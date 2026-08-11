@@ -1,0 +1,152 @@
+name: MobileTina settings status dock patch
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-settings-status-dock-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Apply requested MobileTina optimizations
+        shell: python
+        run: |
+          from pathlib import Path
+
+          root = Path('V2rayNG/app/src/main')
+
+          # 1) Remove obsolete Settings entries.
+          pref = root / 'res/xml/pref_settings.xml'
+          s = pref.read_text(encoding='utf-8')
+          blocks = [
+          '''        <CheckBoxPreference
+                      android:key="pref_double_column_display"
+                      android:summary="@string/summary_pref_double_column_display"
+                      android:title="@string/title_pref_double_column_display" />
+
+          ''',
+          '''        <CheckBoxPreference
+                      android:key="pref_is_booted"
+                      android:summary="@string/summary_pref_is_booted"
+                      android:title="@string/title_pref_is_booted" />
+
+          ''',
+          ]
+          for block in blocks:
+              if block not in s:
+                  raise RuntimeError(f'Expected preference block not found: {block.splitlines()[1]}')
+              s = s.replace(block, '', 1)
+          pref.write_text(s, encoding='utf-8')
+
+          # 2) Clear stale hidden preference values on upgrade as well.
+          app = root / 'java/com/v2ray/ang/AngApplication.kt'
+          s = app.read_text(encoding='utf-8')
+          old = '''        MmkvManager.encodeSettings(AppConfig.PREF_ROOT_MODE_ENABLE, false)
+                  MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, false)
+          '''
+          new = '''        MmkvManager.encodeSettings(AppConfig.PREF_ROOT_MODE_ENABLE, false)
+                  MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, false)
+                  MmkvManager.encodeSettings(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)
+                  MmkvManager.encodeSettings(AppConfig.PREF_IS_BOOTED, false)
+          '''
+          if old not in s:
+              raise RuntimeError('AngApplication stale preference reset block not found')
+          app.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # 3) Persian status wording + Auto ping label.
+          strings = root / 'res/values/mobiletina_strings.xml'
+          s = strings.read_text(encoding='utf-8')
+          s = s.replace('<string name="mobiletina_status_connected">متصل</string>',
+                        '<string name="mobiletina_status_connected">متصل شد</string>', 1)
+          s = s.replace('<string name="mobiletina_status_disconnected">آماده اتصال</string>',
+                        '<string name="mobiletina_status_disconnected">فیلترشکن خاموش است</string>', 1)
+          anchor = '<string name="mobiletina_ping_inactive" translatable="false">غیرفعال</string>'
+          if anchor not in s:
+              raise RuntimeError('Ping string anchor not found')
+          if 'name="mobiletina_ping_format"' not in s:
+              s = s.replace(anchor, anchor + '\n    <string name="mobiletina_ping_format" translatable="false">پینگ : %1$s</string>', 1)
+          strings.write_text(s, encoding='utf-8')
+
+          # 4) Only Auto mode gets the explicit "پینگ : N" prefix.
+          main = root / 'java/com/v2ray/ang/ui/MainActivity.kt'
+          s = main.read_text(encoding='utf-8')
+          old = '''            running && !lastConnectedPing.isNullOrBlank() -> lastConnectedPing
+                      running && ping > 0L -> ping.toString()
+          '''
+          new = '''            running && !lastConnectedPing.isNullOrBlank() ->
+                          getString(R.string.mobiletina_ping_format, lastConnectedPing)
+                      running && ping > 0L ->
+                          getString(R.string.mobiletina_ping_format, ping.toString())
+          '''
+          if old not in s:
+              raise RuntimeError('Auto ping display block not found')
+          main.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # 5) Compact the Manual bottom dock without changing the 92dp artwork.
+          layout = root / 'res/layout/activity_main.xml'
+          s = layout.read_text(encoding='utf-8')
+          replacements = [
+              ('android:layout_height="186dp"\n                    android:background="@color/mobiletina_manual_dock_bg"',
+               'android:layout_height="168dp"\n                    android:background="@color/mobiletina_manual_dock_bg"'),
+              ('android:layout_height="140dp"\n                        android:layout_gravity="bottom"',
+               'android:layout_height="122dp"\n                        android:layout_gravity="bottom"'),
+              ('android:layout_marginTop="100dp"\n                        android:backgroundTint="#1976D2"',
+               'android:layout_marginTop="92dp"\n                        android:backgroundTint="#1976D2"'),
+              ('android:layout_height="28dp"\n                        android:layout_gravity="top|center_horizontal"\n                        android:layout_marginTop="158dp"',
+               'android:layout_height="24dp"\n                        android:layout_gravity="top|center_horizontal"\n                        android:layout_marginTop="144dp"'),
+          ]
+          for old, new in replacements:
+              if old not in s:
+                  raise RuntimeError(f'Manual dock layout anchor not found: {old[:45]}')
+              s = s.replace(old, new, 1)
+          layout.write_text(s, encoding='utf-8')
+
+          # 6) True black Manual dock in Night Mode; Light Mode remains white.
+          night = root / 'res/values-night/mobiletina_colors.xml'
+          s = night.read_text(encoding='utf-8')
+          old = '<color name="mobiletina_manual_dock_bg">#2B2B2B</color>'
+          new = '<color name="mobiletina_manual_dock_bg">#000000</color>'
+          if old not in s:
+              raise RuntimeError('Night dock color not found')
+          night.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # Remove this temporary workflow from final branch state.
+          Path('.github/workflows/mobiletina-settings-status-dock-temp.yml').unlink()
+
+      - name: Verify requested changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q 'pref_double_column_display' V2rayNG/app/src/main/res/xml/pref_settings.xml
+          ! grep -q 'pref_is_booted' V2rayNG/app/src/main/res/xml/pref_settings.xml
+          grep -q 'PREF_DOUBLE_COLUMN_DISPLAY, false' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
+          grep -q 'PREF_IS_BOOTED, false' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
+          grep -q 'فیلترشکن خاموش است' V2rayNG/app/src/main/res/values/mobiletina_strings.xml
+          grep -q 'متصل شد' V2rayNG/app/src/main/res/values/mobiletina_strings.xml
+          grep -q 'پینگ : %1\$s' V2rayNG/app/src/main/res/values/mobiletina_strings.xml
+          grep -q 'android:layout_height="168dp"' V2rayNG/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:layout_height="122dp"' V2rayNG/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:layout_marginTop="144dp"' V2rayNG/app/src/main/res/layout/activity_main.xml
+          grep -q '#000000' V2rayNG/app/src/main/res/values-night/mobiletina_colors.xml
+
+      - name: Commit requested optimizations
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "MobileTina CI"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Optimize MobileTina settings status and manual dock"
+          git push origin HEAD:agent/mobiletina-2.2.6-port
