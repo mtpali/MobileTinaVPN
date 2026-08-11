@@ -1,0 +1,123 @@
+package com.v2ray.ang.handler
+
+import com.v2ray.ang.AppConfig
+import com.v2ray.ang.dto.SubscriptionUpdateResult
+import com.v2ray.ang.dto.entities.ProfileItem
+import com.v2ray.ang.dto.entities.SubscriptionCache
+import com.v2ray.ang.dto.entities.SubscriptionItem
+import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.fmt.SocksFmt
+import com.v2ray.ang.util.LogUtil
+import com.v2ray.ang.util.Utils
+
+/**
+ * MobileTina subscription retirement marker.
+ *
+ * A SOCKS profile that round-trips to a URI beginning with `socks://Og@1:` is treated
+ * as a server-side marker. When it exists in a real remote subscription, the remote
+ * subscription and all of its other profiles are removed. Matching marker profiles are
+ * preserved in a disabled local group so they remain visible in the manual list but are
+ * never fetched as subscriptions again.
+ */
+object MobileTinaSubscriptionMarkerManager {
+    private const val REMOVAL_MARKER_PREFIX = "socks://Og@1:"
+
+    fun updateAll(): SubscriptionUpdateResult {
+        return try {
+            MmkvManager.decodeSubscriptions().fold(SubscriptionUpdateResult()) { acc, cache ->
+                acc + updateOne(cache)
+            }
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to process MobileTina subscription markers", e)
+            SubscriptionUpdateResult()
+        }
+    }
+
+    private fun updateOne(cache: SubscriptionCache): SubscriptionUpdateResult {
+        // Local/disabled groups are display-only and must never be retired again or fetched.
+        if (!cache.subscription.enabled || cache.subscription.url.isBlank()) {
+            return AngConfigManager.updateConfigViaSub(cache)
+        }
+
+        // Handle a marker that may already be stored from a previous refresh, even if the
+        // network is currently unavailable.
+        findRemovalMarkers(cache.guid).takeIf { it.isNotEmpty() }?.let { markers ->
+            return retireRemoteSubscription(
+                cache = cache,
+                markers = markers,
+                result = SubscriptionUpdateResult(configCount = markers.size, successCount = 1)
+            )
+        }
+
+        val result = AngConfigManager.updateConfigViaSub(cache)
+        if (result.successCount <= 0) return result
+
+        val markers = findRemovalMarkers(cache.guid)
+        if (markers.isEmpty()) return result
+
+        return retireRemoteSubscription(
+            cache = cache,
+            markers = markers,
+            result = result.copy(configCount = markers.size)
+        )
+    }
+
+    private fun findRemovalMarkers(subscriptionId: String): List<ProfileItem> {
+        return MmkvManager.decodeServerList(subscriptionId)
+            .mapNotNull { guid -> MmkvManager.decodeServerConfig(guid)?.copy() }
+            .filter(::isRemovalMarker)
+    }
+
+    private fun isRemovalMarker(profile: ProfileItem): Boolean {
+        if (profile.configType != EConfigType.SOCKS) return false
+        val uri = runCatching {
+            profile.configType.protocolScheme + SocksFmt.toUri(profile)
+        }.getOrNull() ?: return false
+        return uri.startsWith(REMOVAL_MARKER_PREFIX, ignoreCase = false)
+    }
+
+    private fun retireRemoteSubscription(
+        cache: SubscriptionCache,
+        markers: List<ProfileItem>,
+        result: SubscriptionUpdateResult
+    ): SubscriptionUpdateResult {
+        if (markers.isEmpty()) return result
+
+        val selectedWasInRemovedSubscription = MmkvManager.getSelectServer()
+            ?.let(MmkvManager::decodeServerConfig)
+            ?.subscriptionId == cache.guid
+
+        // Remove the real subscription first. This also removes every profile that belonged
+        // to it, including the stored copies of the markers. We keep in-memory copies above.
+        MmkvManager.removeSubscription(cache.guid)
+
+        val localGroupId = Utils.getUuid()
+        val localGroupName = markers.first().remarks.trim().ifBlank { cache.subscription.remarks }
+        MmkvManager.encodeSubscription(
+            localGroupId,
+            SubscriptionItem(
+                remarks = localGroupName,
+                enabled = false,
+                autoUpdate = false
+            )
+        )
+
+        val preservedKeys = markers.map { marker ->
+            val localMarker = marker.copy(
+                subscriptionId = localGroupId,
+                addedTime = System.currentTimeMillis()
+            )
+            MmkvManager.encodeServerConfig("", localMarker)
+        }
+
+        if ((selectedWasInRemovedSubscription || MmkvManager.getSelectServer().isNullOrBlank()) && preservedKeys.isNotEmpty()) {
+            MmkvManager.setSelectServer(preservedKeys.first())
+        }
+
+        LogUtil.i(
+            AppConfig.TAG,
+            "MobileTina marker retired subscription ${cache.guid}; preserved ${preservedKeys.size} marker config(s)"
+        )
+        return result
+    }
+}
