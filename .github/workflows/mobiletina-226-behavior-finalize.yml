@@ -1,0 +1,160 @@
+name: Finalize MobileTina 2.2.6 behavior
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-226-behavior-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Apply MobileTina behavior guards
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          # Hide v2rayNG's synthetic All/Default group from MobileTina manual UI.
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt')
+          s = p.read_text(encoding='utf-8')
+          old = '''    fun getSubscriptions(context: Context): List<GroupMapItem> {
+        val subscriptions = MmkvManager.decodeSubscriptions()
+        if (subscriptionId.isNotEmpty()
+            && !subscriptions.map { it.guid }.contains(subscriptionId)
+        ) {
+            subscriptionIdChanged("")
+        }
+
+        val groups = mutableListOf<GroupMapItem>()
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_GROUP_ALL_DISPLAY)) {
+            groups.add(
+                GroupMapItem(
+                    id = "",
+                    remarks = context.getString(R.string.filter_config_all)
+                )
+            )
+        }
+        subscriptions.forEach { sub ->
+            groups.add(
+                GroupMapItem(
+                    id = sub.guid,
+                    remarks = sub.subscription.remarks
+                )
+            )
+        }
+        return groups
+    }
+'''
+          new = '''    fun getSubscriptions(context: Context): List<GroupMapItem> {
+        val subscriptions = MmkvManager.decodeSubscriptions()
+            .filter { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }
+        val validIds = subscriptions.map { it.guid }
+        if (subscriptionId.isBlank() || subscriptionId == AppConfig.DEFAULT_SUBSCRIPTION_ID || !validIds.contains(subscriptionId)) {
+            subscriptionId = subscriptions.firstOrNull()?.guid.orEmpty()
+            MmkvManager.encodeSettings(AppConfig.CACHE_SUBSCRIPTION_ID, subscriptionId)
+        }
+        return subscriptions.map { sub ->
+            GroupMapItem(
+                id = sub.guid,
+                remarks = sub.subscription.remarks
+            )
+        }
+    }
+'''
+          if old not in s:
+              raise SystemExit('MainViewModel getSubscriptions block not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # Keep only Stop in the VPN notification. Restart is intentionally hidden in MobileTina.
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('    private const val NOTIFICATION_PENDING_INTENT_RESTART_V2RAY = 2\n', '')
+          restart_intent = '''        val restartV2RayIntent = Intent(AppConfig.BROADCAST_ACTION_SERVICE)
+        restartV2RayIntent.`package` = AppConfig.ANG_PACKAGE
+        restartV2RayIntent.putExtra("key", AppConfig.MSG_STATE_RESTART)
+        val restartV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_RESTART_V2RAY, restartV2RayIntent, flags)
+
+'''
+          if restart_intent not in s:
+              raise SystemExit('Notification restart intent block not found')
+          s = s.replace(restart_intent, '', 1)
+          restart_action = '''            .addAction(
+                R.drawable.ic_restore_24dp,
+                service.getString(R.string.title_service_restart),
+                restartV2RayPendingIntent
+            )
+'''
+          if restart_action not in s:
+              raise SystemExit('Notification restart action block not found')
+          s = s.replace(restart_action, '', 1)
+          p.write_text(s, encoding='utf-8')
+
+          # Preserve MobileTina's quiet connection behavior while keeping the proxy-sharing warning.
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt')
+          s = p.read_text(encoding='utf-8')
+          old = '''        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
+            context.toast(R.string.toast_warning_pref_proxysharing_short)
+        } else {
+            context.toast(R.string.toast_services_start)
+        }
+'''
+          new = '''        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
+            context.toast(R.string.toast_warning_pref_proxysharing_short)
+        }
+'''
+          if old not in s:
+              raise SystemExit('Core start toast block not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # Retain the newer 2.2.6 Android local-network permission behavior and correct stale comments.
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt')
+          s = p.read_text(encoding='utf-8')
+          if 'import android.os.Build\n' not in s:
+              s = s.replace('import android.os.Bundle\n', 'import android.os.Build\nimport android.os.Bundle\n', 1)
+          s = s.replace('// IMPORTANT: this is the untouched 2.0.15 Real Delay service.', '// IMPORTANT: Smart Connect uses the native v2rayNG 2.2.6 Real Ping service.')
+          old = '''        V2RayServiceManager.startVService(this)
+        if (isSmartConnect) {
+'''
+          new = '''        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN &&
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)
+        ) {
+            checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) { }
+        }
+        V2RayServiceManager.startVService(this)
+        if (isSmartConnect) {
+'''
+          if old not in s:
+              raise SystemExit('MainActivity startV2Ray marker not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+      - name: Validate behavior patches
+        run: |
+          set -euo pipefail
+          ! grep -q 'NOTIFICATION_PENDING_INTENT_RESTART_V2RAY' V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt
+          ! grep -q 'toast_services_start' V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt
+          grep -q 'filter { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }' V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt
+          grep -q 'native v2rayNG 2.2.6 Real Ping service' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'ACCESS_LOCAL_NETWORK' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+
+      - name: Commit behavior finalization
+        run: |
+          git config user.name "VPN963"
+          git config user.email "120357728+VPN963@users.noreply.github.com"
+          git add V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt \
+                  V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt \
+                  V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt \
+                  V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          git diff --cached --check
+          git commit -m "Preserve MobileTina behavior on v2rayNG 2.2.6"
+          git push origin HEAD:agent/mobiletina-2.2.6-port
