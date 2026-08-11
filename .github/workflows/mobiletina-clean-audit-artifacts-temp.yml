@@ -1,0 +1,57 @@
+name: Clean MobileTina audit artifacts
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-clean-audit-artifacts-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Remove audit-only files and remaining unused night image
+        run: |
+          set -euo pipefail
+          git config user.name "MobileTina CI"
+          git config user.email "actions@github.com"
+
+          # The audit workflow temporarily added this NDK line to build.gradle; restore branch behavior.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('V2rayNG/app/build.gradle.kts')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('    ndkVersion = "29.0.14206865"\n', '', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          # Untracked build cache files were accidentally committed by the audit job; remove them.
+          git rm -f \
+            V2rayNG/app/libs/arm64-v8a/hev-socks5-tunnel-bin \
+            V2rayNG/app/libs/armeabi-v7a/hev-socks5-tunnel-bin \
+            V2rayNG/app/libs/x86/hev-socks5-tunnel-bin \
+            V2rayNG/app/libs/x86_64/hev-socks5-tunnel-bin \
+            libs/arm64-v8a/hev-socks5-tunnel-bin \
+            libs/armeabi-v7a/hev-socks5-tunnel-bin \
+            libs/x86/hev-socks5-tunnel-bin \
+            libs/x86_64/hev-socks5-tunnel-bin
+
+          # nav_header_bg is unused in both flavors; remove its night-qualified sibling too.
+          git rm -f V2rayNG/app/src/main/res/drawable-night/nav_header_bg.png
+
+          # Remove this temporary workflow from the final branch.
+          git rm -f .github/workflows/mobiletina-clean-audit-artifacts-temp.yml
+
+          git add V2rayNG/app/build.gradle.kts
+          git diff --cached --check
+          git commit -m "Finalize safe unused image cleanup"
+          git push origin HEAD:agent/mobiletina-2.2.6-port
