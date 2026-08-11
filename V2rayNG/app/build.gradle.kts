@@ -12,7 +12,7 @@ android {
         applicationId = "com.v2ray.mobiletina"
         minSdk = 24
         targetSdk = 37
-        versionCode = 736
+        versionCode = 744
         versionName = "2.2.6"
         multiDexEnabled = true
 
