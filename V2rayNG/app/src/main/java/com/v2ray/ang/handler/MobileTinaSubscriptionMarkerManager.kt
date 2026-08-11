@@ -21,6 +21,18 @@ import com.v2ray.ang.util.Utils
  */
 object MobileTinaSubscriptionMarkerManager {
     private const val REMOVAL_MARKER_PREFIX = "socks://Og@1:"
+    private const val FIXED_SUBSCRIPTION_NAME = "instagram : mobile.tina"
+    private const val PREF_SUBSCRIPTION_EXPIRED = "MOBILETINA_SUBSCRIPTION_EXPIRED"
+    private const val PREF_EXPIRED_TOAST_PENDING = "MOBILETINA_SUBSCRIPTION_EXPIRED_TOAST_PENDING"
+
+    fun isSubscriptionExpired(): Boolean =
+        MmkvManager.decodeSettingsBool(PREF_SUBSCRIPTION_EXPIRED, false)
+
+    fun consumeExpiredToastPending(): Boolean {
+        if (!MmkvManager.decodeSettingsBool(PREF_EXPIRED_TOAST_PENDING, false)) return false
+        MmkvManager.encodeSettings(PREF_EXPIRED_TOAST_PENDING, false)
+        return true
+    }
 
     fun updateAll(): SubscriptionUpdateResult {
         return try {
@@ -87,16 +99,20 @@ object MobileTinaSubscriptionMarkerManager {
             ?.let(MmkvManager::decodeServerConfig)
             ?.subscriptionId == cache.guid
 
+        // Persist the expired state before removing the remote subscription. The Auto page
+        // uses this flag to keep its FAB red while the preserved marker remains in the list.
+        MmkvManager.encodeSettings(PREF_SUBSCRIPTION_EXPIRED, true)
+        MmkvManager.encodeSettings(PREF_EXPIRED_TOAST_PENDING, true)
+
         // Remove the real subscription first. This also removes every profile that belonged
         // to it, including the stored copies of the markers. We keep in-memory copies above.
         MmkvManager.removeSubscription(cache.guid)
 
         val localGroupId = Utils.getUuid()
-        val localGroupName = markers.first().remarks.trim().ifBlank { cache.subscription.remarks }
         MmkvManager.encodeSubscription(
             localGroupId,
             SubscriptionItem(
-                remarks = localGroupName,
+                remarks = FIXED_SUBSCRIPTION_NAME,
                 enabled = false,
                 autoUpdate = false
             )
