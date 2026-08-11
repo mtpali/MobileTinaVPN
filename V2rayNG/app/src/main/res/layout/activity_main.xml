@@ -278,6 +278,8 @@
                 android:id="@+id/manual_panel"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -305,7 +307,7 @@
 
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="166dp"
+                    android:layout_height="154dp"
                     android:background="@color/mobiletina_manual_dock_bg"
                     android:clipChildren="false"
                     android:clipToPadding="false">
@@ -318,11 +320,12 @@
                         android:background="@android:color/transparent"
                         android:clickable="true"
                         android:contentDescription="@string/tasker_start_service"
-                        android:elevation="8dp"
+                        android:elevation="12dp"
                         android:focusable="true"
                         android:padding="0dp"
                         android:scaleType="fitCenter"
                         android:src="@drawable/mt_manual_stop"
+                        android:translationY="-28dp"
                         app:shapeAppearanceOverlay="@style/MobileTinaCircleFab" />
 
                     <com.google.android.material.button.MaterialButton
@@ -330,8 +333,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="50dp"
                         android:layout_gravity="top|center_horizontal"
-                        android:layout_marginTop="92dp"
+                        android:layout_marginTop="72dp"
                         android:backgroundTint="@color/mobiletina_smart_connect_bg"
+                        android:elevation="4dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:minHeight="50dp"
@@ -351,7 +355,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="24dp"
                         android:layout_gravity="top|center_horizontal"
-                        android:layout_marginTop="142dp"
+                        android:layout_marginTop="128dp"
                         android:gravity="center"
                         android:orientation="horizontal"
                         android:visibility="invisible">
