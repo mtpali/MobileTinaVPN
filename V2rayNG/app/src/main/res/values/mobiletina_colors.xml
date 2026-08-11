@@ -3,9 +3,9 @@
     <color name="colorTextPrimary">#1C1B1F</color>
     <color name="mobiletina_manual_dock_bg">#FFFFFF</color>
     <color name="mobiletina_manual_dock_text">#1C1B1F</color>
-    <color name="mobiletina_smart_connect_bg">#000000</color>
-    <color name="mobiletina_smart_connect_text">#FFFFFF</color>
-    <color name="mobiletina_smart_connect_stroke">#54545A</color>
+    <color name="mobiletina_smart_connect_bg">#FFFFFF</color>
+    <color name="mobiletina_smart_connect_text">#000000</color>
+    <color name="mobiletina_smart_connect_stroke">#000000</color>
     <color name="mobiletina_subscription_progress_indicator">#54545A</color>
     <color name="mobiletina_subscription_progress_track">#C8C8C8</color>
 </resources>
