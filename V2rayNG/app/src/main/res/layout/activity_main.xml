@@ -330,27 +330,22 @@
                         android:translationY="-28dp"
                         app:shapeAppearanceOverlay="@style/MobileTinaCircleFab" />
 
-                    <com.google.android.material.button.MaterialButton
+                    <com.google.android.material.imageview.ShapeableImageView
                         android:id="@+id/btn_smart_connect"
-                        android:layout_width="wrap_content"
-                        android:layout_height="44dp"
+                        android:layout_width="145dp"
+                        android:layout_height="47dp"
                         android:layout_gravity="top|center_horizontal"
                         android:layout_marginTop="72dp"
-                        android:backgroundTint="@color/mobiletina_smart_connect_bg"
-                        android:elevation="4dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:minHeight="44dp"
-                        android:minWidth="145dp"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:text="@string/mobiletina_manual_smart_connect_with_icon"
-                        android:textAllCaps="false"
-                        android:textColor="@color/mobiletina_smart_connect_text"
-                        android:textSize="18sp"
-                        app:cornerRadius="22dp"
-                        app:strokeColor="@color/mobiletina_smart_connect_stroke"
-                        app:strokeWidth="2dp" />
+                        android:background="@android:color/transparent"
+                        android:clickable="true"
+                        android:contentDescription="@string/mobiletina_manual_smart_connect"
+                        android:elevation="0dp"
+                        android:focusable="true"
+                        android:outlineProvider="none"
+                        android:padding="0dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/mt_manual_auto"
+                        android:stateListAnimator="@null" />
 
                     <LinearLayout
                         android:id="@+id/manual_selected_row"

@@ -26,6 +26,7 @@ jobs:
           echo '5c46b28c45361fad6b93612b5cb4e8dff6793437ad9908e44cec695360380eb9  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_red.png' | sha256sum -c -
           echo '9c785413bec4f4e707e69decfeaa387e1c4d6268f40a1ad357c135770b763abc  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_stop.webp' | sha256sum -c -
           echo 'a4dee906b06e9f0833b35efa77182ac8d567a3e9d0ab335ffe4c70e7aa261026  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_fab.webp' | sha256sum -c -
+          echo '22b1878853ee3793b81d545d01dfe5b8fad837689913e8530d55b90f510aa55a  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_auto.webp' | sha256sum -c -
           echo 'f33b9e6d04c2f6ec344c917f3a2412075c8f62af841b444ffa7a864099e395f7  V2rayNG/app/src/main/res/drawable-nodpi/mt_nav.png' | sha256sum -c -
 
       - uses: android-actions/setup-android@v4
