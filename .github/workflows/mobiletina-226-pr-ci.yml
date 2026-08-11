@@ -3,7 +3,7 @@ name: MobileTina 2.2.6 PR CI
 on:
   pull_request:
     branches:
-      - master
+      - agent/v2rayng-2.2.6-base
 
 jobs:
   armv7:
