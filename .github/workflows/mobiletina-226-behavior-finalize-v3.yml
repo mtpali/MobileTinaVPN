@@ -1,0 +1,156 @@
+name: Finalize MobileTina 2.2.6 behavior v3
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-226-behavior-finalize-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Patch source with structure-aware edits
+        shell: python
+        run: |
+          from pathlib import Path
+          import traceback
+
+          report = Path('.github/verification/mobiletina-226-behavior-finalize-v3.txt')
+          report.parent.mkdir(parents=True, exist_ok=True)
+          files = {}
+          status = 'FAILED'
+          detail = ''
+
+          try:
+              # MainViewModel: replace only getSubscriptions, leaving native 2.2.6 Real Ping untouched.
+              p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt')
+              s = p.read_text(encoding='utf-8')
+              start = s.index('    fun getSubscriptions(context: Context): List<GroupMapItem> {')
+              end_marker = '\n    /**\n     * Gets the position of a server by its GUID.'
+              end = s.index(end_marker, start)
+              replacement = '''    fun getSubscriptions(context: Context): List<GroupMapItem> {
+                  val subscriptions = MmkvManager.decodeSubscriptions()
+                      .filter { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }
+                  val validIds = subscriptions.map { it.guid }
+                  if (subscriptionId.isBlank() || subscriptionId == AppConfig.DEFAULT_SUBSCRIPTION_ID || !validIds.contains(subscriptionId)) {
+                      subscriptionId = subscriptions.firstOrNull()?.guid.orEmpty()
+                      MmkvManager.encodeSettings(AppConfig.CACHE_SUBSCRIPTION_ID, subscriptionId)
+                  }
+                  return subscriptions.map { sub ->
+                      GroupMapItem(
+                          id = sub.guid,
+                          remarks = sub.subscription.remarks
+                      )
+                  }
+              }
+          '''
+              files[p] = s[:start] + replacement + s[end:]
+
+              # NotificationManager: remove restart constant, intent and action by structural line locations.
+              p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt')
+              lines = p.read_text(encoding='utf-8').splitlines(keepends=True)
+              lines = [ln for ln in lines if 'NOTIFICATION_PENDING_INTENT_RESTART_V2RAY = 2' not in ln]
+
+              restart_start = next(i for i, ln in enumerate(lines) if 'val restartV2RayIntent = Intent(' in ln)
+              restart_end = next(i for i in range(restart_start, len(lines)) if 'val restartV2RayPendingIntent = PendingIntent.getBroadcast' in lines[i])
+              del lines[restart_start:restart_end + 1]
+              if restart_start < len(lines) and lines[restart_start].strip() == '':
+                  del lines[restart_start]
+
+              pending_idx = next(i for i, ln in enumerate(lines) if 'restartV2RayPendingIntent' in ln)
+              action_start = pending_idx
+              while action_start >= 0 and '.addAction(' not in lines[action_start]:
+                  action_start -= 1
+              if action_start < 0:
+                  raise RuntimeError('restart action start not found')
+              action_end = pending_idx
+              while action_end < len(lines) and lines[action_end].strip() != ')':
+                  action_end += 1
+              if action_end >= len(lines):
+                  raise RuntimeError('restart action end not found')
+              del lines[action_start:action_end + 1]
+              files[p] = ''.join(lines)
+
+              # CoreServiceManager: preserve proxy-sharing warning but remove ordinary Start services toast.
+              p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt')
+              lines = p.read_text(encoding='utf-8').splitlines(keepends=True)
+              toast_idx = next(i for i, ln in enumerate(lines) if 'context.toast(R.string.toast_services_start)' in ln)
+              if toast_idx == 0 or '} else {' not in lines[toast_idx - 1]:
+                  raise RuntimeError('Core start toast else block shape changed')
+              del lines[toast_idx - 1:toast_idx + 1]
+              files[p] = ''.join(lines)
+
+              # MainActivity: retain Android 16 local-network permission logic from 2.2.6 and correct Real Ping comment.
+              p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt')
+              lines = p.read_text(encoding='utf-8').splitlines(keepends=True)
+              if not any('import android.os.Build' in ln for ln in lines):
+                  bundle_idx = next(i for i, ln in enumerate(lines) if 'import android.os.Bundle' in ln)
+                  lines.insert(bundle_idx, 'import android.os.Build\n')
+              for i, ln in enumerate(lines):
+                  if 'IMPORTANT: this is the untouched 2.0.15 Real Delay service.' in ln:
+                      lines[i] = ln.replace('IMPORTANT: this is the untouched 2.0.15 Real Delay service.', 'IMPORTANT: Smart Connect uses the native v2rayNG 2.2.6 Real Ping service.')
+              if not any('PermissionType.ACCESS_LOCAL_NETWORK' in ln for ln in lines):
+                  start_idx = next(i for i, ln in enumerate(lines) if 'V2RayServiceManager.startVService(this)' in ln)
+                  indent = lines[start_idx][:len(lines[start_idx]) - len(lines[start_idx].lstrip())]
+                  block = [
+                      f'{indent}if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN &&\n',
+                      f'{indent}    MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)\n',
+                      f'{indent}) {{\n',
+                      f'{indent}    checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) {{ }}\n',
+                      f'{indent}}}\n',
+                  ]
+                  lines[start_idx:start_idx] = block
+              files[p] = ''.join(lines)
+
+              # Validate all transformed texts before writing any source file.
+              vm = files[Path('V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt')]
+              nm = files[Path('V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt')]
+              core = files[Path('V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt')]
+              main = files[Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt')]
+              assert 'filter { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }' in vm
+              assert 'restartV2RayPendingIntent' not in nm
+              assert 'NOTIFICATION_PENDING_INTENT_RESTART_V2RAY' not in nm
+              assert 'toast_services_start' not in core
+              assert 'native v2rayNG 2.2.6 Real Ping service' in main
+              assert 'PermissionType.ACCESS_LOCAL_NETWORK' in main
+
+              for path, text in files.items():
+                  path.write_text(text, encoding='utf-8')
+              status = 'SUCCESS'
+              detail = 'Default/All hidden; notification restart removed; start toast removed; Android 16 permission preserved.'
+          except Exception as exc:
+              detail = f'{type(exc).__name__}: {exc}\n{traceback.format_exc()}'
+
+          report.write_text(f'status={status}\n{detail}\n', encoding='utf-8')
+          print(report.read_text(encoding='utf-8'))
+
+      - name: Commit source only on complete patch success
+        shell: bash
+        run: |
+          set -euo pipefail
+          report=.github/verification/mobiletina-226-behavior-finalize-v3.txt
+          git config user.name "VPN963"
+          git config user.email "120357728+VPN963@users.noreply.github.com"
+          if grep -q '^status=SUCCESS$' "$report"; then
+            git add V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt \
+                    V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt \
+                    V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt \
+                    V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt \
+                    "$report"
+            git diff --cached --check
+            git commit -m "Preserve MobileTina behavior on v2rayNG 2.2.6"
+          else
+            git add "$report"
+            git commit -m "Record MobileTina behavior finalizer v3 failure"
+          fi
+          git push origin HEAD:agent/mobiletina-2.2.6-port
