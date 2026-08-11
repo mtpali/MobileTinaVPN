@@ -1,0 +1,61 @@
+name: Harden MobileTina 2.2.6 Core behavior
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-226-core-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Move 24-hour limit into Core lifecycle
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt')
+          s = p.read_text(encoding='utf-8')
+
+          start_marker = '        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")\n'
+          if start_marker not in s:
+              raise SystemExit('Core start-success marker not found')
+          if 'MobileTinaSessionLimiter.schedule(service)' not in s:
+              s = s.replace(
+                  start_marker,
+                  '        MobileTinaSessionLimiter.schedule(service)\n' + start_marker,
+                  1,
+              )
+
+          stop_marker = '    fun stopCoreLoop(): Boolean {\n        val service = getService() ?: return false\n'
+          if stop_marker not in s:
+              raise SystemExit('Core stop marker not found')
+          if 'MobileTinaSessionLimiter.cancel(service)' not in s:
+              s = s.replace(
+                  stop_marker,
+                  stop_marker + '        MobileTinaSessionLimiter.cancel(service)\n',
+                  1,
+              )
+
+          p.write_text(s, encoding='utf-8')
+
+      - name: Validate and commit Core hardening
+        run: |
+          set -euo pipefail
+          grep -q 'MobileTinaSessionLimiter.schedule(service)' V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt
+          grep -q 'MobileTinaSessionLimiter.cancel(service)' V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt
+          git config user.name "VPN963"
+          git config user.email "120357728+VPN963@users.noreply.github.com"
+          git add V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt
+          git diff --cached --check
+          git commit -m "Enforce MobileTina 24-hour limit in Core lifecycle"
+          git push origin HEAD:agent/mobiletina-2.2.6-port
