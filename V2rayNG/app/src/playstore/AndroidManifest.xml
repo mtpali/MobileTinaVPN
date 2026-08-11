@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <application
+        android:theme="@style/MobileTinaAppTheme"
+        tools:replace="android:theme">
+
+        <activity
+            android:name=".ui.MainActivity"
+            tools:node="merge">
+            <meta-data
+                android:name="android.app.shortcuts"
+                tools:node="remove" />
+        </activity>
+
+        <activity
+            android:name=".ui.MobileTinaStoreAboutActivity"
+            android:exported="false" />
+
+        <receiver
+            android:name=".receiver.MobileTinaExpiryReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".receiver.WidgetProvider"
+            tools:node="remove" />
+    </application>
+</manifest>

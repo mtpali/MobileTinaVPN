@@ -13,5 +13,8 @@ data class SubscriptionItem(
     var filter: String? = null,
     var allowInsecureUrl: Boolean = false,
     var userAgent: String? = null,
+    var trafficUploadBytes: Long? = null,
+    var trafficDownloadBytes: Long? = null,
+    var trafficTotalBytes: Long? = null,
+    var expireEpochSeconds: Long? = null,
 )
-
