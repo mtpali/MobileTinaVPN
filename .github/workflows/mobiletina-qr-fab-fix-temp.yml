@@ -1,0 +1,96 @@
+name: MobileTina QR hold and Manual FAB fix
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-qr-fab-fix-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Fix subscription hold lifecycle and Manual FAB placement
+        shell: python
+        run: |
+          from pathlib import Path
+
+          main = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt')
+          layout = Path('V2rayNG/app/src/main/res/layout/activity_main.xml')
+
+          s = main.read_text(encoding='utf-8')
+
+          # Shared hold state: pending callbacks can be cancelled when tabs change/rebuild.
+          field_anchor = '    private val internetDialogHandler = Handler(Looper.getMainLooper())\n'
+          fields = field_anchor + '''    private val subscriptionHoldHandler = Handler(Looper.getMainLooper())\n    private var subscriptionHoldRunnable: Runnable? = null\n    private var subscriptionSecretDialog: AlertDialog? = null\n'''
+          if 'private val subscriptionHoldHandler' not in s:
+              assert field_anchor in s
+              s = s.replace(field_anchor, fields, 1)
+
+          # Cancel any pending 10-second reveal as soon as the selected subscription tab changes.
+          pager_old = '''    private fun setupGroupPager() {\n        groupPagerAdapter = GroupPagerAdapter(this, emptyList())\n        binding.viewPager.adapter = groupPagerAdapter\n        // Horizontal gestures belong to Auto/Manual; subscription changes happen by tapping tabs.\n        binding.viewPager.isUserInputEnabled = false\n    }\n'''
+          pager_new = '''    private fun setupGroupPager() {\n        groupPagerAdapter = GroupPagerAdapter(this, emptyList())\n        binding.viewPager.adapter = groupPagerAdapter\n        // Horizontal gestures belong to Auto/Manual; subscription changes happen by tapping tabs.\n        binding.viewPager.isUserInputEnabled = false\n        binding.tabGroup.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {\n            override fun onTabSelected(tab: TabLayout.Tab?) = cancelSubscriptionHold()\n            override fun onTabUnselected(tab: TabLayout.Tab?) = cancelSubscriptionHold()\n            override fun onTabReselected(tab: TabLayout.Tab?) = Unit\n        })\n    }\n'''
+          if 'override fun onTabUnselected(tab: TabLayout.Tab?) = cancelSubscriptionHold()' not in s:
+              assert pager_old in s
+              s = s.replace(pager_old, pager_new, 1)
+
+          # Rebuilding tabs must invalidate callbacks attached to old custom TextViews.
+          group_anchor = '    private fun setupGroupTab() {\n        val groups = mainViewModel.getSubscriptions(this)\n'
+          group_new = '    private fun setupGroupTab() {\n        cancelSubscriptionHold()\n        val groups = mainViewModel.getSubscriptions(this)\n'
+          if group_new not in s:
+              assert group_anchor in s
+              s = s.replace(group_anchor, group_new, 1)
+
+          old_hold = '''    private fun installSecretHold(view: View, subscriptionId: String) {\n        val handler = Handler(Looper.getMainLooper())\n        var revealed = false\n        val reveal = Runnable {\n            revealed = true\n            showSubscriptionSecret(subscriptionId)\n        }\n        view.setOnTouchListener { _, event ->\n            when (event.actionMasked) {\n                MotionEvent.ACTION_DOWN -> {\n                    revealed = false\n                    handler.postDelayed(reveal, SUBSCRIPTION_REVEAL_HOLD_MS)\n                }\n                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> handler.removeCallbacks(reveal)\n            }\n            revealed\n        }\n    }\n'''
+          new_hold = '''    private fun cancelSubscriptionHold() {\n        subscriptionHoldRunnable?.let(subscriptionHoldHandler::removeCallbacks)\n        subscriptionHoldRunnable = null\n    }\n\n    private fun installSecretHold(view: View, subscriptionId: String) {\n        view.setOnTouchListener { _, event ->\n            when (event.actionMasked) {\n                MotionEvent.ACTION_DOWN -> {\n                    cancelSubscriptionHold()\n                    val reveal = Runnable {\n                        subscriptionHoldRunnable = null\n                        val selectedPosition = binding.tabGroup.selectedTabPosition\n                        val selectedId = if (selectedPosition >= 0) {\n                            binding.tabGroup.getTabAt(selectedPosition)?.tag as? String\n                        } else null\n                        if (!isFinishing && !isDestroyed && view.isAttachedToWindow && selectedId == subscriptionId) {\n                            showSubscriptionSecret(subscriptionId)\n                        }\n                    }\n                    subscriptionHoldRunnable = reveal\n                    subscriptionHoldHandler.postDelayed(reveal, SUBSCRIPTION_REVEAL_HOLD_MS)\n                }\n                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> cancelSubscriptionHold()\n            }\n            false\n        }\n        view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {\n            override fun onViewAttachedToWindow(v: View) = Unit\n            override fun onViewDetachedFromWindow(v: View) = cancelSubscriptionHold()\n        })\n    }\n'''
+          assert old_hold in s
+          s = s.replace(old_hold, new_hold, 1)
+
+          # Prevent duplicate/stale QR dialogs and retain a single dialog owner.
+          dialog_start = '''    private fun showSubscriptionSecret(subscriptionId: String) {\n        val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return\n'''
+          dialog_start_new = '''    private fun showSubscriptionSecret(subscriptionId: String) {\n        cancelSubscriptionHold()\n        if (subscriptionSecretDialog?.isShowing == true) return\n        val selectedPosition = binding.tabGroup.selectedTabPosition\n        val selectedId = if (selectedPosition >= 0) binding.tabGroup.getTabAt(selectedPosition)?.tag as? String else null\n        if (selectedId != subscriptionId) return\n        val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return\n'''
+          if 'if (subscriptionSecretDialog?.isShowing == true) return' not in s:
+              assert dialog_start in s
+              s = s.replace(dialog_start, dialog_start_new, 1)
+
+          dialog_end_old = '''        AlertDialog.Builder(this)\n            .setTitle(subscription.remarks.ifBlank { getString(R.string.mobiletina_subscription_secret_title) })\n            .setView(container)\n            .setNegativeButton(R.string.mobiletina_close, null)\n            .show()\n    }\n'''
+          dialog_end_new = '''        subscriptionSecretDialog = AlertDialog.Builder(this)\n            .setTitle(subscription.remarks.ifBlank { getString(R.string.mobiletina_subscription_secret_title) })\n            .setView(container)\n            .setNegativeButton(R.string.mobiletina_close, null)\n            .create()\n            .also { dialog ->\n                dialog.setOnDismissListener {\n                    if (subscriptionSecretDialog === dialog) subscriptionSecretDialog = null\n                }\n                dialog.show()\n            }\n    }\n'''
+          assert dialog_end_old in s
+          s = s.replace(dialog_end_old, dialog_end_new, 1)
+
+          destroy_old = '''    override fun onDestroy() {\n        internetDialogHandler.removeCallbacksAndMessages(null)\n        internetDialog?.dismiss()\n        internetDialog = null\n        tabMediator?.detach()\n        super.onDestroy()\n    }\n'''
+          destroy_new = '''    override fun onDestroy() {\n        cancelSubscriptionHold()\n        subscriptionHoldHandler.removeCallbacksAndMessages(null)\n        subscriptionSecretDialog?.dismiss()\n        subscriptionSecretDialog = null\n        internetDialogHandler.removeCallbacksAndMessages(null)\n        internetDialog?.dismiss()\n        internetDialog = null\n        tabMediator?.detach()\n        super.onDestroy()\n    }\n'''
+          assert destroy_old in s
+          s = s.replace(destroy_old, destroy_new, 1)
+
+          main.write_text(s, encoding='utf-8')
+
+          # Put the Manual FAB fully inside the compact lower dock. Keep 92dp size/artwork unchanged.
+          x = layout.read_text(encoding='utf-8')
+          fab_start = x.index('android:id="@+id/fab"')
+          fab_end = x.index('android:id="@+id/btn_smart_connect"')
+          fab_block = x[fab_start:fab_end]
+          if 'android:translationY="-12dp"' in fab_block:
+              fab_block = fab_block.replace('                        android:translationY="-12dp"\n', '', 1)
+              x = x[:fab_start] + fab_block + x[fab_end:]
+          layout.write_text(x, encoding='utf-8')
+
+      - name: Commit fixes and remove temporary workflow
+        run: |
+          set -euo pipefail
+          git config user.name "MobileTina CI"
+          git config user.email "actions@github.com"
+          git rm -f .github/workflows/mobiletina-qr-fab-fix-temp.yml
+          git add V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt V2rayNG/app/src/main/res/layout/activity_main.xml
+          git diff --cached --check
+          git commit -m "Fix subscription hold lifecycle and Manual FAB placement"
+          git push origin HEAD:agent/mobiletina-2.2.6-port
