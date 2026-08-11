@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="colorTextPrimary">#F4EFF4</color>
+    <color name="mobiletina_manual_dock_bg">#2B2B2B</color>
+    <color name="mobiletina_manual_dock_text">#FFFFFF</color>
 </resources>

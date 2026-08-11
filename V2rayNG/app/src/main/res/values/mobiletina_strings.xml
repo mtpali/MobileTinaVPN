@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="mobiletina_app_name" translatable="false">MobileTina</string>
+    <string name="mobiletina_app_name" translatable="false">فیلترشکن</string>
     <string name="mobiletina_status_connected">متصل</string>
     <string name="mobiletina_status_disconnected">آماده اتصال</string>
     <string name="mobiletina_status_connecting">در حال اتصال…</string>
