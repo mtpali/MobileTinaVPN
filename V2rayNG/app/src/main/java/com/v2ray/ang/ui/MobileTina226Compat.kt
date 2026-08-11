@@ -8,8 +8,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.MutableLiveData
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.TestServiceMessage
-import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.MobileTinaSubscriptionMarkerManager
 import com.v2ray.ang.service.TProxyService
 import com.v2ray.ang.util.MessageUtil
 import com.v2ray.ang.util.Utils
@@ -72,7 +72,7 @@ fun MainViewModel.currentServerGuids(): List<String> {
     }
 }
 
-fun MainViewModel.updateEverySubscription() = AngConfigManager.updateConfigViaSubAll()
+fun MainViewModel.updateEverySubscription() = MobileTinaSubscriptionMarkerManager.updateAll()
 
 fun MainViewModel.testServerRealPing(guid: String) {
     if (guid.isBlank()) return
