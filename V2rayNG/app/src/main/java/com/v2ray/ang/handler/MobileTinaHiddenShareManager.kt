@@ -19,7 +19,7 @@ object MobileTinaHiddenShareManager {
         return contents.size
     }
 
-    private fun exportConfig(guid: String): String? {
+    fun exportConfig(guid: String): String? {
         val profile = MmkvManager.decodeServerConfig(guid) ?: return null
         return when (profile.configType) {
             EConfigType.VMESS -> profile.configType.protocolScheme + VmessFmt.toUri(profile)
