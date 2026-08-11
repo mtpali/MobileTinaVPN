@@ -1,0 +1,7 @@
+status=FAILED
+RuntimeError: Notification restart action block not found
+Traceback (most recent call last):
+  File "/home/runner/work/_temp/8daeb84c-8ac0-44c2-98ea-52a6307a1498.py", line 76, in <module>
+    raise RuntimeError(f'Notification {label} block not found')
+RuntimeError: Notification restart action block not found
+
