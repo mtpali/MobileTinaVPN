@@ -282,6 +282,7 @@ object CoreServiceManager {
             browserDialer!!.start(service, dialerAddr)
         }
 
+        MobileTinaSessionLimiter.schedule(service)
         MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         NotificationManager.startSpeedNotification()
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
@@ -294,6 +295,7 @@ object CoreServiceManager {
      */
     fun stopCoreLoop(): Boolean {
         val service = getService() ?: return false
+        MobileTinaSessionLimiter.cancel(service)
 
         if (coreController.isRunning) {
             CoroutineScope(Dispatchers.IO).launch {
