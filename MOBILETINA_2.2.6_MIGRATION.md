@@ -18,7 +18,7 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 ## Preserved MobileTina UX/features
 - Auto is the default page; Manual remains available with directional swipe and dedicated mode buttons.
 - Exact user artwork is kept byte-for-byte in `drawable-nodpi`, with no vector conversion, recolor, tint, or recompression.
-- Auto artwork mapping: white=idle, yellow=connecting, blue=connected, red=failed; Auto FAB 236dp.
+- Auto artwork mapping: white=idle, yellow=connecting, blue=connected, red=failed; Auto FAB 236dp. The Auto content top padding is 94dp so the large FAB sits slightly lower on the page.
 - Manual artwork mapping: stop=VPN off, fab=VPN on; Manual FAB 92dp; Smart Connect button 50dp.
 - Manual list shows server name + ping only. Editing, sharing, deleting and drag/reorder are not exposed. Selected server is visibly highlighted.
 - Subscription card remains Auto-only and shows used/total and days remaining when `subscription-userinfo` metadata exists.
@@ -38,7 +38,7 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 - The ordinary `Start services` toast is suppressed while the proxy-sharing warning is retained.
 - Android 16+ local-network permission behavior from v2rayNG 2.2.6 is preserved when proxy sharing is enabled.
 - Launcher shortcut metadata and home-screen widget are removed in the Playstore manifest overlay.
-- Launcher branding uses standard Android `mipmap` resources: legacy PNG icons for mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi plus adaptive foreground/background resources for Android 8+; the Playstore manifest references `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`.
+- Launcher branding uses standard Android `mipmap` resources: legacy PNG icons for mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi plus adaptive foreground/background resources for Android 8+; the Playstore manifest references `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`. The adaptive foreground canvas is reduced to 76% of its previous scale to give the red logo more breathing room inside launcher masks.
 - Custom `text.ttf` remains the app font through the MobileTina application theme.
 
 ## Regression rules
