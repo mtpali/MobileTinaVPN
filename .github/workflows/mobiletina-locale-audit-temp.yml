@@ -1,0 +1,29 @@
+name: MobileTina locale resource audit
+
+on:
+  pull_request:
+    branches:
+      - agent/v2rayng-2.2.6-base
+
+jobs:
+  audit-locales:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+      - name: List values qualifier directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd V2rayNG/app/src/main/res
+          echo '=== ALL values-* directories ==='
+          find . -maxdepth 1 -type d -name 'values-*' -printf '%f\n' | sort
+          echo '=== directories containing string resources ==='
+          for d in values-*; do
+            [ -d "$d" ] || continue
+            if grep -R -l -E '<(string|string-array|plurals)([[:space:]>])' "$d" --include='*.xml' >/dev/null 2>&1; then
+              echo "$d"
+            fi
+          done
