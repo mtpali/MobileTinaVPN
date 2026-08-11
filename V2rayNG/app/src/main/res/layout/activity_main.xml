@@ -327,6 +327,7 @@
                         android:focusable="true"
                         android:padding="0dp"
                         android:scaleType="fitCenter"
+                        android:translationY="-12dp"
                         android:src="@drawable/mt_manual_stop"
                         app:shapeAppearanceOverlay="@style/MobileTinaCircleFab" />
 
@@ -347,6 +348,7 @@
                         android:textAllCaps="false"
                         android:textColor="@color/mobiletina_smart_connect_text"
                         android:textSize="16sp"
+                        android:translationY="-12dp"
                         app:cornerRadius="25dp"
                         app:strokeColor="@color/mobiletina_smart_connect_stroke"
                         app:strokeWidth="1dp" />
