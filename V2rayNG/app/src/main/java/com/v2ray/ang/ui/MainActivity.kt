@@ -239,6 +239,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 MobileTinaSessionLimiter.schedule(this)
             } else {
                 MobileTinaSessionLimiter.cancel(this)
+                lastConnectedPing = null
             }
             refreshSelectedServerUi()
         }
@@ -353,6 +354,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         if (smartConnecting || manualConnecting) return
 
         manualConnecting = true
+        lastConnectedPing = null
         refreshSelectedServerUi()
         requestVpnPermissionAndStart(false)
     }
@@ -369,15 +371,22 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
 
         smartConnecting = true
+        lastConnectedPing = null
         smartConnectionFailed = false
         smartCountdownSeconds = 0
         refreshSelectedServerUi()
 
         smartConnectJob?.cancel()
         smartConnectJob = lifecycleScope.launch {
-            // Do not consume the six-second Real Delay window while a subscription refresh is still running.
-            withTimeoutOrNull(8_000L) {
-                while (subscriptionRefreshing && isActive) delay(50L)
+            // The complete Smart Connect selection phase is capped at six seconds.
+            // A subscription refresh may get a brief grace period, but it no longer adds an
+            // independent 8-second wait before the Real Ping window starts.
+            val smartDeadline = SystemClock.elapsedRealtime() + SMART_CONNECT_TIMEOUT_MS
+            val refreshGrace = (smartDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L).coerceAtMost(750L)
+            if (refreshGrace > 0L) {
+                withTimeoutOrNull(refreshGrace) {
+                    while (subscriptionRefreshing && isActive) delay(50L)
+                }
             }
 
             val groups = mainViewModel.getSubscriptions(this@MainActivity)
@@ -405,13 +414,17 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             }
 
             val generation = mainViewModel.realPingGeneration
-            val deadline = SystemClock.elapsedRealtime() + SMART_CONNECT_TIMEOUT_MS
-            smartCountdownSeconds = SMART_CONNECT_TIMEOUT_SECONDS
+            val remainingForPing = (smartDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            if (remainingForPing <= 0L) {
+                markSmartConnectFailed()
+                return@launch
+            }
+            smartCountdownSeconds = ceil(remainingForPing / 1000.0).toInt().coerceIn(1, SMART_CONNECT_TIMEOUT_SECONDS)
             refreshSelectedServerUi()
 
             val countdownJob = launch {
                 while (isActive) {
-                    val remaining = deadline - SystemClock.elapsedRealtime()
+                    val remaining = smartDeadline - SystemClock.elapsedRealtime()
                     if (remaining <= 0L) break
                     smartCountdownSeconds = ceil(remaining / 1000.0).toInt().coerceAtLeast(1)
                     refreshSelectedServerUi()
@@ -421,7 +434,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
             // IMPORTANT: Smart Connect uses the native v2rayNG 2.2.6 Real Ping service.
             mainViewModel.testAllRealPing()
-            val finished = withTimeoutOrNull(SMART_CONNECT_TIMEOUT_MS) {
+            val finished = withTimeoutOrNull(remainingForPing) {
                 while (mainViewModel.realPingGeneration == generation) delay(40L)
                 true
             } ?: false
@@ -445,7 +458,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             mainViewModel.sortByTestResults()
             mainViewModel.reloadServerList()
             refreshSelectedServerUi()
-            delay(120L)
             requestVpnPermissionAndStart(true)
         }
     }
@@ -497,7 +509,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         V2RayServiceManager.startVService(this)
         if (isSmartConnect) {
             lifecycleScope.launch {
-                delay(7_000L)
+                delay(6_000L)
                 if (smartConnecting && mainViewModel.isRunning.value != true) markSmartConnectFailed()
             }
         } else {
@@ -512,6 +524,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     fun restartV2Ray() {
+        lastConnectedPing = null
         if (mainViewModel.isRunning.value == true) V2RayServiceManager.stopVService(this)
         lifecycleScope.launch {
             delay(500L)
@@ -522,8 +535,14 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun handlePingClick() {
         val guid = MmkvManager.getSelectServer().orEmpty()
         if (guid.isBlank() || smartConnecting) return
-        binding.tvAutoPing.setText(R.string.mobiletina_testing)
-        if (mainViewModel.isRunning.value == true) {
+        val running = mainViewModel.isRunning.value == true
+        if (currentMode == MODE_MANUAL) {
+            binding.tvManualPing.setText(R.string.mobiletina_testing)
+        } else {
+            binding.tvAutoPing.setText(R.string.mobiletina_testing)
+        }
+        if (running) {
+            lastConnectedPing = null
             mainViewModel.testCurrentServerRealPing()
         } else {
             mainViewModel.testServerRealPing(guid)
@@ -543,7 +562,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
         binding.tvAutoServer.text = profile?.remarks.orEmpty()
         binding.tvManualSelected.text = profile?.remarks.orEmpty()
-        binding.tvManualPing.text = pingLabel(ping)
+        binding.tvManualPing.text = when {
+            running && !lastConnectedPing.isNullOrBlank() -> lastConnectedPing
+            else -> pingLabel(ping)
+        }
         binding.manualSelectedRow.visibility = if (profile != null) View.VISIBLE else View.INVISIBLE
 
         val autoArtwork: Int

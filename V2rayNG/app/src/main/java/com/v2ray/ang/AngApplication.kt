@@ -6,6 +6,7 @@ import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.tencent.mmkv.MMKV
 import com.v2ray.ang.AppConfig.ANG_PACKAGE
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
 
 class AngApplication : MultiDexApplication() {
@@ -33,6 +34,11 @@ class AngApplication : MultiDexApplication() {
         super.onCreate()
 
         MMKV.initialize(this)
+
+        // MobileTina no longer exposes or supports the two root-only Settings options.
+        // Clear stale values from upgrades so an invisible root mode can never remain active.
+        MmkvManager.encodeSettings(AppConfig.PREF_ROOT_MODE_ENABLE, false)
+        MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, false)
 
         // Initialize WorkManager with the custom configuration
         WorkManager.initialize(this, workManagerConfiguration)

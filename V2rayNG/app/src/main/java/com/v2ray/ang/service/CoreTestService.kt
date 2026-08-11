@@ -4,16 +4,13 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import com.v2ray.ang.AppConfig
-import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreNativeManager
 import com.v2ray.ang.dto.RealPingEvent
 import com.v2ray.ang.dto.TestServiceMessage
-import com.v2ray.ang.enums.NotificationChannelType
 import com.v2ray.ang.extension.serializable
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
-import com.v2ray.ang.util.NotificationHelper
 import java.util.Collections
 
 class CoreTestService : Service() {
@@ -47,7 +44,6 @@ class CoreTestService : Service() {
         val snapshot = ArrayList(activeWorkers)
         snapshot.forEach { it.cancel() }
         activeWorkers.clear()
-        NotificationHelper.stopForeground(this)
         super.onDestroy()
     }
 
@@ -69,7 +65,7 @@ class CoreTestService : Service() {
             AppConfig.MSG_MEASURE_CONFIG_START -> handleMeasureStart(message, startId)
             AppConfig.MSG_MEASURE_CONFIG_CANCEL -> handleMeasureCancel()
             else -> {
-                NotificationHelper.stopForeground(this); stopSelf(startId)
+                stopSelf(startId)
             }
         }
         return START_NOT_STICKY
@@ -77,13 +73,6 @@ class CoreTestService : Service() {
 
     private fun handleMeasureStart(message: TestServiceMessage, startId: Int) {
         LogUtil.i(AppConfig.TAG, "CoreTestService starting worker   subscription ${message.subscriptionId}")
-
-        NotificationHelper.startForeground(
-            this,
-            NotificationChannelType.CORE_TEST,
-            getString(R.string.app_name),
-            getString(R.string.title_real_ping_all_server)
-        )
 
         val guidsList = when {
             message.serverGuids.isNotEmpty() -> message.serverGuids
@@ -101,19 +90,13 @@ class CoreTestService : Service() {
             activeWorkers.add(worker)
             worker.start()
         } else {
-            NotificationHelper.stopForeground(this)
-            stopSelf(startId)
+                stopSelf(startId)
         }
     }
 
     private fun handleWorkerEvent(event: RealPingEvent, onWorkerDone: () -> Unit) {
         when (event) {
             is RealPingEvent.Progress -> {
-                NotificationHelper.updateNotification(
-                    channelType = NotificationChannelType.CORE_TEST,
-                    context = this,
-                    content = getString(R.string.connection_runing_task_left, event.text)
-                )
                 MessageUtil.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_NOTIFY, event.text)
             }
 
@@ -126,8 +109,7 @@ class CoreTestService : Service() {
                 MessageUtil.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_FINISH, event.status)
                 onWorkerDone()
                 if (activeWorkers.isEmpty()) {
-                    NotificationHelper.stopForeground(this)
-                    stopSelf()
+                                stopSelf()
                 }
             }
         }
@@ -138,7 +120,6 @@ class CoreTestService : Service() {
         val snapshot = ArrayList(activeWorkers)
         snapshot.forEach { it.cancel() }
         activeWorkers.clear()
-        NotificationHelper.stopForeground(this)
         stopSelf()
     }
 }

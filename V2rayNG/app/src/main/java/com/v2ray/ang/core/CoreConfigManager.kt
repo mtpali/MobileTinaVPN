@@ -485,7 +485,7 @@ object CoreConfigManager {
         }
         val fakedns = MmkvManager.decodeSettingsBool(AppConfig.PREF_FAKE_DNS_ENABLED) == true
         val sniffAllTlsAndHttp =
-            MmkvManager.decodeSettingsBool(AppConfig.PREF_SNIFFING_ENABLED, true) != false
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_SNIFFING_ENABLED, false) != false
         inbound1.sniffing?.enabled = fakedns || sniffAllTlsAndHttp
         inbound1.sniffing?.routeOnly =
             MmkvManager.decodeSettingsBool(AppConfig.PREF_ROUTE_ONLY_ENABLED, false)

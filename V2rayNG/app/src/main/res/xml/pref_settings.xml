@@ -14,6 +14,7 @@
             android:title="@string/title_pref_confirm_remove" />
 
         <CheckBoxPreference
+            android:defaultValue="true"
             android:key="pref_start_scan_immediate"
             android:summary="@string/summary_pref_start_scan_immediate"
             android:title="@string/title_pref_start_scan_immediate" />
@@ -133,7 +134,7 @@
     <PreferenceCategory android:title="@string/title_core_settings">
 
         <CheckBoxPreference
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:key="pref_sniffing_enabled"
             android:summary="@string/summary_pref_sniffing_enabled"
             android:title="@string/title_pref_sniffing_enabled" />
@@ -325,18 +326,6 @@
             android:key="pref_mode"
             android:summary="%s"
             android:title="@string/title_mode" />
-
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="pref_root_mode_enabled"
-            android:summary="@string/summary_root_mode_enabled"
-            android:title="@string/title_root_mode_enabled" />
-
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="pref_root_lan_sharing"
-            android:summary="@string/summary_root_lan_sharing"
-            android:title="@string/title_root_lan_sharing" />
 
 
     </PreferenceCategory>
