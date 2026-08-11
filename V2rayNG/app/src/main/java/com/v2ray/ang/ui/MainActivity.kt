@@ -9,6 +9,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -418,7 +419,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 }
             }
 
-            // IMPORTANT: this is the untouched 2.0.15 Real Delay service.
+            // IMPORTANT: Smart Connect uses the native v2rayNG 2.2.6 Real Ping service.
             mainViewModel.testAllRealPing()
             val finished = withTimeoutOrNull(SMART_CONNECT_TIMEOUT_MS) {
                 while (mainViewModel.realPingGeneration == generation) delay(40L)
@@ -487,6 +488,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             }
             toast(R.string.title_file_chooser)
             return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN &&
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)
+        ) {
+            checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) { }
         }
         V2RayServiceManager.startVService(this)
         if (isSmartConnect) {

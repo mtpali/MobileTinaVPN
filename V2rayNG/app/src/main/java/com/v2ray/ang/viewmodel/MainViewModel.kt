@@ -223,30 +223,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun getSubscriptions(context: Context): List<GroupMapItem> {
         val subscriptions = MmkvManager.decodeSubscriptions()
-        if (subscriptionId.isNotEmpty()
-            && !subscriptions.map { it.guid }.contains(subscriptionId)
-        ) {
-            subscriptionIdChanged("")
+            .filter { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }
+        val validIds = subscriptions.map { it.guid }
+        if (subscriptionId.isBlank() || subscriptionId == AppConfig.DEFAULT_SUBSCRIPTION_ID || !validIds.contains(subscriptionId)) {
+            subscriptionId = subscriptions.firstOrNull()?.guid.orEmpty()
+            MmkvManager.encodeSettings(AppConfig.CACHE_SUBSCRIPTION_ID, subscriptionId)
         }
-
-        val groups = mutableListOf<GroupMapItem>()
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_GROUP_ALL_DISPLAY)) {
-            groups.add(
-                GroupMapItem(
-                    id = "",
-                    remarks = context.getString(R.string.filter_config_all)
-                )
+        return subscriptions.map { sub ->
+            GroupMapItem(
+                id = sub.guid,
+                remarks = sub.subscription.remarks
             )
         }
-        subscriptions.forEach { sub ->
-            groups.add(
-                GroupMapItem(
-                    id = sub.guid,
-                    remarks = sub.subscription.remarks
-                )
-            )
-        }
-        return groups
     }
 
     /**
