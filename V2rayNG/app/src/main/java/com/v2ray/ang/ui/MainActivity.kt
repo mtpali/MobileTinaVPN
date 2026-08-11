@@ -49,6 +49,7 @@ import com.v2ray.ang.handler.MobileTinaExpiryManager
 import com.v2ray.ang.handler.MobileTinaHiddenShareManager
 import com.v2ray.ang.handler.MobileTinaResetManager
 import com.v2ray.ang.handler.MobileTinaSubscriptionInfo
+import com.v2ray.ang.handler.MobileTinaSubscriptionMarkerManager
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.V2RayServiceManager
@@ -632,6 +633,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         val autoArtwork: Int
         val status: String
         when {
+            MobileTinaSubscriptionMarkerManager.isSubscriptionExpired() -> {
+                autoArtwork = R.drawable.mt_auto_red
+                status = "اشتراک شما به پایان رسید"
+            }
             running -> {
                 autoArtwork = R.drawable.mt_auto_blue
                 status = getString(R.string.mobiletina_status_connected)
@@ -819,6 +824,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             MobileTinaSubscriptionInfo.refreshAll()
             withContext(Dispatchers.Main) {
                 normalizeSubscriptionNames()
+                showExpiredSubscriptionToastIfNeeded()
                 setupGroupTab()
                 mainViewModel.reloadServerList()
                 ensureSelectedServerForCurrentSubscription()
@@ -847,6 +853,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     }
                 }
                 normalizeSubscriptionNames()
+                showExpiredSubscriptionToastIfNeeded()
                 setupGroupTab()
                 mainViewModel.reloadServerList()
                 ensureSelectedServerForCurrentSubscription()
@@ -858,11 +865,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         return true
     }
 
+    private fun showExpiredSubscriptionToastIfNeeded() {
+        if (MobileTinaSubscriptionMarkerManager.consumeExpiredToastPending()) {
+            toastError("اشتراک شما به پایان رسید")
+        }
+    }
+
     private fun normalizeSubscriptionNames() {
         MmkvManager.decodeSubscriptions().forEach { cache ->
             if (cache.guid == AppConfig.DEFAULT_SUBSCRIPTION_ID) return@forEach
-            val remarks = cache.subscription.remarks.trim()
-            if (remarks.isBlank() || remarks.equals("import sub", ignoreCase = true)) {
+            if (cache.subscription.remarks != DEFAULT_SUBSCRIPTION_NAME) {
                 cache.subscription.remarks = DEFAULT_SUBSCRIPTION_NAME
                 MmkvManager.encodeSubscription(cache.guid, cache.subscription)
             }
