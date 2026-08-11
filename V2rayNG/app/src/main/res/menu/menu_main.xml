@@ -98,7 +98,7 @@
         app:showAsAction="never" />
     <item
         android:id="@+id/ping_all"
-        android:title="@string/title_ping_all_server"
+        android:title="@string/title_real_ping_all_server"
         android:visible="false"
         app:showAsAction="never" />
 </menu>
