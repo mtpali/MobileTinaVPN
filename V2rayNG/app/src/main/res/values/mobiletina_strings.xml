@@ -15,7 +15,7 @@
     <string name="mobiletina_mode_manual" translatable="false">حالت دستی</string>
     <string name="mobiletina_tap_for_ping" translatable="false">برای بررسی پینگ لمس کنید</string>
     <string name="mobiletina_manual_smart_connect" translatable="false">اتصال خودکار</string>
-    <string name="mobiletina_manual_smart_connect_with_icon" translatable="false">⚡ اتصال خودکار</string>
+    <string name="mobiletina_manual_smart_connect_with_icon" translatable="false">اتصال خودکار</string>
     <string name="mobiletina_locate_selected" translatable="false">رفتن به سرور انتخاب‌شده</string>
     <string name="mobiletina_countdown_format" translatable="false">%1$d</string>
     <string name="mobiletina_smart_countdown_format" translatable="false">در حال انتخاب بهترین سرور • %1$d ثانیه</string>
