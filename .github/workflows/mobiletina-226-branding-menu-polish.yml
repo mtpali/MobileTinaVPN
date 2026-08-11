@@ -1,0 +1,126 @@
+name: Apply MobileTina 2.2.6 branding and menu polish
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-226-branding-menu-polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Apply requested visual and Persian text changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text(encoding='utf-8')
+              if old not in s:
+                  raise RuntimeError(f'{label}: expected text not found in {path}')
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # Auto mode: a little larger and lower than the previous 224dp / 72dp layout.
+          path = 'V2rayNG/app/src/main/res/layout/activity_main.xml'
+          p = Path(path)
+          s = p.read_text(encoding='utf-8')
+          replacements = [
+              ('android:paddingTop="72dp"', 'android:paddingTop="82dp"', 'auto panel top padding'),
+              ('android:id="@+id/fab_auto"\n                        android:layout_width="224dp"\n                        android:layout_height="224dp"',
+               'android:id="@+id/fab_auto"\n                        android:layout_width="236dp"\n                        android:layout_height="236dp"', 'auto fab size'),
+              ('android:id="@+id/tv_auto_status"\n                        android:layout_width="wrap_content"\n                        android:layout_height="wrap_content"\n                        android:layout_marginTop="20dp"',
+               'android:id="@+id/tv_auto_status"\n                        android:layout_width="wrap_content"\n                        android:layout_height="wrap_content"\n                        android:layout_marginTop="22dp"', 'auto status spacing'),
+              ('android:id="@+id/tv_auto_server"\n                        android:layout_width="match_parent"\n                        android:layout_height="wrap_content"\n                        android:layout_marginTop="24dp"',
+               'android:id="@+id/tv_auto_server"\n                        android:layout_width="match_parent"\n                        android:layout_height="wrap_content"\n                        android:layout_marginTop="26dp"', 'auto server spacing'),
+              ('android:layout_marginTop="34dp"\n                        android:layout_marginEnd="2dp"\n                        android:visibility="gone"',
+               'android:layout_marginTop="38dp"\n                        android:layout_marginEnd="2dp"\n                        android:visibility="gone"', 'subscription card spacing'),
+          ]
+          for old, new, label in replacements:
+              if old not in s:
+                  raise RuntimeError(f'{label}: expected block not found')
+              s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # Light mode manual dock should blend with the light page: white surface + black text.
+          path = 'V2rayNG/app/src/main/res/values/mobiletina_colors.xml'
+          p = Path(path)
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('<color name="mobiletina_manual_dock_bg">#2B2B2B</color>',
+                        '<color name="mobiletina_manual_dock_bg">#FFFFFF</color>', 1)
+          s = s.replace('<color name="mobiletina_manual_dock_text">#FFFFFF</color>',
+                        '<color name="mobiletina_manual_dock_text">#1C1B1F</color>', 1)
+          p.write_text(s, encoding='utf-8')
+
+          # Dark mode keeps the dark dock and high-contrast white text.
+          path = 'V2rayNG/app/src/main/res/values-night/mobiletina_colors.xml'
+          p = Path(path)
+          s = p.read_text(encoding='utf-8')
+          if 'mobiletina_manual_dock_bg' not in s:
+              s = s.replace('    <color name="colorTextPrimary">#F4EFF4</color>\n',
+                            '    <color name="colorTextPrimary">#F4EFF4</color>\n    <color name="mobiletina_manual_dock_bg">#2B2B2B</color>\n    <color name="mobiletina_manual_dock_text">#FFFFFF</color>\n', 1)
+          p.write_text(s, encoding='utf-8')
+
+          # App-facing Persian translations requested by the user.
+          path = 'V2rayNG/app/src/main/res/values/strings.xml'
+          p = Path(path)
+          s = p.read_text(encoding='utf-8')
+          text_replacements = [
+              ('<string name="app_name" translatable="false">v2rayNG</string>', '<string name="app_name" translatable="false">فیلترشکن</string>', 'app name'),
+              ('<string name="notification_action_stop_v2ray">Stop</string>', '<string name="notification_action_stop_v2ray">خاموش کردن فیلترشکن</string>', 'notification stop'),
+              ('<string name="title_real_ping_all_server">Real delay config</string>', '<string name="title_real_ping_all_server">تست سرعت</string>', 'real delay menu'),
+              ('<string name="title_sort_by_test_results">Sorting by test results</string>', '<string name="title_sort_by_test_results">مرتب سازی</string>', 'sort menu'),
+              ('<string name="title_sub_update">Update subscription</string>', '<string name="title_sub_update">بروزرسانی اشتراک</string>', 'subscription update menu'),
+              ('<string name="title_del_duplicate_config">Delete duplicate config</string>', '<string name="title_del_duplicate_config">حذف کانفیگ مشابه</string>', 'delete duplicate menu'),
+              ('<string name="title_del_invalid_config">Delete invalid config</string>', '<string name="title_del_invalid_config">حذف کانفیگ غیرفعال</string>', 'delete invalid menu'),
+              ('<string name="title_del_all_config">Delete config</string>', '<string name="title_del_all_config">حذف تمام کانفیگ ها</string>', 'delete all menu'),
+              ('<string name="per_app_proxy_settings">Per-app settings</string>', '<string name="per_app_proxy_settings">حالت پروکسی</string>', 'per app drawer'),
+              ('<string name="title_settings">Settings</string>', '<string name="title_settings">تنظیمات</string>', 'settings drawer'),
+          ]
+          for old, new, label in text_replacements:
+              if old not in s:
+                  raise RuntimeError(f'{label}: expected string not found')
+              s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # The custom toolbar name follows the same Persian application name.
+          replace_once(
+              'V2rayNG/app/src/main/res/values/mobiletina_strings.xml',
+              '<string name="mobiletina_app_name" translatable="false">MobileTina</string>',
+              '<string name="mobiletina_app_name" translatable="false">فیلترشکن</string>',
+              'MobileTina toolbar app name'
+          )
+
+          # Also use the Persian name for Android's notification channel metadata.
+          replace_once(
+              'V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt',
+              'const val RAY_NG_CHANNEL_NAME = "v2rayNG Background Service"',
+              'const val RAY_NG_CHANNEL_NAME = "فیلترشکن"',
+              'notification channel name'
+          )
+
+      - name: Commit requested changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "MobileTina CI"
+          git config user.email "actions@github.com"
+          git add V2rayNG/app/src/main/res/layout/activity_main.xml \
+                  V2rayNG/app/src/main/res/values/mobiletina_colors.xml \
+                  V2rayNG/app/src/main/res/values-night/mobiletina_colors.xml \
+                  V2rayNG/app/src/main/res/values/strings.xml \
+                  V2rayNG/app/src/main/res/values/mobiletina_strings.xml \
+                  V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt
+          git diff --cached --check
+          git commit -m "Polish auto layout light dock and Persian labels"
+          git push origin HEAD:agent/mobiletina-2.2.6-port
