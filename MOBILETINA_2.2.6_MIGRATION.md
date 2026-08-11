@@ -39,6 +39,9 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 - Android 16+ local-network permission behavior from v2rayNG 2.2.6 is preserved when proxy sharing is enabled.
 - Launcher shortcut metadata and home-screen widget are removed in the Playstore manifest overlay.
 - Launcher branding uses standard Android `mipmap` resources: legacy PNG icons for mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi plus adaptive foreground/background resources for Android 8+; the Playstore manifest references `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`. The adaptive foreground canvas is reduced to 76% of its previous scale to give the red logo more breathing room inside launcher masks.
+- `Enable double column display` and `Auto connect at start up` are removed from Settings and their stale stored values are forced off on upgrades.
+- Auto status text uses `فیلترشکن خاموش است` while stopped and `متصل شد` while connected; numeric Auto ping is displayed as `پینگ : N`.
+- The Manual bottom dock is compacted to 168dp. Its Light theme stays white and its Night theme uses true black (`#000000`).
 - Custom `text.ttf` remains the app font through the MobileTina application theme.
 
 ## Regression rules
