@@ -1,0 +1,303 @@
+name: MobileTina 2.2.6 Port CI v2
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-port-226-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobiletina-226-migration
+  cancel-in-progress: true
+
+jobs:
+  port-build-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 2.2.6 port branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Fetch stable MobileTina source branch
+        shell: bash
+        run: |
+          git fetch origin agent/mobiletina-2.0.15-base:refs/remotes/origin/agent/mobiletina-2.0.15-base
+
+      - name: Restore MobileTina UI and features in working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          copy_old() {
+            local p="$1"
+            mkdir -p "$(dirname "$p")"
+            git show "origin/agent/mobiletina-2.0.15-base:$p" > "$p"
+          }
+          files=(
+            V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainRecyclerAdapter.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/ui/GroupServerFragment.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaModeContainer.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaStoreAboutActivity.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/ui/ScannerActivity.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/core/MobileTinaSessionLimiter.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaExpiryManager.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaHiddenShareManager.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaResetManager.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/receiver/MobileTinaExpiryReceiver.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/receiver/BootReceiver.kt
+            V2rayNG/app/src/main/java/com/v2ray/ang/util/MobileTinaImportNormalizer.kt
+            V2rayNG/app/src/main/res/layout/activity_main.xml
+            V2rayNG/app/src/main/res/layout/activity_mobiletina_store_about.xml
+            V2rayNG/app/src/main/res/layout/item_recycler_main.xml
+            V2rayNG/app/src/main/res/layout/nav_header.xml
+            V2rayNG/app/src/main/res/menu/menu_drawer.xml
+            V2rayNG/app/src/main/res/menu/menu_main.xml
+            V2rayNG/app/src/main/res/values/mobiletina_strings.xml
+            V2rayNG/app/src/main/res/values/mobiletina_colors.xml
+            V2rayNG/app/src/main/res/values-night/mobiletina_colors.xml
+            V2rayNG/app/src/main/res/values/mobiletina_styles.xml
+            V2rayNG/app/src/main/res/drawable/mobiletina_mode_tab_background.xml
+            V2rayNG/app/src/main/res/drawable/ic_mobiletina_qr_scan.xml
+            V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_white.png
+            V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_yellow.png
+            V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_blue.png
+            V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_red.png
+            V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_stop.webp
+            V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_fab.webp
+            V2rayNG/app/src/main/res/drawable-nodpi/mt_nav.png
+            V2rayNG/app/src/main/res/font/text.ttf
+            V2rayNG/app/src/playstore/AndroidManifest.xml
+            V2rayNG/app/src/playstore/res/values/mobiletina_brand.xml
+          )
+          for p in "${files[@]}"; do copy_old "$p"; done
+
+          echo '44d73fbbbf50b037ab0184059e0d890f4fa87a13121d5b9b8fe82c59d67f6903  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_white.png' | sha256sum -c -
+          echo 'efa8450467ec7ebe208d71a9b84a55877c416a5193e50c53fba0e50ea8cfc76c  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_yellow.png' | sha256sum -c -
+          echo '14a34d2485c19090f29e74547a126a59180014659dc045fa7594ad62434e8e89  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_blue.png' | sha256sum -c -
+          echo '5c46b28c45361fad6b93612b5cb4e8dff6793437ad9908e44cec695360380eb9  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_red.png' | sha256sum -c -
+          echo '9c785413bec4f4e707e69decfeaa387e1c4d6268f40a1ad357c135770b763abc  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_stop.webp' | sha256sum -c -
+          echo 'a4dee906b06e9f0833b35efa77182ac8d567a3e9d0ab335ffe4c70e7aa261026  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_fab.webp' | sha256sum -c -
+          echo 'f33b9e6d04c2f6ec344c917f3a2412075c8f62af841b444ffa7a864099e395f7  V2rayNG/app/src/main/res/drawable-nodpi/mt_nav.png' | sha256sum -c -
+
+      - name: Adapt MobileTina source to 2.2.6 APIs
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('import android.os.Bundle\n', 'import android.os.Build\nimport android.os.Bundle\n')
+          s = s.replace('import com.v2ray.ang.handler.V2RayServiceManager\n', 'import com.v2ray.ang.core.CoreServiceManager\n')
+          s = s.replace('V2RayServiceManager', 'CoreServiceManager')
+          s = s.replace('com.v2ray.ang.handler.V2rayConfigManager.getV2rayConfig', 'com.v2ray.ang.core.CoreConfigManager.getV2rayConfig')
+          s = s.replace('            runCatching { com.v2ray.ang.service.TProxyService.preloadNative() }\n', '')
+          marker = '        CoreServiceManager.startVService(this)\n'
+          replacement = '''        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN &&\n            MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)\n        ) {\n            checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) { }\n        }\n        CoreServiceManager.startVService(this)\n'''
+          if marker not in s: raise SystemExit('MainActivity start marker not found')
+          s = s.replace(marker, replacement, 1)
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainRecyclerAdapter.kt')
+          p.write_text(p.read_text(encoding='utf-8').replace('com.v2ray.ang.dto.ServersCache', 'com.v2ray.ang.dto.entities.ServersCache'), encoding='utf-8')
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/GroupServerFragment.kt')
+          p.write_text(p.read_text(encoding='utf-8').replace('com.v2ray.ang.dto.ProfileItem', 'com.v2ray.ang.dto.entities.ProfileItem'), encoding='utf-8')
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaExpiryManager.kt')
+          p.write_text(p.read_text(encoding='utf-8').replace('com.v2ray.ang.dto.SubscriptionItem', 'com.v2ray.ang.dto.entities.SubscriptionItem'), encoding='utf-8')
+
+          for rel in ['V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaResetManager.kt','V2rayNG/app/src/main/java/com/v2ray/ang/receiver/BootReceiver.kt']:
+              p = Path(rel)
+              s = p.read_text(encoding='utf-8').replace('import com.v2ray.ang.handler.V2RayServiceManager', 'import com.v2ray.ang.core.CoreServiceManager').replace('V2RayServiceManager', 'CoreServiceManager')
+              p.write_text(s, encoding='utf-8')
+
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/dto/entities/SubscriptionItem.kt')
+          s = p.read_text(encoding='utf-8')
+          needle = '    var userAgent: String? = null,\n)'
+          repl = '    var userAgent: String? = null,\n    var trafficUploadBytes: Long? = null,\n    var trafficDownloadBytes: Long? = null,\n    var trafficTotalBytes: Long? = null,\n    var expireEpochSeconds: Long? = null,\n)'
+          if needle not in s: raise SystemExit('SubscriptionItem marker not found')
+          p.write_text(s.replace(needle, repl), encoding='utf-8')
+
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/viewmodel/MainViewModel.kt')
+          s = p.read_text(encoding='utf-8')
+          needle = '    val updateTestResultAction by lazy { MutableLiveData<String>() }\n'
+          if needle not in s: raise SystemExit('MainViewModel LiveData marker not found')
+          s = s.replace(needle, needle + '    val realPingFinishedAction by lazy { MutableLiveData<Long>() }\n\n    @Volatile\n    var realPingGeneration: Long = 0L\n        private set\n', 1)
+          s = s.replace('    fun removeServer(guid: String) {', '    fun currentServerGuids(): List<String> = serversCache.map { it.guid }\n\n    fun removeServer(guid: String) {', 1)
+          s = s.replace('    fun exportAllServer(): Int {', '    fun updateEverySubscription(): SubscriptionUpdateResult = AngConfigManager.updateConfigViaSubAll()\n\n    fun exportAllServer(): Int {', 1)
+          needle = '    fun testCurrentServerRealPing() {'
+          extra = '''    fun testServerRealPing(guid: String) {\n        if (guid.isBlank()) return\n        MessageUtil.sendMsg2TestService(getApplication(), TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_CANCEL))\n        MmkvManager.clearAllTestDelayResults(listOf(guid))\n        updateListAction.value = getPosition(guid)\n        viewModelScope.launch(Dispatchers.Default) {\n            MessageUtil.sendMsg2TestService(getApplication(), TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_START, subscriptionId = subscriptionId, serverGuids = listOf(guid)))\n        }\n    }\n\n    fun cancelRealPing() {\n        MessageUtil.sendMsg2TestService(getApplication(), TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_CANCEL))\n    }\n\n'''
+          if needle not in s: raise SystemExit('MainViewModel current ping marker not found')
+          s = s.replace(needle, extra + needle, 1)
+          s = s.replace('val subscriptions = MmkvManager.decodeSubscriptions()\n', 'val subscriptions = MmkvManager.decodeSubscriptions()\n            .filter { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }\n', 1)
+          s = s.replace('subscriptionIdChanged("")', 'subscriptionIdChanged(subscriptions.firstOrNull()?.guid.orEmpty())', 1)
+          synthetic = '''        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_GROUP_ALL_DISPLAY)) {\n            groups.add(\n                GroupMapItem(\n                    id = "",\n                    remarks = context.getString(R.string.filter_config_all)\n                )\n            )\n        }\n'''
+          s = s.replace(synthetic, '')
+          finish_old = '                    if (content == "0") {\n                        onTestsFinished()\n                    }\n'
+          finish_new = '                    if (content == "0") {\n                        realPingGeneration += 1L\n                        realPingFinishedAction.value = realPingGeneration\n                        onTestsFinished()\n                    }\n'
+          if finish_old not in s: raise SystemExit('MainViewModel finish marker not found')
+          s = s.replace(finish_old, finish_new, 1)
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('V2rayNG/app/src/main/res/values/themes.xml')
+          s = p.read_text(encoding='utf-8')
+          needle = '        <item name="android:navigationBarColor">@color/md_theme_surface</item>\n'
+          if needle not in s: raise SystemExit('theme marker not found')
+          p.write_text(s.replace(needle, needle + '        <item name="fontFamily">@font/text</item>\n        <item name="android:fontFamily">@font/text</item>\n', 1), encoding='utf-8')
+
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/handler/NotificationManager.kt')
+          s = p.read_text(encoding='utf-8').replace('    private const val NOTIFICATION_PENDING_INTENT_RESTART_V2RAY = 2\n', '')
+          s = re.sub(r'\n        val restartV2RayIntent = Intent\(AppConfig\.BROADCAST_ACTION_SERVICE\).*?val restartV2RayPendingIntent = PendingIntent\.getBroadcast\(service, NOTIFICATION_PENDING_INTENT_RESTART_V2RAY, restartV2RayIntent, flags\)\n', '\n', s, flags=re.S)
+          s = re.sub(r'\n            \.addAction\(\n                R\.drawable\.ic_restore_24dp,\n                service\.getString\(R\.string\.title_service_restart\),\n                restartV2RayPendingIntent\n            \)', '', s)
+          p.write_text(s, encoding='utf-8')
+
+      - name: Write subscription metadata reader for 2.2.6
+        shell: bash
+        run: |
+          cat > V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaSubscriptionInfo.kt <<'KOT'
+          package com.v2ray.ang.handler
+          import com.v2ray.ang.AppConfig
+          import com.v2ray.ang.BuildConfig
+          import com.v2ray.ang.dto.entities.SubscriptionItem
+          import okhttp3.Credentials
+          import okhttp3.OkHttpClient
+          import okhttp3.Request
+          import java.net.InetSocketAddress
+          import java.net.Proxy
+          import java.util.concurrent.TimeUnit
+          object MobileTinaSubscriptionInfo {
+              fun refreshAll() = MmkvManager.decodeSubscriptions().filter { it.subscription.enabled && it.subscription.url.isNotBlank() }.forEach { runCatching { refreshOne(it.guid, it.subscription) } }
+              fun refresh(subscriptionId: String) { val item = MmkvManager.decodeSubscription(subscriptionId) ?: return; if (item.enabled && item.url.isNotBlank()) runCatching { refreshOne(subscriptionId, item) } }
+              private fun refreshOne(guid: String, item: SubscriptionItem) {
+                  val port = SettingsManager.getHttpPort()
+                  val raw = fetchHeader(item, port) ?: if (port != 0) fetchHeader(item, 0) else null ?: return
+                  val fields = raw.split(';').mapNotNull { seg -> val i=seg.indexOf('='); if(i<=0) null else seg.substring(0,i).trim().lowercase() to (seg.substring(i+1).trim().toLongOrNull() ?: return@mapNotNull null) }.toMap()
+                  item.trafficUploadBytes=fields["upload"]?.takeIf{it>=0}; item.trafficDownloadBytes=fields["download"]?.takeIf{it>=0}; item.trafficTotalBytes=fields["total"]?.takeIf{it>0}; item.expireEpochSeconds=fields["expire"]?.takeIf{it>0}; MmkvManager.encodeSubscription(guid,item)
+              }
+              private fun fetchHeader(item: SubscriptionItem, port: Int): String? {
+                  val b=OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(10,TimeUnit.SECONDS).followRedirects(true).followSslRedirects(true)
+                  if(port!=0){ b.proxy(Proxy(Proxy.Type.HTTP,InetSocketAddress(AppConfig.LOOPBACK,port))); val u=SettingsManager.getSocksUsername(); val p=SettingsManager.getSocksPassword(); if(!u.isNullOrBlank()&&!p.isNullOrBlank()) b.proxyAuthenticator{_,r-> if(r.request.header("Proxy-Authorization")!=null) null else r.request.newBuilder().header("Proxy-Authorization",Credentials.basic(u,p)).build()} }
+                  val req=Request.Builder().url(item.url).get().header("User-Agent",item.userAgent?.takeIf{it.isNotBlank()}?:"v2rayNG/${BuildConfig.VERSION_NAME}").header("Connection","close").build()
+                  return b.build().newCall(req).execute().use { if(!it.isSuccessful) null else it.header("subscription-userinfo") }
+              }
+          }
+          KOT
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+          cmdline-tools-version: '14742923'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+
+      - name: Install NDK
+        shell: bash
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;29.0.14206865"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
+          sed -i '10i\\\n        \\\n            ndkVersion = "29.0.14206865"' V2rayNG/app/build.gradle.kts
+
+      - name: Restore cached libhevtun
+        id: cache-libhevtun-restore
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}/libs
+          key: mobiletina-226-v2-libhevtun-${{ runner.os }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
+
+      - name: Build libhevtun
+        if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+        run: bash compile-hevtun.sh
+
+      - name: Save libhevtun
+        if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}/libs
+          key: mobiletina-226-v2-libhevtun-${{ runner.os }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
+
+      - name: Copy libhevtun
+        run: cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/V2rayNG/app
+
+      - name: Resolve and download 2.2.6 libv2ray
+        shell: bash
+        run: |
+          pushd AndroidLibXrayLite
+          CURRENT_TAG=$(git describe --tags --abbrev=0)
+          echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
+          popd
+
+      - name: Download libv2ray
+        uses: robinraju/release-downloader@v1.13
+        with:
+          repository: '2dust/AndroidLibXrayLite'
+          tag: ${{ env.CURRENT_TAG }}
+          fileName: 'libv2ray.aar'
+          out-file-path: V2rayNG/app/libs/
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compile MobileTina 2.2.6 ARMv7 and capture result
+        id: compile
+        shell: bash
+        run: |
+          set +e
+          cd V2rayNG
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          chmod 755 gradlew
+          ./gradlew assemblePlaystoreDebug -PABI_FILTERS=armeabi-v7a 2>&1 | tee ../mobiletina-226-build.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Restore temporary build.gradle edit
+        if: always()
+        run: git checkout -- V2rayNG/app/build.gradle.kts
+
+      - name: Commit success or failure report
+        if: always()
+        shell: bash
+        env:
+          BUILD_EXIT: ${{ steps.compile.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          mkdir -p .github/verification
+          report=.github/verification/mobiletina-226-ci.txt
+          {
+            echo "MobileTina v2rayNG 2.2.6 migration CI"
+            echo "run=$GITHUB_RUN_ID"
+            echo "sha=$GITHUB_SHA"
+            echo "build_exit=${BUILD_EXIT:-999}"
+            echo "utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "---- build log tail ----"
+            tail -n 180 mobiletina-226-build.log 2>/dev/null || true
+          } > "$report"
+
+          git config user.name "VPN963"
+          git config user.email "120357728+VPN963@users.noreply.github.com"
+          if [ "${BUILD_EXIT:-999}" = "0" ]; then
+            git add V2rayNG/app/src "$report"
+            git diff --cached --check
+            git commit -m "Port MobileTina features and UI to v2rayNG 2.2.6"
+          else
+            git add "$report"
+            git commit -m "Record MobileTina 2.2.6 migration build failure"
+          fi
+          git push origin HEAD:agent/mobiletina-2.2.6-port
+
+      - name: Upload successful ARMv7 APK
+        if: steps.compile.outputs.exit_code == '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: MobileTina-2.2.6-armeabi-v7a-port
+          path: V2rayNG/app/build/outputs/apk/playstore/debug/*armeabi-v7a*.apk
+          if-no-files-found: error
