@@ -604,8 +604,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             smartConnecting && smartCountdownSeconds > 0 ->
                 getString(R.string.mobiletina_smart_countdown_format, smartCountdownSeconds)
             smartConnecting -> getString(R.string.mobiletina_testing)
-            running && !lastConnectedPing.isNullOrBlank() -> lastConnectedPing
-            running && ping > 0L -> ping.toString()
+            running && !lastConnectedPing.isNullOrBlank() ->
+                getString(R.string.mobiletina_ping_format, lastConnectedPing)
+            running && ping > 0L ->
+                getString(R.string.mobiletina_ping_format, ping.toString())
             running && ping < 0L -> getString(R.string.mobiletina_ping_inactive)
             running -> getString(R.string.mobiletina_tap_for_ping)
             else -> ""

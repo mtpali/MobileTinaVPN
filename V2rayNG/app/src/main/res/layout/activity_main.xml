@@ -305,14 +305,14 @@
 
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="186dp"
+                    android:layout_height="168dp"
                     android:background="@color/mobiletina_manual_dock_bg"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
                     <View
                         android:layout_width="match_parent"
-                        android:layout_height="140dp"
+                        android:layout_height="122dp"
                         android:layout_gravity="bottom"
                         android:background="@color/mobiletina_manual_dock_bg" />
 
@@ -335,7 +335,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="50dp"
                         android:layout_gravity="top|center_horizontal"
-                        android:layout_marginTop="100dp"
+                        android:layout_marginTop="92dp"
                         android:backgroundTint="#1976D2"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
@@ -352,9 +352,9 @@
                     <LinearLayout
                         android:id="@+id/manual_selected_row"
                         android:layout_width="wrap_content"
-                        android:layout_height="28dp"
+                        android:layout_height="24dp"
                         android:layout_gravity="top|center_horizontal"
-                        android:layout_marginTop="158dp"
+                        android:layout_marginTop="144dp"
                         android:gravity="center"
                         android:orientation="horizontal"
                         android:visibility="invisible">

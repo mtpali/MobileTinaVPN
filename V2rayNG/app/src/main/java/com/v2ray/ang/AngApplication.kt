@@ -39,6 +39,8 @@ class AngApplication : MultiDexApplication() {
         // Clear stale values from upgrades so an invisible root mode can never remain active.
         MmkvManager.encodeSettings(AppConfig.PREF_ROOT_MODE_ENABLE, false)
         MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, false)
+        MmkvManager.encodeSettings(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)
+        MmkvManager.encodeSettings(AppConfig.PREF_IS_BOOTED, false)
 
         // Initialize WorkManager with the custom configuration
         WorkManager.initialize(this, workManagerConfiguration)
