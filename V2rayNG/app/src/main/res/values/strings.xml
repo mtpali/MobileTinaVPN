@@ -327,7 +327,7 @@
     <string name="filter_config_all">All</string>
     <string name="title_del_duplicate_config_count">Delete %d duplicate configs</string>
     <string name="title_del_config_count">Delete %d configs</string>
-    <string name="title_import_config_count">Import %d configs</string>
+    <string name="title_import_config_count">تعداد %d کانفیگ اضافه شد</string>
     <string name="title_export_config_count">Export %d configs</string>
     <string name="title_update_config_count">Update %d configs</string>
     <string name="title_update_subscription_result">Updated %1$d configs (%2$d success, %3$d failed, %4$d skipped)</string>
@@ -482,4 +482,5 @@
         <item>WebDAV</item>
     </string-array>
 
+    <string name="mobiletina_cancel">بیخیال</string>
 </resources>

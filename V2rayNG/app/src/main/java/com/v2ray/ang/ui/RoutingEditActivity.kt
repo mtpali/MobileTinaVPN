@@ -154,7 +154,7 @@ class RoutingEditActivity : BaseActivity() {
                         }
                     }
                 }
-                .setNegativeButton(android.R.string.cancel) { _, _ ->
+                .setNegativeButton(R.string.mobiletina_cancel) { _, _ ->
                     // do nothing
                 }
                 .show()

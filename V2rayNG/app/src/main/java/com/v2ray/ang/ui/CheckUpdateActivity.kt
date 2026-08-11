@@ -73,7 +73,7 @@ class CheckUpdateActivity : BaseActivity() {
                     Utils.openUri(this, it)
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
     }
 }

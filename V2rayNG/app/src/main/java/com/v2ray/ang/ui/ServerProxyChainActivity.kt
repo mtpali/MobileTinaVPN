@@ -144,7 +144,7 @@ class ServerProxyChainActivity : BaseActivity() {
                             MmkvManager.removeServer(editGuid)
                             finish()
                         }
-                        .setNegativeButton(android.R.string.cancel) { _, _ ->
+                        .setNegativeButton(R.string.mobiletina_cancel) { _, _ ->
                             // do nothing
                         }
                         .show()

@@ -62,7 +62,15 @@ val MainViewModel.realPingGeneration: Long
         return MobileTinaRealPingBridge.generation()
     }
 
-fun MainViewModel.currentServerGuids(): List<String> = serversCache.map { it.guid }
+fun MainViewModel.currentServerGuids(): List<String> {
+    val cached = serversCache.map { it.guid }
+    if (cached.isNotEmpty()) return cached
+    return if (subscriptionId.isBlank()) {
+        MmkvManager.decodeAllServerList()
+    } else {
+        MmkvManager.decodeServerList(subscriptionId)
+    }
+}
 
 fun MainViewModel.updateEverySubscription() = AngConfigManager.updateConfigViaSubAll()
 

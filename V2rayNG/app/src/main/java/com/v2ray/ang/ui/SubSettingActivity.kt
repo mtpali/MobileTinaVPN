@@ -124,7 +124,7 @@ class SubSettingActivity : BaseActivity() {
                         viewModel.remove(guid)
                         refreshData()
                     }
-                    .setNegativeButton(android.R.string.cancel, null)
+                    .setNegativeButton(R.string.mobiletina_cancel, null)
                     .show()
             } else {
                 viewModel.remove(guid)

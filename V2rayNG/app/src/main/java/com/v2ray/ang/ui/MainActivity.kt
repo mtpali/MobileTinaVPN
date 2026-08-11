@@ -39,6 +39,7 @@ import com.v2ray.ang.R
 import com.v2ray.ang.core.MobileTinaSessionLimiter
 import com.v2ray.ang.databinding.ActivityMainBinding
 import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.enums.PermissionType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
@@ -51,6 +52,7 @@ import com.v2ray.ang.handler.MobileTinaSubscriptionInfo
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.V2RayServiceManager
+import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.MobileTinaImportNormalizer
 import com.v2ray.ang.util.QRCodeDecoder
 import com.v2ray.ang.util.Utils
@@ -83,6 +85,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var manualConnecting = false
     private var manualPrewarmGuid: String? = null
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
+    private var internetDialog: AlertDialog? = null
+    private val internetDialogHandler = Handler(Looper.getMainLooper())
 
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -353,6 +357,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
         if (smartConnecting || manualConnecting) return
 
+        ensureSelectedServerForCurrentSubscription()
+        if (MmkvManager.getSelectServer().isNullOrBlank()) {
+            mainViewModel.currentServerGuids().singleOrNull()?.let(MmkvManager::setSelectServer)
+        }
         manualConnecting = true
         lastConnectedPing = null
         refreshSelectedServerUi()
@@ -367,6 +375,21 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
         if (smartConnecting) {
             cancelSmartConnect()
+            return
+        }
+
+        ensureSelectedServerForCurrentSubscription()
+        val immediateServer = mainViewModel.currentServerGuids().singleOrNull()
+        if (immediateServer != null) {
+            smartConnectJob?.cancel()
+            mainViewModel.cancelRealPing()
+            MmkvManager.setSelectServer(immediateServer)
+            smartConnecting = true
+            lastConnectedPing = null
+            smartConnectionFailed = false
+            smartCountdownSeconds = 0
+            refreshSelectedServerUi()
+            requestVpnPermissionAndStart(true)
             return
         }
 
@@ -619,6 +642,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.fab.setImageResource(
             if (running) R.drawable.mt_manual_fab else R.drawable.mt_manual_stop
         )
+        binding.subscriptionCard.translationY = if (running) -12f * resources.displayMetrics.density else 0f
         refreshSubscriptionCard()
     }
 
@@ -726,9 +750,12 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     /** Network subscription refreshes belong to the resumed/visible activity lifecycle. */
     private fun updateSubscriptionOnResume() {
         if (!hasInternetConnection()) {
-            toast(R.string.mobiletina_enable_internet)
+            showInternetRequiredDialog()
             return
         }
+        internetDialogHandler.removeCallbacksAndMessages(null)
+        internetDialog?.dismiss()
+        internetDialog = null
         if (!firstRunPrefs.getBoolean(FIRST_RUN_COMPLETED, false)) return
 
         val now = SystemClock.elapsedRealtime()
@@ -736,6 +763,22 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             lastSubscriptionRefreshAt = now
             refreshSubscriptionsSilently()
         }
+    }
+
+    private fun showInternetRequiredDialog() {
+        if (isFinishing || isDestroyed || internetDialog?.isShowing == true) return
+        internetDialog = AlertDialog.Builder(this)
+            .setMessage(R.string.mobiletina_enable_internet)
+            .create()
+            .also { dialog ->
+                dialog.setOnDismissListener {
+                    if (internetDialog === dialog) internetDialog = null
+                }
+                dialog.show()
+                internetDialogHandler.postDelayed({
+                    if (dialog.isShowing) dialog.dismiss()
+                }, INTERNET_DIALOG_DURATION_MS)
+            }
     }
 
     private fun refreshSubscriptionsSilently() {
@@ -994,8 +1037,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     normalizeSubscriptionNames()
                     when {
                         count > 0 -> {
+                            ensureImportedConfigsHaveVisibleGroup()
                             toast(getString(R.string.title_import_config_count, count))
+                            setupGroupTab()
                             mainViewModel.reloadServerList()
+                            ensureSelectedServerForCurrentSubscription()
                         }
                         countSub > 0 -> {
                             setupGroupTab()
@@ -1015,6 +1061,37 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     binding.progressBar.visibility = View.INVISIBLE
                 }
             }
+        }
+    }
+
+    private fun ensureImportedConfigsHaveVisibleGroup() {
+        val defaultServers = MmkvManager.decodeServerList(AppConfig.DEFAULT_SUBSCRIPTION_ID)
+        if (defaultServers.isEmpty()) return
+
+        val currentId = mainViewModel.subscriptionId
+            .takeIf { it.isNotBlank() && it != AppConfig.DEFAULT_SUBSCRIPTION_ID }
+        val existingId = MmkvManager.decodeSubscriptions()
+            .firstOrNull { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }
+            ?.guid
+        val targetId = currentId ?: existingId ?: Utils.getUuid().also { newId ->
+            MmkvManager.encodeSubscription(
+                newId,
+                SubscriptionItem(remarks = DEFAULT_SUBSCRIPTION_NAME, enabled = true, autoUpdate = false)
+            )
+        }
+
+        val merged = (MmkvManager.decodeServerList(targetId) + defaultServers).distinct().toMutableList()
+        defaultServers.forEach { guid ->
+            MmkvManager.decodeServerConfig(guid)?.let { profile ->
+                profile.subscriptionId = targetId
+                MmkvManager.encodeProfileDirect(guid, JsonUtil.toJson(profile))
+            }
+        }
+        MmkvManager.encodeServerList(merged, targetId)
+        MmkvManager.encodeServerList(mutableListOf(), AppConfig.DEFAULT_SUBSCRIPTION_ID)
+        mainViewModel.subscriptionIdChanged(targetId)
+        if (MmkvManager.getSelectServer().isNullOrBlank()) {
+            merged.firstOrNull()?.let(MmkvManager::setSelectServer)
         }
     }
 
@@ -1056,7 +1133,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
     }
 
@@ -1074,7 +1151,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
     }
 
@@ -1092,7 +1169,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
     }
 
@@ -1136,7 +1213,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 refreshSelectedServerUi()
                 toast(R.string.mobiletina_reset_done)
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
     }
 
@@ -1149,6 +1226,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     override fun onDestroy() {
+        internetDialogHandler.removeCallbacksAndMessages(null)
+        internetDialog?.dismiss()
+        internetDialog = null
         tabMediator?.detach()
         super.onDestroy()
     }
@@ -1161,6 +1241,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val SUBSCRIPTION_REVEAL_HOLD_MS = 10_000L
         private const val SMART_CONNECT_TIMEOUT_SECONDS = 6
         private const val SMART_CONNECT_TIMEOUT_MS = 6_000L
+        private const val INTERNET_DIALOG_DURATION_MS = 3_000L
         private const val DEFAULT_SUBSCRIPTION_NAME = "instagram : mobile.tina"
     }
 }

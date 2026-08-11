@@ -113,7 +113,7 @@ class RoutingSettingActivity : HelperBaseActivity() {
                         LogUtil.e(AppConfig.TAG, "Failed to import predefined ruleset", e)
                     }
                 }
-                .setNegativeButton(android.R.string.cancel) { _, _ ->
+                .setNegativeButton(R.string.mobiletina_cancel) { _, _ ->
                     //do nothing
                 }
                 .show()
@@ -142,7 +142,7 @@ class RoutingSettingActivity : HelperBaseActivity() {
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
+            .setNegativeButton(R.string.mobiletina_cancel) { _, _ ->
                 //do nothing
             }
             .show()
@@ -183,7 +183,7 @@ class RoutingSettingActivity : HelperBaseActivity() {
                     }
                 }
             }
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
+            .setNegativeButton(R.string.mobiletina_cancel) { _, _ ->
                 //do nothing
             }
             .show()

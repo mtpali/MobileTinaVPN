@@ -308,7 +308,7 @@ class BackupActivity : HelperBaseActivity() {
                 MmkvManager.encodeWebDavConfig(cfg)
                 toastSuccess(R.string.toast_success)
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
     }
 }

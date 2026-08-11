@@ -225,7 +225,7 @@ class UserAssetActivity : HelperBaseActivity() {
                     MmkvManager.removeAssetUrl(guid)
                     initAssets()
                 }
-                .setNegativeButton(android.R.string.cancel) { _, _ ->
+                .setNegativeButton(R.string.mobiletina_cancel) { _, _ ->
                     // do nothing
                 }
                 .show()
