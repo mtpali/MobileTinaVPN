@@ -152,7 +152,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.btnModeManual.setOnClickListener { setMode(MODE_MANUAL) }
         binding.btnModeAuto.setOnClickListener { setMode(MODE_AUTO) }
         binding.modeContainer.setOnModeSwipeListener { direction ->
-            // +1 = left-to-right -> Manual, -1 = right-to-left -> Auto.
             if (direction > 0) setMode(MODE_MANUAL) else setMode(MODE_AUTO)
         }
         setMode(MODE_AUTO)
@@ -190,7 +189,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun setupGroupPager() {
         groupPagerAdapter = GroupPagerAdapter(this, emptyList())
         binding.viewPager.adapter = groupPagerAdapter
-        // Horizontal gestures belong to Auto/Manual; subscription changes happen by tapping tabs.
         binding.viewPager.isUserInputEnabled = false
         binding.tabGroup.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) = cancelSubscriptionHold()
@@ -347,14 +345,18 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         val selectedPosition = binding.tabGroup.selectedTabPosition
         val selectedId = if (selectedPosition >= 0) binding.tabGroup.getTabAt(selectedPosition)?.tag as? String else null
         if (selectedId != subscriptionId) return
+
         val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
-        if (subscription.url.isBlank()) return
+        val singleServerLink = MmkvManager.decodeServerList(subscriptionId)
+            .singleOrNull()
+            ?.let(MobileTinaHiddenShareManager::exportConfig)
+        val secretContent = singleServerLink ?: subscription.url.takeIf { it.isNotBlank() } ?: return
 
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 12, 40, 12)
         }
-        QRCodeDecoder.createQRCode(subscription.url)?.let { bitmap ->
+        QRCodeDecoder.createQRCode(secretContent)?.let { bitmap ->
             container.addView(ImageView(this).apply {
                 setImageBitmap(bitmap)
                 adjustViewBounds = true
@@ -362,8 +364,13 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             })
         }
         container.addView(Button(this).apply {
-            setText(R.string.mobiletina_copy_subscription_link)
-            setOnClickListener { Utils.setClipboard(this@MainActivity, subscription.url) }
+            if (singleServerLink != null) {
+                text = "کپی لینک سرور"
+                setOnClickListener { Utils.setClipboard(this@MainActivity, singleServerLink) }
+            } else {
+                setText(R.string.mobiletina_copy_subscription_link)
+                setOnClickListener { Utils.setClipboard(this@MainActivity, subscription.url) }
+            }
         })
         container.addView(Button(this).apply {
             setText(R.string.mobiletina_copy_all_configs)
@@ -435,9 +442,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
         smartConnectJob?.cancel()
         smartConnectJob = lifecycleScope.launch {
-            // The complete Smart Connect selection phase is capped at six seconds.
-            // A subscription refresh may get a brief grace period, but it no longer adds an
-            // independent 8-second wait before the Real Ping window starts.
             val smartDeadline = SystemClock.elapsedRealtime() + SMART_CONNECT_TIMEOUT_MS
             val refreshGrace = (smartDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L).coerceAtMost(750L)
             if (refreshGrace > 0L) {
@@ -489,7 +493,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 }
             }
 
-            // IMPORTANT: Smart Connect uses the native v2rayNG 2.2.6 Real Ping service.
             mainViewModel.testAllRealPing()
             val finished = withTimeoutOrNull(remainingForPing) {
                 while (mainViewModel.realPingGeneration == generation) delay(40L)
@@ -520,18 +523,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun cancelSmartConnect() {
-    smartConnectJob?.cancel()
-    smartConnectJob = null
-    mainViewModel.cancelRealPing()
-    pendingSmartVpnPermission = false
-    smartConnecting = false
-    smartConnectionFailed = false
-    smartCountdownSeconds = 0
-    // Covers the tiny window where the service start was already dispatched but
-    // the UI has not received the running broadcast yet.
-    V2RayServiceManager.stopVService(this)
-    refreshSelectedServerUi()
-}
+        smartConnectJob?.cancel()
+        smartConnectJob = null
+        mainViewModel.cancelRealPing()
+        pendingSmartVpnPermission = false
+        smartConnecting = false
+        smartConnectionFailed = false
+        smartCountdownSeconds = 0
+        V2RayServiceManager.stopVService(this)
+        refreshSelectedServerUi()
+    }
 
     private fun requestVpnPermissionAndStart(isSmartConnect: Boolean) {
         if (SettingsManager.isVpnMode()) {
@@ -672,7 +673,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
         binding.fab.backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
         binding.fab.imageTintList = null
-        // User-supplied artwork: VPN off = stop, VPN on = fab.
         binding.fab.setImageResource(
             if (running) R.drawable.mt_manual_fab else R.drawable.mt_manual_stop
         )
@@ -680,17 +680,13 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         refreshSubscriptionCard()
     }
 
-
     private fun prewarmManualConnection(guid: String) {
         if (guid.isBlank() || guid == manualPrewarmGuid) return
         manualPrewarmGuid = guid
         manualPrewarmJob?.cancel()
         manualPrewarmJob = lifecycleScope.launch(Dispatchers.IO) {
-            // Move one-time initialization/config work out of the tap-to-connect critical path.
             runCatching { V2RayServiceManager.isRunning() }
             runCatching { com.v2ray.ang.service.TProxyService.preloadNative() }
-            // Warm-up only. The real config is rebuilt again at connect time,
-            // so configuration and settings freshness are preserved.
             runCatching {
                 com.v2ray.ang.handler.V2rayConfigManager.getV2rayConfig(
                     applicationContext,
@@ -781,7 +777,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         updateSubscriptionOnResume()
     }
 
-    /** Network subscription refreshes belong to the resumed/visible activity lifecycle. */
     private fun updateSubscriptionOnResume() {
         if (!hasInternetConnection()) {
             showInternetRequiredDialog()
@@ -902,7 +897,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun markFirstRunPermissionCompleted() {
         firstRunPrefs.edit().putBoolean(FIRST_RUN_COMPLETED, true).apply()
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
-        // Subscription updating is intentionally deferred to onResume.
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -1026,7 +1020,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             true
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to import config from clipboard", e)
-            toastError(R.string.toast_failure)
+            toastError("خطا")
             false
         }
     }
@@ -1037,7 +1031,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             true
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to import config from local file", e)
-            toastError(R.string.toast_failure)
+            toastError("خطا")
             false
         }
     }
@@ -1055,7 +1049,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to read config file", e)
-            toastError(R.string.toast_failure)
+            toastError("خطا")
         }
     }
 
@@ -1079,10 +1073,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                         }
                         countSub > 0 -> {
                             setupGroupTab()
-                            // A QR subscription should be usable immediately without restarting the app.
                             if (hasInternetConnection()) refreshSubscriptionsSilently()
                         }
-                        else -> toastError(R.string.toast_failure)
+                        else -> toastError("خطا")
                     }
                     binding.progressBar.visibility = View.INVISIBLE
                     ensureSelectedServerForCurrentSubscription()
@@ -1091,7 +1084,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             } catch (e: Exception) {
                 Log.e(AppConfig.TAG, "Failed to import batch config", e)
                 withContext(Dispatchers.Main) {
-                    toastError(R.string.toast_failure)
+                    toastError("خطا")
                     binding.progressBar.visibility = View.INVISIBLE
                 }
             }
