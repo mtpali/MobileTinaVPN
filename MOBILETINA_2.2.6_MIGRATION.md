@@ -28,7 +28,7 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 - First run requests Camera permission, then VPN authorization; Camera denial does not block the app and VPN authorization does not auto-connect by itself.
 - Resume checks validated internet and refreshes subscriptions with a guard; when internet is unavailable the Persian warning is shown as an auto-dismissing three-second dialog instead of a toast.
 - QR scanner starts scanning immediately by default for new installs.
-- Hidden subscription reveal remains a real ~10-second hold and provides QR, subscription-link copy, and Copy All Configs including Custom JSON.
+- Hidden subscription reveal remains a real ~10-second hold and provides QR, subscription-link copy, and Copy All Configs including Custom JSON. Pending reveal callbacks are cancelled when subscription tabs change or rebuild, and the selected tab is revalidated immediately before the dialog opens so an old tab cannot reveal its QR after navigation.
 - Public share/edit/export actions remain hidden from MobileTina.
 - Drawer is reduced to About Store, Per App Proxy, Settings, and Remove VPN; legacy technical entries stay hidden.
 - Remove VPN stops service, clears app subscriptions/configs/selection, and does not revoke system permissions.
@@ -43,7 +43,7 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 - Auto status text uses `فیلترشکن خاموش است` while stopped and `متصل شد` while connected; numeric Auto ping is displayed as `پینگ : N`.
 - Direct config import result uses Persian `تعداد N کانفیگ اضافه شد`; app-owned Cancel dialog buttons use `بیخیال`.
 - Manual Smart Connect button is white with black text in Light mode and true black with white text in Night mode.
-- The Manual bottom dock is compacted from 168dp to 156dp. FAB and Smart Connect controls keep their previous absolute screen positions; the selected-server row also remains at its previous screen position. Light dock stays white and Night dock uses true black (`#000000`).
+- The Manual bottom dock is compacted to 156dp. The 92dp Manual FAB is fully placed inside the lower dock instead of being translated above its top boundary; its artwork and size are unchanged. Light dock stays white and Night dock uses true black (`#000000`).
 - A two-flavor Android Lint audit plus source-reference scan removed only confirmed unused upstream raster resources: all density variants of `ic_stat_name_black.png` and both day/night `nav_header_bg.png` resources. All MobileTina-added or modified artwork is explicitly protected from cleanup.
 - Custom `text.ttf` remains the app font through the MobileTina application theme.
 
