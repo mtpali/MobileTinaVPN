@@ -1,11 +1,9 @@
 name: MobileTina unused image cleanup
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/mobiletina-2.2.6-port
-    paths:
-      - .github/workflows/mobiletina-unused-images-cleanup-temp.yml
+      - agent/v2rayng-2.2.6-base
 
 permissions:
   contents: write
@@ -83,7 +81,7 @@ jobs:
       - name: Remove only doubly-confirmed unused upstream raster images
         shell: python
         run: |
-          import os, re, subprocess, xml.etree.ElementTree as ET
+          import re, subprocess, xml.etree.ElementTree as ET
           from pathlib import Path
 
           repo = Path.cwd()
@@ -120,7 +118,6 @@ jobs:
           unused_fdroid = set.intersection(*(unused_rasters(p) for p in fdroid)) if len(fdroid) > 1 else unused_rasters(fdroid[0])
           candidates = unused_play & unused_fdroid
 
-          # Protect every image added/modified by MobileTina relative to the exact upstream 2.2.6 base.
           changed = subprocess.check_output(
               ['git', 'diff', '--name-only', f'{base}..HEAD', '--', 'V2rayNG/app/src'],
               text=True,
@@ -129,15 +126,8 @@ jobs:
 
           def is_custom_protected(path):
               name = Path(path).stem.lower()
-              return (
-                  path in protected
-                  or name.startswith('mt_')
-                  or name.startswith('ic_launcher')
-                  or 'mobiletina' in name
-              )
+              return path in protected or name.startswith('mt_') or name.startswith('ic_launcher') or 'mobiletina' in name
 
-          # Extra defense against dynamic/manual references: if the resource stem occurs anywhere
-          # in source text outside the image itself, keep it even if lint classified it unused.
           text_exts = {'.kt', '.java', '.xml', '.kts', '.gradle', '.pro', '.properties', '.txt', '.json'}
           source_text = []
           for p in (app / 'src').rglob('*'):
@@ -177,15 +167,6 @@ jobs:
                   subprocess.run(['git', 'rm', '-f', rel], check=True)
           print(f'SAFE_DELETE_COUNT={len(safe)}')
           print(f'SAFE_DELETE_BYTES={total}')
-
-          # Save a local audit record in the job log, not in the repository.
-          (repo / 'unused-image-audit.txt').write_text(
-              'Unused both flavors:\n' + '\n'.join(sorted(candidates)) +
-              '\n\nProtected custom:\n' + '\n'.join(skipped_custom) +
-              '\n\nKept references:\n' + '\n'.join(skipped_reference) +
-              '\n\nDeleted:\n' + '\n'.join(safe) + '\n',
-              encoding='utf-8'
-          )
 
       - name: Verify after deletion with both lint variants
         run: |
