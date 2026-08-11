@@ -42,6 +42,7 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 - `Enable double column display` and `Auto connect at start up` are removed from Settings and their stale stored values are forced off on upgrades.
 - Auto status text uses `فیلترشکن خاموش است` while stopped and `متصل شد` while connected; numeric Auto ping is displayed as `پینگ : N`.
 - The Manual bottom dock is compacted to 168dp. Its Light theme stays white and its Night theme uses true black (`#000000`).
+- A two-flavor Android Lint audit plus source-reference scan removed only confirmed unused upstream raster resources: `drawable-mdpi/ic_stat_name_black.png` and both day/night `nav_header_bg.png` resources. All MobileTina-added or modified artwork is explicitly protected from cleanup.
 - Custom `text.ttf` remains the app font through the MobileTina application theme.
 
 ## Regression rules
