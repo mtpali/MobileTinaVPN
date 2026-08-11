@@ -17,6 +17,8 @@
     <string name="mobiletina_manual_smart_connect_with_icon" translatable="false">⚡ اتصال خودکار</string>
     <string name="mobiletina_locate_selected" translatable="false">رفتن به سرور انتخاب‌شده</string>
     <string name="mobiletina_countdown_format" translatable="false">%1$d</string>
+    <string name="mobiletina_smart_countdown_format" translatable="false">در حال انتخاب بهترین سرور • %1$d ثانیه</string>
+    <string name="mobiletina_smart_countdown_short" translatable="false">%1$d ثانیه</string>
     <string name="mobiletina_subscription_status" translatable="false">Subscription</string>
     <string name="mobiletina_subscription_used" translatable="false">مصرف‌شده: %1$s</string>
     <string name="mobiletina_subscription_days_remaining" translatable="false">%1$d روز باقی‌مانده</string>

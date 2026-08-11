@@ -563,6 +563,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.tvAutoServer.text = profile?.remarks.orEmpty()
         binding.tvManualSelected.text = profile?.remarks.orEmpty()
         binding.tvManualPing.text = when {
+            smartConnecting && smartCountdownSeconds > 0 ->
+                getString(R.string.mobiletina_smart_countdown_short, smartCountdownSeconds)
+            smartConnecting -> getString(R.string.mobiletina_testing)
             running && !lastConnectedPing.isNullOrBlank() -> lastConnectedPing
             else -> pingLabel(ping)
         }
@@ -598,7 +601,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.tvAutoServer.visibility = if (showAutoDetails) View.VISIBLE else View.GONE
         binding.tvAutoServer.text = if (showAutoDetails) profile?.remarks.orEmpty() else ""
         binding.tvAutoPing.text = when {
-            smartConnecting && smartCountdownSeconds > 0 -> smartCountdownSeconds.toString()
+            smartConnecting && smartCountdownSeconds > 0 ->
+                getString(R.string.mobiletina_smart_countdown_format, smartCountdownSeconds)
             smartConnecting -> getString(R.string.mobiletina_testing)
             running && !lastConnectedPing.isNullOrBlank() -> lastConnectedPing
             running && ping > 0L -> ping.toString()
@@ -714,7 +718,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         setupGroupTab()
         ensureSelectedServerForCurrentSubscription()
         refreshSelectedServerUi()
+        updateSubscriptionOnResume()
+    }
 
+    /** Network subscription refreshes belong to the resumed/visible activity lifecycle. */
+    private fun updateSubscriptionOnResume() {
         if (!hasInternetConnection()) {
             toast(R.string.mobiletina_enable_internet)
             return
@@ -815,7 +823,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun markFirstRunPermissionCompleted() {
         firstRunPrefs.edit().putBoolean(FIRST_RUN_COMPLETED, true).apply()
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
-        if (hasInternetConnection()) refreshSubscriptionsSilently()
+        // Subscription updating is intentionally deferred to onResume.
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
