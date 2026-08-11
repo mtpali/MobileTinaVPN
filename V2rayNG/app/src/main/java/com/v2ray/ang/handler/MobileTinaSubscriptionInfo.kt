@@ -25,8 +25,13 @@ object MobileTinaSubscriptionInfo {
 
     private fun refreshOne(guid: String, item: SubscriptionItem) {
         val proxyPort = SettingsManager.getHttpPort()
-        val raw = if (proxyPort > 0) fetchHeader(item, proxyPort) ?: fetchHeader(item, 0) else fetchHeader(item, 0)
-            ?: return
+        val raw = (
+            if (proxyPort > 0) {
+                fetchHeader(item, proxyPort) ?: fetchHeader(item, 0)
+            } else {
+                fetchHeader(item, 0)
+            }
+        ) ?: return
 
         val fields = raw.split(';').mapNotNull { segment ->
             val i = segment.indexOf('=')
