@@ -327,7 +327,6 @@
                         android:focusable="true"
                         android:padding="0dp"
                         android:scaleType="fitCenter"
-                        android:translationY="-12dp"
                         android:src="@drawable/mt_manual_stop"
                         app:shapeAppearanceOverlay="@style/MobileTinaCircleFab" />
 

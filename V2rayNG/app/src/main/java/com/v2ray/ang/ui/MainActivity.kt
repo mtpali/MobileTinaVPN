@@ -87,6 +87,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
     private var internetDialog: AlertDialog? = null
     private val internetDialogHandler = Handler(Looper.getMainLooper())
+    private val subscriptionHoldHandler = Handler(Looper.getMainLooper())
+    private var subscriptionHoldRunnable: Runnable? = null
+    private var subscriptionSecretDialog: AlertDialog? = null
 
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -189,6 +192,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.viewPager.adapter = groupPagerAdapter
         // Horizontal gestures belong to Auto/Manual; subscription changes happen by tapping tabs.
         binding.viewPager.isUserInputEnabled = false
+        binding.tabGroup.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab?) = cancelSubscriptionHold()
+            override fun onTabUnselected(tab: TabLayout.Tab?) = cancelSubscriptionHold()
+            override fun onTabReselected(tab: TabLayout.Tab?) = Unit
+        })
     }
 
     private fun setupDrawer() {
@@ -252,6 +260,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun setupGroupTab() {
+        cancelSubscriptionHold()
         val groups = mainViewModel.getSubscriptions(this)
         groupPagerAdapter.update(groups)
         tabMediator?.detach()
@@ -299,26 +308,45 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
     }
 
+    private fun cancelSubscriptionHold() {
+        subscriptionHoldRunnable?.let(subscriptionHoldHandler::removeCallbacks)
+        subscriptionHoldRunnable = null
+    }
+
     private fun installSecretHold(view: View, subscriptionId: String) {
-        val handler = Handler(Looper.getMainLooper())
-        var revealed = false
-        val reveal = Runnable {
-            revealed = true
-            showSubscriptionSecret(subscriptionId)
-        }
         view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    revealed = false
-                    handler.postDelayed(reveal, SUBSCRIPTION_REVEAL_HOLD_MS)
+                    cancelSubscriptionHold()
+                    val reveal = Runnable {
+                        subscriptionHoldRunnable = null
+                        val selectedPosition = binding.tabGroup.selectedTabPosition
+                        val selectedId = if (selectedPosition >= 0) {
+                            binding.tabGroup.getTabAt(selectedPosition)?.tag as? String
+                        } else null
+                        if (!isFinishing && !isDestroyed && view.isAttachedToWindow && selectedId == subscriptionId) {
+                            showSubscriptionSecret(subscriptionId)
+                        }
+                    }
+                    subscriptionHoldRunnable = reveal
+                    subscriptionHoldHandler.postDelayed(reveal, SUBSCRIPTION_REVEAL_HOLD_MS)
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> handler.removeCallbacks(reveal)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> cancelSubscriptionHold()
             }
-            revealed
+            false
         }
+        view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = Unit
+            override fun onViewDetachedFromWindow(v: View) = cancelSubscriptionHold()
+        })
     }
 
     private fun showSubscriptionSecret(subscriptionId: String) {
+        cancelSubscriptionHold()
+        if (subscriptionSecretDialog?.isShowing == true) return
+        val selectedPosition = binding.tabGroup.selectedTabPosition
+        val selectedId = if (selectedPosition >= 0) binding.tabGroup.getTabAt(selectedPosition)?.tag as? String else null
+        if (selectedId != subscriptionId) return
         val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
         if (subscription.url.isBlank()) return
 
@@ -342,11 +370,17 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             setOnClickListener { MobileTinaHiddenShareManager.copyAllConfigs(this@MainActivity, subscriptionId) }
         })
 
-        AlertDialog.Builder(this)
+        subscriptionSecretDialog = AlertDialog.Builder(this)
             .setTitle(subscription.remarks.ifBlank { getString(R.string.mobiletina_subscription_secret_title) })
             .setView(container)
             .setNegativeButton(R.string.mobiletina_close, null)
-            .show()
+            .create()
+            .also { dialog ->
+                dialog.setOnDismissListener {
+                    if (subscriptionSecretDialog === dialog) subscriptionSecretDialog = null
+                }
+                dialog.show()
+            }
     }
 
     private fun handleManualFabAction() {
@@ -1226,6 +1260,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     override fun onDestroy() {
+        cancelSubscriptionHold()
+        subscriptionHoldHandler.removeCallbacksAndMessages(null)
+        subscriptionSecretDialog?.dismiss()
+        subscriptionSecretDialog = null
         internetDialogHandler.removeCallbacksAndMessages(null)
         internetDialog?.dismiss()
         internetDialog = null
