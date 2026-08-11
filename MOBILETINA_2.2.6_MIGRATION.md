@@ -13,7 +13,7 @@
 ## Core strategy
 The 2.0.15 Core was not copied into this branch. MobileTina runs on the native v2rayNG 2.2.6 architecture (`CoreServiceManager`, `CoreConfigManager`, `CoreTestService`, matching AndroidLibXrayLite/libv2ray). MobileTina compatibility facades only bridge old UI call sites to the 2.2.6 Core APIs.
 
-Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects directly. Multiple servers run cancellable Real Ping, wait up to six seconds, select the lowest positive result available, sort, and connect.
+Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects directly without starting the batch timer. Multiple servers run cancellable Real Ping, wait up to six seconds, select the lowest positive result available, sort, and connect.
 
 ## Preserved MobileTina UX/features
 - Auto is the default page; Manual remains available with directional swipe and dedicated mode buttons.
@@ -21,12 +21,12 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 - Auto artwork mapping: white=idle, yellow=connecting, blue=connected, red=failed; Auto FAB 236dp. The Auto content top padding is 94dp so the large FAB sits slightly lower on the page.
 - Manual artwork mapping: stop=VPN off, fab=VPN on; Manual FAB 92dp; Smart Connect button 50dp.
 - Manual list shows server name + ping only. Editing, sharing, deleting and drag/reorder are not exposed. Selected server is visibly highlighted.
-- Subscription card remains Auto-only and shows used/total and days remaining when `subscription-userinfo` metadata exists.
+- Subscription card remains Auto-only and shows used/total and days remaining when `subscription-userinfo` metadata exists. In Light mode its progress colors are inverted for legibility; while VPN is connected the card is raised slightly.
 - Subscription metadata refresh supports the running local proxy first with direct-network fallback.
 - Default subscription title is normalized to `instagram : mobile.tina`.
-- Synthetic Default/All groups are filtered from MobileTina.
+- Synthetic Default/All groups are normally filtered from MobileTina. Direct imported configs that would otherwise land in the hidden DEFAULT group are migrated into a visible local MobileTina group so even a single scanned/imported server appears immediately.
 - First run requests Camera permission, then VPN authorization; Camera denial does not block the app and VPN authorization does not auto-connect by itself.
-- Resume checks validated internet and refreshes subscriptions with a guard; offline message remains the MobileTina Persian message.
+- Resume checks validated internet and refreshes subscriptions with a guard; when internet is unavailable the Persian warning is shown as an auto-dismissing three-second dialog instead of a toast.
 - QR scanner starts scanning immediately by default for new installs.
 - Hidden subscription reveal remains a real ~10-second hold and provides QR, subscription-link copy, and Copy All Configs including Custom JSON.
 - Public share/edit/export actions remain hidden from MobileTina.
@@ -41,12 +41,14 @@ Smart Connect uses the native 2.2.6 Real Ping batch service. One server connects
 - Launcher branding uses standard Android `mipmap` resources: legacy PNG icons for mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi plus adaptive foreground/background resources for Android 8+; the Playstore manifest references `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`. The adaptive foreground canvas is reduced to 76% of its previous scale to give the red logo more breathing room inside launcher masks.
 - `Enable double column display` and `Auto connect at start up` are removed from Settings and their stale stored values are forced off on upgrades.
 - Auto status text uses `فیلترشکن خاموش است` while stopped and `متصل شد` while connected; numeric Auto ping is displayed as `پینگ : N`.
-- The Manual bottom dock is compacted to 168dp. Its Light theme stays white and its Night theme uses true black (`#000000`).
-- A two-flavor Android Lint audit plus source-reference scan removed only confirmed unused upstream raster resources: `drawable-mdpi/ic_stat_name_black.png` and both day/night `nav_header_bg.png` resources. All MobileTina-added or modified artwork is explicitly protected from cleanup.
+- Direct config import result uses Persian `تعداد N کانفیگ اضافه شد`; app-owned Cancel dialog buttons use `بیخیال`.
+- Manual Smart Connect button is white with black text in Light mode and true black with white text in Night mode.
+- The Manual bottom dock is compacted from 168dp to 156dp. FAB and Smart Connect controls keep their previous absolute screen positions; the selected-server row also remains at its previous screen position. Light dock stays white and Night dock uses true black (`#000000`).
+- A two-flavor Android Lint audit plus source-reference scan removed only confirmed unused upstream raster resources: all density variants of `ic_stat_name_black.png` and both day/night `nav_header_bg.png` resources. All MobileTina-added or modified artwork is explicitly protected from cleanup.
 - Custom `text.ttf` remains the app font through the MobileTina application theme.
 
 ## Regression rules
 - Do not replace the native 2.2.6 Core/Real Ping implementation with 2.0.15 or 2.3.3 internals.
 - Do not alter user artwork bytes.
 - Build ARMv7 before declaring a migration change successful.
-- Phone QA must verify Real Ping against the user's known server set, Auto/Manual artwork and spacing, QR import/update metadata, expiry behavior, and 24-hour scheduling.
+- Phone QA must verify Real Ping against the user's known server set, single-server direct connect, direct import visibility, Auto/Manual artwork and spacing, QR import/update metadata, expiry behavior, and 24-hour scheduling.
