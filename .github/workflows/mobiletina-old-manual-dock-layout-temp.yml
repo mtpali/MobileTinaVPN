@@ -1,0 +1,95 @@
+name: MobileTina old-style Manual dock layout
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+    paths:
+      - .github/workflows/mobiletina-old-manual-dock-layout-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Recreate old MobileTina Manual dock composition
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('V2rayNG/app/src/main/res/layout/activity_main.xml')
+          s = p.read_text(encoding='utf-8')
+
+          old_panel = '''            <LinearLayout
+                android:id="@+id/manual_panel"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:visibility="gone">'''
+          new_panel = '''            <LinearLayout
+                android:id="@+id/manual_panel"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:visibility="gone">'''
+          assert old_panel in s, 'manual panel block not found'
+          s = s.replace(old_panel, new_panel, 1)
+
+          old_dock = '''                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="166dp"
+                    android:background="@color/mobiletina_manual_dock_bg"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">'''
+          new_dock = '''                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="154dp"
+                    android:background="@color/mobiletina_manual_dock_bg"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">'''
+          assert old_dock in s, 'manual dock block not found'
+          s = s.replace(old_dock, new_dock, 1)
+
+          fab_marker = '''                        android:elevation="8dp"
+                        android:focusable="true"'''
+          fab_new = '''                        android:elevation="12dp"
+                        android:focusable="true"
+                        android:translationY="-28dp"'''
+          assert fab_marker in s, 'manual FAB marker not found'
+          s = s.replace(fab_marker, fab_new, 1)
+
+          smart_id = s.index('android:id="@+id/btn_smart_connect"')
+          row_id = s.index('android:id="@+id/manual_selected_row"')
+          smart_block = s[smart_id:row_id]
+          assert 'android:layout_marginTop="92dp"' in smart_block
+          smart_block = smart_block.replace('android:layout_marginTop="92dp"', 'android:layout_marginTop="72dp"', 1)
+          if 'android:elevation=' not in smart_block:
+              smart_block = smart_block.replace('android:backgroundTint="@color/mobiletina_smart_connect_bg"', 'android:backgroundTint="@color/mobiletina_smart_connect_bg"\n                        android:elevation="4dp"', 1)
+          s = s[:smart_id] + smart_block + s[row_id:]
+
+          row_id = s.index('android:id="@+id/manual_selected_row"')
+          tail = s[row_id:]
+          assert 'android:layout_marginTop="142dp"' in tail
+          tail = tail.replace('android:layout_marginTop="142dp"', 'android:layout_marginTop="128dp"', 1)
+          s = s[:row_id] + tail
+
+          p.write_text(s, encoding='utf-8')
+
+      - name: Commit layout
+        run: |
+          git config user.name "MobileTina CI"
+          git config user.email "actions@github.com"
+          git rm -f .github/workflows/mobiletina-old-manual-dock-layout-temp.yml
+          git add V2rayNG/app/src/main/res/layout/activity_main.xml
+          git diff --cached --check
+          git commit -m "Match old MobileTina Manual dock layout"
+          git push origin HEAD:agent/mobiletina-2.2.6-port
