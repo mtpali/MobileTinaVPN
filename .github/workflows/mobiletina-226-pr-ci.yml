@@ -87,13 +87,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Decode release keystore
-        uses: timheuer/base64-to-file@v2.0.0
-        id: android_keystore
-        with:
-          fileName: mobiletina-release.jks
-          encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
-
       - name: Test and build obfuscated ARMv7 + ARMv8 APK
         run: |
           cd V2rayNG
@@ -103,10 +96,7 @@ jobs:
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
-            -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} \
-            -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
+            -PFINAL_BUILD_SIGNING=debug
 
       - name: Verify final APK signature and architectures
         run: |

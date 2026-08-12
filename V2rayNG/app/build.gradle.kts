@@ -57,6 +57,12 @@ android {
             isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
+            // CI can create an installable final artifact when no private production
+            // keystore is configured. Official publishing remains unsigned unless the
+            // signing properties are supplied explicitly by the release owner.
+            if ((properties["FINAL_BUILD_SIGNING"] as? String) == "debug") {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
