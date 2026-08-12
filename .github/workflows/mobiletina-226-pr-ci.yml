@@ -107,6 +107,15 @@ jobs:
           printf 'arm64-v8a\narmeabi-v7a\n' > /tmp/expected-abis
           zipinfo -1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u > /tmp/apk-abis
           diff -u /tmp/expected-abis /tmp/apk-abis
+          unzip -p "$APK" 'classes*.dex' | strings > /tmp/dex-strings
+          for field in configType subscriptionId server serverPort password network enabled url outboundBean streamSettings routing; do
+            grep -Fxq "$field" /tmp/dex-strings
+          done
+          MAPPING=V2rayNG/app/build/outputs/mapping/playstoreRelease/mapping.txt
+          test -s "$MAPPING"
+          MAPPED_NAME=$(sed -n 's/^com\.v2ray\.ang\.handler\.AngConfigManager -> \(.*\):$/\1/p' "$MAPPING")
+          test -n "$MAPPED_NAME"
+          test "$MAPPED_NAME" != 'com.v2ray.ang.handler.AngConfigManager'
 
       - name: Upload final MobileTina APK
         uses: actions/upload-artifact@v7
