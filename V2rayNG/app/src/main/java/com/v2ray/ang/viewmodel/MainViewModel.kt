@@ -38,7 +38,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var subscriptionId: String = MmkvManager.decodeSettingsString(AppConfig.CACHE_SUBSCRIPTION_ID, "").orEmpty()
     var keywordFilter = ""
     val serversCache = mutableListOf<ServersCache>()
-    val isRunning by lazy { MutableLiveData<Boolean>() }
+    val isRunning by lazy {
+        MutableLiveData(MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING, false))
+    }
     val updateListAction by lazy { MutableLiveData<Int>() }
     val updateTestResultAction by lazy { MutableLiveData<String>() }
 
@@ -47,7 +49,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * `registerReceiver(Context, BroadcastReceiver, IntentFilter, int)`.
      */
     fun startListenBroadcast() {
-        isRunning.value = false
         val mFilter = IntentFilter(AppConfig.BROADCAST_ACTION_ACTIVITY)
         ContextCompat.registerReceiver(getApplication(), mMsgReceiver, mFilter, Utils.receiverFlags())
         MessageUtil.sendMsg2Service(getApplication(), AppConfig.MSG_REGISTER_CLIENT, "")
@@ -410,16 +411,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             when (intent?.getIntExtra("key", 0)) {
                 AppConfig.MSG_STATE_RUNNING -> {
-                    isRunning.value = true
+                    updateRunningState(true)
                 }
 
                 AppConfig.MSG_STATE_NOT_RUNNING -> {
-                    isRunning.value = false
+                    updateRunningState(false)
                 }
 
                 AppConfig.MSG_STATE_START_SUCCESS -> {
                     // MobileTina keeps successful starts silent; the connected state is visible in the main UI.
-                    isRunning.value = true
+                    updateRunningState(true)
                 }
 
                 AppConfig.MSG_STATE_START_FAILURE -> {
@@ -429,11 +430,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         getApplication<AngApplication>().toastError(R.string.toast_services_failure)
                     }
-                    isRunning.value = false
+                    updateRunningState(false)
                 }
 
                 AppConfig.MSG_STATE_STOP_SUCCESS -> {
-                    isRunning.value = false
+                    updateRunningState(false)
                 }
 
                 AppConfig.MSG_MEASURE_DELAY_SUCCESS -> {
@@ -459,5 +460,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    private fun updateRunningState(running: Boolean) {
+        MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, running)
+        isRunning.value = running
     }
 }

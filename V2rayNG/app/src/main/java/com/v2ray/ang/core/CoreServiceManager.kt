@@ -227,6 +227,7 @@ object CoreServiceManager {
         } catch (e: Exception) {
             val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message", e)
+            MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
             NotificationManager.cancelNotification()
             return false
@@ -283,6 +284,9 @@ object CoreServiceManager {
         }
 
         MobileTinaSessionLimiter.schedule(service)
+        // MMKV runs in multi-process mode, so the UI can render the correct state
+        // immediately when its process is recreated while the VPN service stays alive.
+        MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, true)
         MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         NotificationManager.startSpeedNotification()
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
@@ -294,6 +298,8 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
+        // Persist before asynchronous core shutdown and before notifying UI clients.
+        MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
         val service = getService() ?: return false
         MobileTinaSessionLimiter.cancel(service)
 

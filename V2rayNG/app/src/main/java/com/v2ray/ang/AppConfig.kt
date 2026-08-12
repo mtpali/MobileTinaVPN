@@ -84,6 +84,7 @@ object AppConfig {
 
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"
+    const val CACHE_SERVICE_RUNNING = "cache_service_running"
 
     /** Protocol identifiers. */
     const val PROTOCOL_FREEDOM = "freedom"
