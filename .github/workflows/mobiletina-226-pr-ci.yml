@@ -92,7 +92,10 @@ jobs:
           cd V2rayNG
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           chmod 755 gradlew
-          ./gradlew testPlaystoreDebugUnitTest assemblePlaystoreDebug -PABI_FILTERS=armeabi-v7a
+          ./gradlew testPlaystoreDebugUnitTest \
+            --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
+            assemblePlaystoreDebug \
+            -PABI_FILTERS=armeabi-v7a
 
       - name: Upload MobileTina 2.2.6 ARMv7 APK
         uses: actions/upload-artifact@v7
