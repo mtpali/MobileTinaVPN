@@ -100,7 +100,7 @@
     <string name="title_file_chooser">Select a config</string>
     <string name="toast_require_file_manager">Please install a File Manager.</string>
     <string name="server_customize_config">Customize config</string>
-    <string name="toast_config_file_invalid">Invalid config</string>
+    <string name="toast_config_file_invalid">کانفیگی وجود ندارد</string>
     <string name="server_lab_content">Content</string>
     <string name="toast_none_data_clipboard">There is no data in the clipboard</string>
     <string name="toast_invalid_url">Invalid URL</string>

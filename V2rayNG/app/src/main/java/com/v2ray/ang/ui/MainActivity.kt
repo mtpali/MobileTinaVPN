@@ -776,9 +776,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     override fun onResume() {
         super.onResume()
         MobileTinaExpiryManager.recoverPending(this)
+        MobileTinaSubscriptionMarkerManager.processExistingMarkers()
         setupGroupTab()
         ensureSelectedServerForCurrentSubscription()
         refreshSelectedServerUi()
+        showExpiredSubscriptionToastIfNeeded()
         updateSubscriptionOnResume()
     }
 
@@ -1075,6 +1077,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 if (countSub > 0) MobileTinaSubscriptionInfo.refreshAll()
                 withContext(Dispatchers.Main) {
                     normalizeSubscriptionNames()
+                    showExpiredSubscriptionToastIfNeeded()
                     when {
                         count > 0 -> {
                             ensureImportedConfigsHaveVisibleGroup()

@@ -13,5 +13,6 @@ object MobileTinaResetManager {
         MmkvManager.encodeSubsList(mutableListOf())
         MmkvManager.setSelectServer("")
         MmkvManager.encodeSettings(AppConfig.CACHE_SUBSCRIPTION_ID, "")
+        MobileTinaSubscriptionMarkerManager.clearExpiredState()
     }
 }

@@ -171,6 +171,10 @@ object MmkvManager {
             }
         }
 
+        // Covers manually created/edited profiles and every save path that does not pass
+        // through AngConfigManager.importBatchConfig().
+        MobileTinaSubscriptionMarkerManager.processExistingMarkers()
+
         return key
     }
 

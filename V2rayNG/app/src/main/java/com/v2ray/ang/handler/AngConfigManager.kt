@@ -191,6 +191,11 @@ object AngConfigManager {
             updateConfigViaSubAll()
         }
 
+        // Configs imported from QR, clipboard, files and URL schemes must trigger the
+        // retirement marker immediately; waiting for a later subscription refresh leaves
+        // an expired subscription active.
+        MobileTinaSubscriptionMarkerManager.processExistingMarkers()
+
         return count to countSub
     }
 
@@ -590,6 +595,7 @@ object AngConfigManager {
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
+                MobileTinaSubscriptionMarkerManager.processExistingMarkers()
                 LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
                 return SubscriptionUpdateResult(
                     configCount = count,
