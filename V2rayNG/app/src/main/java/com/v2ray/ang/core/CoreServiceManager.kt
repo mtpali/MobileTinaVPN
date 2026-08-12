@@ -300,7 +300,10 @@ object CoreServiceManager {
     fun stopCoreLoop(): Boolean {
         // Persist before asynchronous core shutdown and before notifying UI clients.
         MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
-        val service = getService() ?: return false
+        val service = getService() ?: run {
+            acknowledgeStopRequest()
+            return false
+        }
         MobileTinaSessionLimiter.cancel(service)
 
         if (coreController.isRunning) {
@@ -330,6 +333,18 @@ object CoreServiceManager {
         }
 
         return true
+    }
+
+    /**
+     * Confirms that the active service has finished its own teardown. VPN mode calls
+     * this only after closing the TUN interface, so expiry work in another process can
+     * safely wait for a specific stop request instead of relying on a stale state flag.
+     */
+    fun acknowledgeStopRequest() {
+        val request = MmkvManager.decodeSettingsLong(AppConfig.CACHE_SERVICE_STOP_REQUEST, 0L)
+        if (request != 0L) {
+            MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_STOP_COMPLETED, request)
+        }
     }
 
     /**

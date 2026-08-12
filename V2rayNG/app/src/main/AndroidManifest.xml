@@ -247,7 +247,8 @@
         </receiver>
         <receiver
             android:name=".receiver.MobileTinaExpiryReceiver"
-            android:exported="false">
+            android:exported="false"
+            android:process=":bg">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>

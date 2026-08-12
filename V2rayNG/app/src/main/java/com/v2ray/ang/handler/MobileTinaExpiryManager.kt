@@ -13,15 +13,18 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.receiver.MobileTinaExpiryReceiver
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -57,6 +60,8 @@ object MobileTinaExpiryManager {
     private const val FALLBACK_WORK_PREFIX = "mobiletina_expiry_fallback_"
     private const val MIN_VALID_NETWORK_TIME = 1_704_067_200_000L // 2024-01-01 UTC
     private const val MAX_VALID_NETWORK_TIME = 4_102_444_800_000L // 2100-01-01 UTC
+    private const val VPN_STOP_TIMEOUT_MILLIS = 15_000L
+    private const val VPN_STOP_POLL_MILLIS = 100L
     private val DEFAULT_TIME_ZONE: ZoneId = ZoneId.of("Asia/Tehran")
 
     private val NETWORK_TIME_SOURCES = arrayOf(
@@ -159,6 +164,11 @@ object MobileTinaExpiryManager {
             return true
         }
 
+        if (!stopVpnBeforeExpiry(context)) {
+            LogUtil.w(AppConfig.TAG, "Expiry is due but VPN did not stop; verification will retry")
+            return false
+        }
+
         if (!claimExpiry(subscriptionId, trigger)) return true
         // Do not cancel the currently running verification work before it imports the
         // marker; only its alarm/fallback siblings need to be removed here.
@@ -169,6 +179,41 @@ object MobileTinaExpiryManager {
         AngConfigManager.importBatchConfig(decodeExpiryMarker(), subscriptionId, true)
         context.sendBroadcast(Intent(ACTION_DATA_CHANGED).setPackage(context.packageName))
         return true
+    }
+
+    /**
+     * Stops the daemon before its selected profile can be removed. The running flag is
+     * cleared as shutdown starts, while CACHE_SERVICE_STOP_COMPLETED acknowledges the
+     * matching request only after service teardown (and the TUN close in VPN mode).
+     */
+    private suspend fun stopVpnBeforeExpiry(context: Context): Boolean {
+        val wasRunning = MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING, false)
+        val stopRequest = SystemClock.elapsedRealtimeNanos().coerceAtLeast(1L)
+        MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_STOP_REQUEST, stopRequest)
+
+        // Sending stop is harmless when no service exists and also covers a very small
+        // race where the daemon started before its running flag became visible.
+        CoreServiceManager.stopVService(context.applicationContext)
+        if (!wasRunning) {
+            delay(350L)
+            if (!MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING, false)) return true
+            // The service appeared during the race window; make sure its receiver sees
+            // the stop command and then wait for the normal acknowledgement below.
+            CoreServiceManager.stopVService(context.applicationContext)
+        }
+
+        val deadline = SystemClock.elapsedRealtime() + VPN_STOP_TIMEOUT_MILLIS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val running = MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING, false)
+            val completedNow = MmkvManager.decodeSettingsLong(AppConfig.CACHE_SERVICE_STOP_COMPLETED, 0L)
+            if (!running && completedNow == stopRequest) return true
+            delay(VPN_STOP_POLL_MILLIS)
+        }
+
+        // Keep the expiry record intact. WorkManager will retry and send the stop command
+        // again instead of deleting configs while the VPN may still be using them.
+        CoreServiceManager.stopVService(context.applicationContext)
+        return false
     }
 
     @Synchronized
@@ -223,13 +268,20 @@ object MobileTinaExpiryManager {
         )
     }
 
-    private fun verificationRequest(subscriptionId: String, delayMillis: Long) =
-        OneTimeWorkRequestBuilder<ExpiryVerificationWorker>()
+    private fun verificationRequest(subscriptionId: String, delayMillis: Long): androidx.work.OneTimeWorkRequest {
+        val builder = OneTimeWorkRequestBuilder<ExpiryVerificationWorker>()
             .setInputData(workDataOf(WORK_INPUT_SUBSCRIPTION_ID to subscriptionId))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInitialDelay(delayMillis, TimeUnit.MILLISECONDS)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15L, TimeUnit.SECONDS)
-            .build()
+        // On Android 12+ this maps to an expedited JobScheduler job. Older Android
+        // versions would require a foreground notification for expedited WorkManager
+        // jobs, so they retain the ordinary zero-delay path.
+        if (delayMillis == 0L && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+        }
+        return builder.build()
+    }
 
     private fun cancelScheduled(context: Context, subscriptionId: String) {
         cancelAlarmAndFallback(context, subscriptionId)

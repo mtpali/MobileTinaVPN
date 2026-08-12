@@ -387,15 +387,22 @@ class CoreVpnService : VpnService(), ServiceControl {
                 LogUtil.w(AppConfig.TAG, "StartCore-VPN: Sleep interrupted", e)
             }
 
+            var vpnInterfaceClosed = !::mInterface.isInitialized
             try {
                 if (::mInterface.isInitialized) {
                     mInterface.close()
+                    vpnInterfaceClosed = true
                     LogUtil.i(AppConfig.TAG, "StartCore-VPN: VPN interface closed")
                 }
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to close interface", e)
             }
+
+            // Cross-process acknowledgement for scheduled expiry work. This must stay
+            // after mInterface.close(): the expiry marker may delete the active profile.
+            if (vpnInterfaceClosed) {
+                CoreServiceManager.acknowledgeStopRequest()
+            }
         }
     }
 }
-
