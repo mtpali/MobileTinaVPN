@@ -42,7 +42,7 @@
     <string name="mobiletina_store_instagram_branch_3" translatable="false">اینستاگرام سوم</string>
     <string name="mobiletina_store_developer" translatable="false">توسعه دهنده برنامه</string>
     <string name="mobiletina_store_address_section" translatable="false">آدرس فروشگاه</string>
-    <string name="mobiletina_store_address_branch_1" translatable="false">شعبه اول : کتالم ، کتالم ، جنب دبستان شهید بهشتی .</string>
-    <string name="mobiletina_store_address_branch_2" translatable="false">شعبه دوم : رامسر ، ابریشم محله ، جنب بانک رفاه .</string>
+    <string name="mobiletina_store_address_branch_1" translatable="false">شعبه اول : کتالم ، جنب دبستان شهید بهشتی</string>
+    <string name="mobiletina_store_address_branch_2" translatable="false">شعبه دوم : رامسر ، ابریشم محله ، جنب بانک رفاه</string>
     <string name="mobiletina_real_delay" translatable="false">Real Delay</string>
 </resources>
