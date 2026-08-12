@@ -6,6 +6,7 @@ import android.content.Intent
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.MobileTinaExpiryManager
 import com.v2ray.ang.handler.SubscriptionUpdater
 import com.v2ray.ang.util.LogUtil
 
@@ -25,6 +26,9 @@ class BootReceiver : BroadcastReceiver() {
             LogUtil.w(AppConfig.TAG, "BootReceiver: Invalid context or action")
             return
         }
+
+        // Expiry recovery is independent from the optional "start VPN on boot" setting.
+        MobileTinaExpiryManager.recoverPending(context.applicationContext)
 
         if (!MmkvManager.decodeStartOnBoot()) {
             LogUtil.i(AppConfig.TAG, "BootReceiver: Auto-start on boot is disabled")

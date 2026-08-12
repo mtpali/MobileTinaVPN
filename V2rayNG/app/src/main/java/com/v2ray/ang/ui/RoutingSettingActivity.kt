@@ -100,7 +100,7 @@ class RoutingSettingActivity : HelperBaseActivity() {
     private fun importPredefined() {
         AlertDialog.Builder(this).setItems(preset_rulesets.asList().toTypedArray()) { _, i ->
             AlertDialog.Builder(this).setMessage(R.string.routing_settings_import_rulesets_tip)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
+                .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                     try {
                         lifecycleScope.launch(Dispatchers.IO) {
                             SettingsManager.resetRoutingRulesetsFromPresets(this@RoutingSettingActivity, i)
@@ -122,7 +122,7 @@ class RoutingSettingActivity : HelperBaseActivity() {
 
     private fun importFromClipboard() {
         AlertDialog.Builder(this).setMessage(R.string.routing_settings_import_rulesets_tip)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                 val clipboard = try {
                     Utils.getClipboard(this)
                 } catch (e: Exception) {
@@ -170,7 +170,7 @@ class RoutingSettingActivity : HelperBaseActivity() {
 
     private fun importRulesetsFromQRcode(qrcode: String?): Boolean {
         AlertDialog.Builder(this).setMessage(R.string.routing_settings_import_rulesets_tip)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                 lifecycleScope.launch(Dispatchers.IO) {
                     val result = SettingsManager.resetRoutingRulesets(qrcode)
                     withContext(Dispatchers.Main) {

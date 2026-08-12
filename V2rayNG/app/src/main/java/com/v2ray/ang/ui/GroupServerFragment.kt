@@ -76,7 +76,7 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(), SwipeRef
     }
 
     override fun onRefresh() {
-        ownerActivity.importConfigViaSub(showResultToast = false)
+        ownerActivity.importConfigViaSub()
         binding.refreshLayout.isRefreshing = false
     }
 

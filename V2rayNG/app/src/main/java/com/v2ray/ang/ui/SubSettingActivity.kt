@@ -75,21 +75,9 @@ class SubSettingActivity : BaseActivity() {
             showLoading()
 
             lifecycleScope.launch(Dispatchers.IO) {
-                val result = AngConfigManager.updateConfigViaSubAll()
+                AngConfigManager.updateConfigViaSubAll()
                 delay(500L)
                 launch(Dispatchers.Main) {
-                    if (result.successCount + result.failureCount + result.skipCount == 0) {
-                        toast(R.string.title_update_subscription_no_subscription)
-                    } else if (result.successCount > 0 && result.failureCount + result.skipCount == 0) {
-                        toast(getString(R.string.title_update_config_count, result.configCount))
-                    } else {
-                        toast(
-                            getString(
-                                R.string.title_update_subscription_result,
-                                result.configCount, result.successCount, result.failureCount, result.skipCount
-                            )
-                        )
-                    }
                     hideLoading()
                     refreshData()
                 }
@@ -120,7 +108,7 @@ class SubSettingActivity : BaseActivity() {
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_CONFIRM_REMOVE)) {
                 AlertDialog.Builder(ownerActivity)
                     .setMessage(R.string.del_config_comfirm)
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                    .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                         viewModel.remove(guid)
                         refreshData()
                     }

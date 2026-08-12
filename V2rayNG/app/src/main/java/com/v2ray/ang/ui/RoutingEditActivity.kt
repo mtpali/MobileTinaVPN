@@ -146,7 +146,7 @@ class RoutingEditActivity : BaseActivity() {
     private fun deleteServer(): Boolean {
         if (position >= 0) {
             AlertDialog.Builder(this).setMessage(R.string.del_config_comfirm)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
+                .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                     lifecycleScope.launch(Dispatchers.IO) {
                         SettingsManager.removeRoutingRuleset(position)
                         launch(Dispatchers.Main) {

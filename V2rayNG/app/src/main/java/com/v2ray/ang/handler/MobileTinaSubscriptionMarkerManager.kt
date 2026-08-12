@@ -1,26 +1,24 @@
 package com.v2ray.ang.handler
 
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.AngApplication
 import com.v2ray.ang.dto.SubscriptionUpdateResult
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.SubscriptionCache
 import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.enums.EConfigType
-import com.v2ray.ang.fmt.SocksFmt
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 
 /**
  * MobileTina subscription retirement marker.
  *
- * A SOCKS profile that round-trips to a URI beginning with `socks://Og@1:` is treated
- * as a server-side marker. When it exists in a real remote subscription, the remote
- * subscription and all of its other profiles are removed. Matching marker profiles are
- * preserved in a disabled local group so they remain visible in the manual list but are
- * never fetched as subscriptions again.
+ * A deliberately invalid SOCKS endpoint is treated as a server-side marker. When it exists
+ * beside normal profiles, that subscription and all of its other profiles are removed.
+ * Matching marker profiles are preserved in a disabled local group so they remain visible
+ * in the manual list but are never fetched as subscriptions again.
  */
 object MobileTinaSubscriptionMarkerManager {
-    private const val REMOVAL_MARKER_PREFIX = "socks://Og@1:"
     private const val FIXED_SUBSCRIPTION_NAME = "instagram : mobile.tina"
     private const val PREF_SUBSCRIPTION_EXPIRED = "MOBILETINA_SUBSCRIPTION_EXPIRED"
     private const val PREF_EXPIRED_TOAST_PENDING = "MOBILETINA_SUBSCRIPTION_EXPIRED_TOAST_PENDING"
@@ -59,12 +57,11 @@ object MobileTinaSubscriptionMarkerManager {
         processingExistingMarkers = true
         try {
             MmkvManager.decodeSubscriptions().toList().forEach { cache ->
-                // A blank URL identifies the local display-only group that preserves the marker.
-                if (cache.subscription.url.isBlank()) return@forEach
                 val markers = findRemovalMarkers(cache.guid)
                 if (markers.isEmpty()) return@forEach
+                if (isPreservedMarkerGroup(cache, markers)) return@forEach
 
-                retireRemoteSubscription(
+                retireSubscriptionGroup(
                     cache = cache,
                     markers = markers,
                     result = SubscriptionUpdateResult(configCount = markers.size, successCount = 1)
@@ -100,19 +97,22 @@ object MobileTinaSubscriptionMarkerManager {
     }
 
     private fun updateOne(cache: SubscriptionCache): SubscriptionUpdateResult {
-        // A local group is display-only and must never be retired again or fetched.
-        if (cache.subscription.url.isBlank()) {
-            return AngConfigManager.updateConfigViaSub(cache)
-        }
-
         // Handle a marker that may already be stored from a previous refresh, even if the
         // network is currently unavailable.
         findRemovalMarkers(cache.guid).takeIf { it.isNotEmpty() }?.let { markers ->
-            return retireRemoteSubscription(
+            if (isPreservedMarkerGroup(cache, markers)) {
+                return AngConfigManager.updateConfigViaSub(cache)
+            }
+            return retireSubscriptionGroup(
                 cache = cache,
                 markers = markers,
                 result = SubscriptionUpdateResult(configCount = markers.size, successCount = 1)
             )
+        }
+
+        // A local marker-only group is display-only and must never be fetched.
+        if (cache.subscription.url.isBlank()) {
+            return AngConfigManager.updateConfigViaSub(cache)
         }
 
         // A disabled remote subscription is not fetched, but its already-stored marker
@@ -127,7 +127,7 @@ object MobileTinaSubscriptionMarkerManager {
         val markers = findRemovalMarkers(cache.guid)
         if (markers.isEmpty()) return result
 
-        return retireRemoteSubscription(
+        return retireSubscriptionGroup(
             cache = cache,
             markers = markers,
             result = result.copy(configCount = markers.size)
@@ -145,11 +145,20 @@ object MobileTinaSubscriptionMarkerManager {
     }
 
     private fun isRemovalMarker(profile: ProfileItem): Boolean {
-        if (profile.configType != EConfigType.SOCKS) return false
-        val uri = runCatching {
-            profile.configType.protocolScheme + SocksFmt.toUri(profile)
-        }.getOrNull() ?: return false
-        return uri.startsWith(REMOVAL_MARKER_PREFIX, ignoreCase = false)
+        return profile.configType == EConfigType.SOCKS &&
+                profile.server == "1" &&
+                profile.serverPort == "1" &&
+                profile.username.orEmpty().isEmpty() &&
+                profile.password.orEmpty().isEmpty()
+    }
+
+    private fun isPreservedMarkerGroup(
+        cache: SubscriptionCache,
+        markers: List<StoredMarker>
+    ): Boolean {
+        if (cache.subscription.url.isNotBlank() || markers.isEmpty()) return false
+        val storedKeys = MmkvManager.decodeServerList(cache.guid)
+        return storedKeys.isNotEmpty() && storedKeys.size == markers.size
     }
 
     private fun syncExpiredState(): Boolean {
@@ -175,7 +184,7 @@ object MobileTinaSubscriptionMarkerManager {
         MmkvManager.encodeSettings(PREF_EXPIRED_TOAST_PENDING, false)
     }
 
-    private fun retireRemoteSubscription(
+    private fun retireSubscriptionGroup(
         cache: SubscriptionCache,
         markers: List<StoredMarker>,
         result: SubscriptionUpdateResult
@@ -190,6 +199,7 @@ object MobileTinaSubscriptionMarkerManager {
         // uses this flag to keep its FAB red while the preserved marker remains in the list.
         MmkvManager.encodeSettings(PREF_SUBSCRIPTION_EXPIRED, true)
         MmkvManager.encodeSettings(PREF_EXPIRED_TOAST_PENDING, true)
+        MobileTinaExpiryManager.cancelForSubscription(AngApplication.application, cache.guid)
 
         // Remove the real subscription first. This also removes every profile that belonged
         // to it, including the stored copies of the markers. We keep in-memory copies above.

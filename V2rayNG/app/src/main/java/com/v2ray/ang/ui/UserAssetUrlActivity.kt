@@ -120,7 +120,7 @@ class UserAssetUrlActivity : BaseActivity() {
     private fun deleteServer(): Boolean {
         if (editAssetId.isNotEmpty()) {
             AlertDialog.Builder(this).setMessage(R.string.del_config_comfirm)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
+                .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                     MmkvManager.removeAssetUrl(editAssetId)
                     finish()
                 }

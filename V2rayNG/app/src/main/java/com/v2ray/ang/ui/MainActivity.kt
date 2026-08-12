@@ -1,7 +1,10 @@
 package com.v2ray.ang.ui
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -68,6 +71,18 @@ import kotlin.math.ceil
 
 class MainActivity : HelperBaseActivity(), com.google.android.material.navigation.NavigationView.OnNavigationItemSelectedListener {
     private val binding by lazy { ActivityMainBinding.inflate(layoutInflater) }
+    private val expiryDataChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != MobileTinaExpiryManager.ACTION_DATA_CHANGED) return
+            normalizeSubscriptionNames()
+            setupGroupTab()
+            mainViewModel.reloadServerList()
+            ensureSelectedServerForCurrentSubscription()
+            refreshSelectedServerUi()
+            showExpiredSubscriptionToastIfNeeded()
+        }
+    }
+    private var expiryReceiverRegistered = false
     val mainViewModel: MainViewModel by viewModels()
 
     private lateinit var groupPagerAdapter: GroupPagerAdapter
@@ -128,6 +143,14 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         setupToolbar(binding.toolbar, false, getString(R.string.mobiletina_app_name))
+
+        ContextCompat.registerReceiver(
+            this,
+            expiryDataChangedReceiver,
+            IntentFilter(MobileTinaExpiryManager.ACTION_DATA_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        expiryReceiverRegistered = true
 
         setupModeTabs()
         setupGroupPager()
@@ -837,23 +860,14 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
     }
 
-    fun importConfigViaSub(showResultToast: Boolean = true): Boolean {
+    fun importConfigViaSub(): Boolean {
         if (subscriptionRefreshing) return false
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
-            val result = mainViewModel.updateEverySubscription()
+            mainViewModel.updateEverySubscription()
             MobileTinaSubscriptionInfo.refreshAll()
             withContext(Dispatchers.Main) {
-                if (showResultToast) {
-                    if (result.successCount + result.failureCount + result.skipCount == 0) {
-                        toast(R.string.title_update_subscription_no_subscription)
-                    } else if (result.successCount > 0 && result.failureCount + result.skipCount == 0) {
-                        toast(getString(R.string.title_update_config_count, result.configCount))
-                    } else {
-                        toast(getString(R.string.title_update_subscription_result, result.configCount, result.successCount, result.failureCount, result.skipCount))
-                    }
-                }
                 normalizeSubscriptionNames()
                 showExpiredSubscriptionToastIfNeeded()
                 setupGroupTab()
@@ -976,12 +990,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             true
         }
         R.id.ping_all -> {
-            toast(getString(R.string.connection_test_testing_count, mainViewModel.serversCache.count()))
             mainViewModel.testAllTcping()
             true
         }
         R.id.real_ping_all -> {
-            toast(getString(R.string.connection_test_testing_count, mainViewModel.serversCache.count()))
             mainViewModel.testAllRealPing()
             true
         }
@@ -1072,7 +1084,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val normalized = MobileTinaImportNormalizer.normalize(raw)
-                MobileTinaExpiryManager.scheduleFromImportedText(this@MainActivity, normalized)
                 val (count, countSub) = AngConfigManager.importBatchConfig(normalized, mainViewModel.subscriptionId, true)
                 if (countSub > 0) MobileTinaSubscriptionInfo.refreshAll()
                 withContext(Dispatchers.Main) {
@@ -1080,7 +1091,14 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     showExpiredSubscriptionToastIfNeeded()
                     when {
                         count > 0 -> {
-                            ensureImportedConfigsHaveVisibleGroup()
+                            val targetSubscriptionId = ensureImportedConfigsHaveVisibleGroup()
+                            targetSubscriptionId?.let { subscriptionId ->
+                                MobileTinaExpiryManager.scheduleFromImportedText(
+                                    this@MainActivity,
+                                    normalized,
+                                    subscriptionId
+                                )
+                            }
                             toast(getString(R.string.title_import_config_count, count))
                             setupGroupTab()
                             mainViewModel.reloadServerList()
@@ -1106,9 +1124,15 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
     }
 
-    private fun ensureImportedConfigsHaveVisibleGroup() {
+    private fun ensureImportedConfigsHaveVisibleGroup(): String? {
         val defaultServers = MmkvManager.decodeServerList(AppConfig.DEFAULT_SUBSCRIPTION_ID)
-        if (defaultServers.isEmpty()) return
+        if (defaultServers.isEmpty()) {
+            return mainViewModel.subscriptionId.takeIf { subscriptionId ->
+                subscriptionId.isNotBlank() &&
+                        subscriptionId != AppConfig.DEFAULT_SUBSCRIPTION_ID &&
+                        MmkvManager.decodeSubscription(subscriptionId) != null
+            }
+        }
 
         val currentId = mainViewModel.subscriptionId
             .takeIf { it.isNotBlank() && it != AppConfig.DEFAULT_SUBSCRIPTION_ID }
@@ -1135,6 +1159,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         if (MmkvManager.getSelectServer().isNullOrBlank()) {
             merged.firstOrNull()?.let(MmkvManager::setSelectServer)
         }
+        return targetId
     }
 
     private fun locateSelectedServer() {
@@ -1162,7 +1187,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun delAllConfig() {
         AlertDialog.Builder(this)
             .setMessage(R.string.del_config_comfirm)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                 binding.progressBar.visibility = View.VISIBLE
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeAllServer()
@@ -1182,7 +1207,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun delDuplicateConfig() {
         AlertDialog.Builder(this)
             .setMessage(R.string.del_config_comfirm)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                 binding.progressBar.visibility = View.VISIBLE
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeDuplicateServer()
@@ -1200,7 +1225,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun delInvalidConfig() {
         AlertDialog.Builder(this)
             .setMessage(R.string.del_invalid_config_comfirm)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                 binding.progressBar.visibility = View.VISIBLE
                 lifecycleScope.launch(Dispatchers.IO) {
                     val ret = mainViewModel.removeInvalidServer()
@@ -1268,6 +1293,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     override fun onDestroy() {
+        if (expiryReceiverRegistered) {
+            unregisterReceiver(expiryDataChangedReceiver)
+            expiryReceiverRegistered = false
+        }
         cancelSubscriptionHold()
         subscriptionHoldHandler.removeCallbacksAndMessages(null)
         subscriptionSecretDialog?.dismiss()

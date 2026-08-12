@@ -109,7 +109,7 @@ class ServerCustomConfigActivity : BaseActivity() {
     private fun deleteServer(): Boolean {
         if (editGuid.isNotEmpty()) {
             AlertDialog.Builder(this).setMessage(R.string.del_config_comfirm)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
+                .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
                     MmkvManager.removeServer(editGuid)
                     finish()
                 }

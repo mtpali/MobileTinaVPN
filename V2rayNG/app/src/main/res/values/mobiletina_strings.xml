@@ -28,6 +28,7 @@
     <string name="mobiletina_copy_subscription_link" translatable="false">کپی لینک اشتراک</string>
     <string name="mobiletina_copy_all_configs" translatable="false">کپی تمام کانفیگ‌ها</string>
     <string name="mobiletina_close" translatable="false">بستن</string>
+    <string name="mobiletina_confirm" translatable="false">تایید</string>
     <string name="mobiletina_delete_vpn" translatable="false">حذف فیلترشکن</string>
     <string name="mobiletina_reset_title" translatable="false">حذف فیلترشکن</string>
     <string name="mobiletina_reset_message" translatable="false">تمام اشتراک‌ها و کانفیگ‌های برنامه پاک شوند؟ این عملیات قابل بازگشت نیست.</string>

@@ -3,6 +3,7 @@ package com.v2ray.ang.handler
 import android.content.Context
 import android.graphics.Bitmap
 import android.text.TextUtils
+import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreConfigManager
@@ -593,6 +594,11 @@ object AngConfigManager {
 
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
+                MobileTinaExpiryManager.syncFromSubscriptionPayload(
+                    AngApplication.application,
+                    configText,
+                    it.guid
+                )
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
                 MobileTinaSubscriptionMarkerManager.processExistingMarkers()
