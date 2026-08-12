@@ -6,7 +6,7 @@ on:
       - agent/v2rayng-2.2.6-base
 
 jobs:
-  armv7:
+  final-arm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -87,20 +87,41 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Build MobileTina 2.2.6 ARMv7
+      - name: Decode release keystore
+        uses: timheuer/base64-to-file@v2.0.0
+        id: android_keystore
+        with:
+          fileName: mobiletina-release.jks
+          encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
+
+      - name: Test and build obfuscated ARMv7 + ARMv8 APK
         run: |
           cd V2rayNG
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           chmod 755 gradlew
           ./gradlew testPlaystoreDebugUnitTest \
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
-            assemblePlaystoreDebug \
-            -PABI_FILTERS=armeabi-v7a
+            assemblePlaystoreRelease \
+            '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
+            -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} \
+            -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
 
-      - name: Upload MobileTina 2.2.6 ARMv7 APK
+      - name: Verify final APK signature and architectures
+        run: |
+          set -euo pipefail
+          APK=$(find V2rayNG/app/build/outputs/apk/playstore/release -type f -name '*armv7-armv8*.apk' -print -quit)
+          test -n "$APK"
+          $ANDROID_HOME/build-tools/37.0.0/apksigner verify --verbose --print-certs "$APK"
+          printf 'arm64-v8a\narmeabi-v7a\n' > /tmp/expected-abis
+          zipinfo -1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u > /tmp/apk-abis
+          diff -u /tmp/expected-abis /tmp/apk-abis
+
+      - name: Upload final MobileTina APK
         uses: actions/upload-artifact@v7
         with:
-          name: MobileTina-2.2.6-armeabi-v7a
-          path: V2rayNG/app/build/outputs/apk/playstore/debug/*armeabi-v7a*.apk
+          name: MobileTina-2.2.6-armv7-armv8-final
+          path: V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
           if-no-files-found: error
           retention-days: 90

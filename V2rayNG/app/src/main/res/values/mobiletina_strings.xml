@@ -34,7 +34,7 @@
     <string name="mobiletina_reset_message" translatable="false">تمام اشتراک‌ها و کانفیگ‌های برنامه پاک شوند؟ این عملیات قابل بازگشت نیست.</string>
     <string name="mobiletina_reset_confirm" translatable="false">حذف</string>
     <string name="mobiletina_reset_done" translatable="false">تمام اشتراک‌ها و کانفیگ‌ها پاک شدند</string>
-    <string name="mobiletina_store_about_title" translatable="false">درباره فروشگاه تینا</string>
+    <string name="mobiletina_store_about_title" translatable="false">درباره موبایل تینا</string>
     <string name="mobiletina_store_page_title" translatable="false">درباره ما</string>
     <string name="mobiletina_store_about_subtitle" translatable="false">ما را در شبکه‌های اجتماعی دنبال کنید</string>
     <string name="mobiletina_store_instagram_branch_1" translatable="false">اینستاگرام شعبه اول : کتالم</string>
