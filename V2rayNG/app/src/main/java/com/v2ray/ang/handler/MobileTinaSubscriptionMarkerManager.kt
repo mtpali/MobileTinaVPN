@@ -96,6 +96,22 @@ object MobileTinaSubscriptionMarkerManager {
         }
     }
 
+    @Synchronized
+    fun update(cache: SubscriptionCache): SubscriptionUpdateResult {
+        if (processingExistingMarkers) return SubscriptionUpdateResult()
+
+        processingExistingMarkers = true
+        return try {
+            updateOne(cache)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to process MobileTina subscription marker", e)
+            SubscriptionUpdateResult(failureCount = 1)
+        } finally {
+            processingExistingMarkers = false
+            syncExpiredState()
+        }
+    }
+
     private fun updateOne(cache: SubscriptionCache): SubscriptionUpdateResult {
         // Handle a marker that may already be stored from a previous refresh, even if the
         // network is currently unavailable.

@@ -23,6 +23,7 @@ import com.v2ray.ang.extension.matchesPattern
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.MobileTinaSubscriptionMarkerManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
@@ -148,7 +149,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return AngConfigManager.updateConfigViaSubAll()
         } else {
             val subItem = MmkvManager.decodeSubscription(subscriptionId) ?: return SubscriptionUpdateResult()
-            return AngConfigManager.updateConfigViaSub(SubscriptionCache(subscriptionId, subItem))
+            return MobileTinaSubscriptionMarkerManager.update(SubscriptionCache(subscriptionId, subItem))
         }
     }
 

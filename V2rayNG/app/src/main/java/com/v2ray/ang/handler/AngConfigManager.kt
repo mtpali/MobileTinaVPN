@@ -513,15 +513,7 @@ object AngConfigManager {
      * @return Detailed result of the subscription update operation.
      */
     fun updateConfigViaSubAll(): SubscriptionUpdateResult {
-        return try {
-            val subscriptions = MmkvManager.decodeSubscriptions()
-            subscriptions.fold(SubscriptionUpdateResult()) { acc, subscription ->
-                acc + updateConfigViaSub(subscription)
-            }
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to update config via all subscriptions", e)
-            SubscriptionUpdateResult()
-        }
+        return MobileTinaSubscriptionMarkerManager.updateAll()
     }
 
     /**

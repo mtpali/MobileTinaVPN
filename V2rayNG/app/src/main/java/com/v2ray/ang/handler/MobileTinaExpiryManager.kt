@@ -51,6 +51,7 @@ object MobileTinaExpiryManager {
     private const val PREFS_NAME = "mobiletina_config_expiry"
     private const val KEY_TRIGGER_PREFIX = "trigger_at_millis_"
     private const val LEGACY_KEY_TRIGGER = "trigger_at_millis"
+    private const val KEY_PENDING_SUBSCRIPTIONS = "MOBILETINA_EXPIRY_PENDING_SUBSCRIPTIONS"
     private const val WORK_INPUT_SUBSCRIPTION_ID = "subscription_id"
     private const val VERIFY_WORK_PREFIX = "mobiletina_expiry_verify_"
     private const val FALLBACK_WORK_PREFIX = "mobiletina_expiry_fallback_"
@@ -102,14 +103,18 @@ object MobileTinaExpiryManager {
     fun recoverPending(context: Context) {
         val app = context.applicationContext
         migrateLegacyEntry(app)
-        pendingSubscriptionIds(app).forEach { subscriptionId ->
+        pendingSubscriptionIds().forEach { subscriptionId ->
             enqueueVerification(app, subscriptionId, ExistingWorkPolicy.KEEP)
         }
     }
 
     fun cancel(context: Context) {
         val app = context.applicationContext
-        val subscriptionIds = pendingSubscriptionIds(app)
+        val subscriptionIds = pendingSubscriptionIds()
+        subscriptionIds.forEach { subscriptionId ->
+            MmkvManager.encodeSettings(triggerKey(subscriptionId), 0L)
+        }
+        MmkvManager.encodeSettings(KEY_PENDING_SUBSCRIPTIONS, mutableSetOf<String>())
         app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
@@ -120,12 +125,8 @@ object MobileTinaExpiryManager {
     fun cancelForSubscription(context: Context, subscriptionId: String) {
         if (subscriptionId.isBlank()) return
         val app = context.applicationContext
-        val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val hadPendingTrigger = prefs.contains(triggerKey(subscriptionId))
-        prefs
-            .edit()
-            .remove(triggerKey(subscriptionId))
-            .commit()
+        val hadPendingTrigger = readTrigger(subscriptionId) > 0L
+        removePendingTrigger(subscriptionId)
         if (hadPendingTrigger) cancelScheduled(app, subscriptionId)
     }
 
@@ -134,16 +135,17 @@ object MobileTinaExpiryManager {
         enqueueVerification(context.applicationContext, subscriptionId, ExistingWorkPolicy.REPLACE)
     }
 
+    @Synchronized
     private fun persistAndVerify(context: Context, subscriptionId: String, trigger: Long) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putLong(triggerKey(subscriptionId), trigger)
-            .apply()
+        val pending = pendingSubscriptionIds().toMutableSet()
+        pending.add(subscriptionId)
+        MmkvManager.encodeSettings(triggerKey(subscriptionId), trigger)
+        MmkvManager.encodeSettings(KEY_PENDING_SUBSCRIPTIONS, pending)
         enqueueVerification(context, subscriptionId, ExistingWorkPolicy.REPLACE)
     }
 
     private suspend fun verifyWithNetworkTime(context: Context, subscriptionId: String): Boolean {
-        val trigger = readTrigger(context, subscriptionId)
+        val trigger = readTrigger(subscriptionId)
         if (trigger <= 0L) return true
 
         if (!subscriptionStillExists(subscriptionId)) {
@@ -157,7 +159,7 @@ object MobileTinaExpiryManager {
             return true
         }
 
-        if (!claimExpiry(context, subscriptionId, trigger)) return true
+        if (!claimExpiry(subscriptionId, trigger)) return true
         // Do not cancel the currently running verification work before it imports the
         // marker; only its alarm/fallback siblings need to be removed here.
         cancelAlarmAndFallback(context, subscriptionId)
@@ -170,10 +172,10 @@ object MobileTinaExpiryManager {
     }
 
     @Synchronized
-    private fun claimExpiry(context: Context, subscriptionId: String, expectedTrigger: Long): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getLong(triggerKey(subscriptionId), 0L) != expectedTrigger) return false
-        return prefs.edit().remove(triggerKey(subscriptionId)).commit()
+    private fun claimExpiry(subscriptionId: String, expectedTrigger: Long): Boolean {
+        if (readTrigger(subscriptionId) != expectedTrigger) return false
+        removePendingTrigger(subscriptionId)
+        return true
     }
 
     private fun subscriptionStillExists(subscriptionId: String): Boolean {
@@ -253,17 +255,12 @@ object MobileTinaExpiryManager {
         )
     }
 
-    private fun pendingSubscriptionIds(context: Context): List<String> {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .all
-            .asSequence()
-            .filter { (key, value) ->
-                key.startsWith(KEY_TRIGGER_PREFIX) && value is Long && value > 0L
+    private fun pendingSubscriptionIds(): List<String> =
+        MmkvManager.decodeSettingsStringSet(KEY_PENDING_SUBSCRIPTIONS)
+            .orEmpty()
+            .filter { subscriptionId ->
+                subscriptionId.isNotBlank() && readTrigger(subscriptionId) > 0L
             }
-            .map { (key, _) -> key.removePrefix(KEY_TRIGGER_PREFIX) }
-            .filter(String::isNotBlank)
-            .toList()
-    }
 
     private fun migrateLegacyEntry(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -273,14 +270,25 @@ object MobileTinaExpiryManager {
         val target = MmkvManager.decodeSettingsString(AppConfig.CACHE_SUBSCRIPTION_ID).orEmpty()
         val editor = prefs.edit().remove(LEGACY_KEY_TRIGGER)
         if (target.isNotBlank() && subscriptionStillExists(target)) {
-            editor.putLong(triggerKey(target), legacyTrigger)
+            val pending = pendingSubscriptionIds().toMutableSet()
+            pending.add(target)
+            MmkvManager.encodeSettings(triggerKey(target), legacyTrigger)
+            MmkvManager.encodeSettings(KEY_PENDING_SUBSCRIPTIONS, pending)
         }
         editor.commit()
     }
 
-    private fun readTrigger(context: Context, subscriptionId: String): Long =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getLong(triggerKey(subscriptionId), 0L)
+    private fun readTrigger(subscriptionId: String): Long =
+        MmkvManager.decodeSettingsLong(triggerKey(subscriptionId), 0L)
+
+    @Synchronized
+    private fun removePendingTrigger(subscriptionId: String) {
+        MmkvManager.encodeSettings(triggerKey(subscriptionId), 0L)
+        val pending = MmkvManager.decodeSettingsStringSet(KEY_PENDING_SUBSCRIPTIONS).orEmpty().toMutableSet()
+        if (pending.remove(subscriptionId)) {
+            MmkvManager.encodeSettings(KEY_PENDING_SUBSCRIPTIONS, pending)
+        }
+    }
 
     private fun triggerKey(subscriptionId: String) = KEY_TRIGGER_PREFIX + subscriptionId
 

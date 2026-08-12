@@ -182,7 +182,7 @@ object SubscriptionUpdater {
             )
 
             LogUtil.i(AppConfig.TAG, "SubscriptionUpdater automatic update: ---${sub.subscription.remarks}")
-            AngConfigManager.updateConfigViaSub(sub)
+            MobileTinaSubscriptionMarkerManager.update(sub)
 
             // Clear notification
             NotificationHelper.cancel(NotificationChannelType.SUBSCRIPTION_UPDATE, applicationContext)

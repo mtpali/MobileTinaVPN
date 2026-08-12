@@ -144,14 +144,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         setContentView(binding.root)
         setupToolbar(binding.toolbar, false, getString(R.string.mobiletina_app_name))
 
-        ContextCompat.registerReceiver(
-            this,
-            expiryDataChangedReceiver,
-            IntentFilter(MobileTinaExpiryManager.ACTION_DATA_CHANGED),
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        expiryReceiverRegistered = true
-
         setupModeTabs()
         setupGroupPager()
         setupDrawer()
@@ -163,6 +155,13 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         ensureSelectedServerForCurrentSubscription()
         refreshSelectedServerUi()
 
+        ContextCompat.registerReceiver(
+            this,
+            expiryDataChangedReceiver,
+            IntentFilter(MobileTinaExpiryManager.ACTION_DATA_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        expiryReceiverRegistered = true
         MobileTinaExpiryManager.recoverPending(this)
 
         if (firstRunPrefs.getBoolean(FIRST_RUN_COMPLETED, false)) {
