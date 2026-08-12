@@ -82,16 +82,21 @@ object MobileTinaSubscriptionMarkerManager {
 
     @Synchronized
     fun updateAll(): SubscriptionUpdateResult {
-        val result = try {
-            MmkvManager.decodeSubscriptions().fold(SubscriptionUpdateResult()) { acc, cache ->
-                acc + updateOne(cache)
-            }
+        if (processingExistingMarkers) return SubscriptionUpdateResult()
+
+        processingExistingMarkers = true
+        return try {
+            MmkvManager.decodeSubscriptions().toList()
+                .fold(SubscriptionUpdateResult()) { acc, cache ->
+                    acc + updateOne(cache)
+                }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to process MobileTina subscription markers", e)
             SubscriptionUpdateResult()
+        } finally {
+            processingExistingMarkers = false
+            syncExpiredState()
         }
-        syncExpiredState()
-        return result
     }
 
     private fun updateOne(cache: SubscriptionCache): SubscriptionUpdateResult {
