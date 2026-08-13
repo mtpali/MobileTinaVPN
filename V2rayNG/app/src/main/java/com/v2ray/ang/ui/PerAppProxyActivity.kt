@@ -41,7 +41,6 @@ class PerAppProxyActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        //setContentView(binding.root)
         setContentViewWithToolbar(binding.root, showHomeAsUp = true, title = getString(R.string.per_app_proxy_settings))
 
         addCustomDividerToRecyclerView(binding.recyclerView, this, R.drawable.custom_divider)
@@ -70,29 +69,13 @@ class PerAppProxyActivity : BaseActivity() {
             try {
                 val apps = withContext(Dispatchers.IO) {
                     val appsList = AppManagerUtil.loadNetworkAppList(this@PerAppProxyActivity)
-
-                    val blacklistSet = viewModel.getAll()
-                    if (blacklistSet.isNotEmpty()) {
+                    val selectedPackages = viewModel.getAll()
+                    if (selectedPackages.isNotEmpty()) {
                         appsList.forEach { app ->
-                            app.isSelected = if (blacklistSet.contains(app.packageName)) 1 else 0
+                            app.isSelected = if (selectedPackages.contains(app.packageName)) 1 else 0
                         }
-                        appsList.sortedWith { p1, p2 ->
-                            when {
-                                p1.isSelected > p2.isSelected -> -1
-                                p1.isSelected < p2.isSelected -> 1
-                                p1.isSystemApp > p2.isSystemApp -> 1
-                                p1.isSystemApp < p2.isSystemApp -> -1
-                                p1.appName.lowercase() > p2.appName.lowercase() -> 1
-                                p1.appName.lowercase() < p2.appName.lowercase() -> -1
-                                p1.packageName > p2.packageName -> 1
-                                p1.packageName < p2.packageName -> -1
-                                else -> 0
-                            }
-                        }
-                    } else {
-                        val collator = Collator.getInstance()
-                        appsList.sortedWith(compareBy(collator) { it.appName })
                     }
+                    sortAppsWithPinnedFavorites(appsList)
                 }
 
                 appsAll = apps
@@ -105,6 +88,48 @@ class PerAppProxyActivity : BaseActivity() {
                 hideLoading()
             }
         }
+    }
+
+    /**
+     * Keep the most frequently requested apps at the top when they are installed.
+     * Everything else preserves the existing selected/system/name ordering.
+     */
+    private fun sortAppsWithPinnedFavorites(apps: List<AppInfo>): List<AppInfo> {
+        val collator = Collator.getInstance()
+        return apps.sortedWith { first, second ->
+            val firstPinned = preferredAppPriority(first.packageName)
+            val secondPinned = preferredAppPriority(second.packageName)
+            when {
+                firstPinned != secondPinned -> firstPinned.compareTo(secondPinned)
+                first.isSelected != second.isSelected -> second.isSelected.compareTo(first.isSelected)
+                first.isSystemApp != second.isSystemApp -> first.isSystemApp.compareTo(second.isSystemApp)
+                else -> {
+                    val byName = collator.compare(first.appName, second.appName)
+                    if (byName != 0) byName else first.packageName.compareTo(second.packageName)
+                }
+            }
+        }
+    }
+
+    private fun preferredAppPriority(packageName: String): Int = when (packageName) {
+        // Telegram / Telegram X
+        "org.telegram.messenger" -> 0
+        "org.telegram.messenger.web" -> 1
+        "org.thunderdog.challegram" -> 2
+
+        // Instagram
+        "com.instagram.android" -> 10
+
+        // WhatsApp / WhatsApp Business
+        "com.whatsapp" -> 20
+        "com.whatsapp.w4b" -> 21
+
+        // Chrome variants
+        "com.android.chrome" -> 30
+        "com.chrome.beta" -> 31
+        "com.chrome.dev" -> 32
+        "com.chrome.canary" -> 33
+        else -> Int.MAX_VALUE
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -125,7 +150,6 @@ class PerAppProxyActivity : BaseActivity() {
 
         return super.onCreateOptionsMenu(menu)
     }
-
 
     @SuppressLint("NotifyDataSetChanged")
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
@@ -211,7 +235,6 @@ class PerAppProxyActivity : BaseActivity() {
                 ) ?: ""
             }
             launch(Dispatchers.Main) {
-                //LogUtil.i(AppConfig.TAG, content)
                 selectProxyApp(content, true)
                 toastSuccess(R.string.toast_success)
                 hideLoading()
