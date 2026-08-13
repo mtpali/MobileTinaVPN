@@ -93,11 +93,14 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var lastSubscriptionRefreshAt = 0L
     private var subscriptionRefreshing = false
     private var pendingSmartVpnPermission = false
+    private var pendingSmartVpnAttemptId = 0L
     private var smartConnecting = false
     private var smartConnectionFailed = false
     private var smartCountdownSeconds = 0
+    private var smartAttemptId = 0L
     private var lastConnectedPing: String? = null
     private var smartConnectJob: kotlinx.coroutines.Job? = null
+    private var smartStartWatchdogJob: kotlinx.coroutines.Job? = null
     private var manualConnecting = false
     private var manualPrewarmGuid: String? = null
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
@@ -110,11 +113,17 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val smart = pendingSmartVpnPermission
+            val attemptId = pendingSmartVpnAttemptId
             pendingSmartVpnPermission = false
+            pendingSmartVpnAttemptId = 0L
             if (result.resultCode == RESULT_OK) {
-                startV2Ray(smart)
+                if (smart) {
+                    if (isSmartAttemptActive(attemptId)) startV2Ray(true, attemptId)
+                } else {
+                    startV2Ray(false)
+                }
             } else if (smart) {
-                markSmartConnectFailed()
+                markSmartConnectFailed(attemptId)
             } else {
                 manualConnecting = false
                 refreshSelectedServerUi()
@@ -266,6 +275,12 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         mainViewModel.isRunning.observe(this) { isRunning ->
             if (isRunning == true) {
                 manualConnecting = false
+                smartConnectJob?.cancel()
+                smartConnectJob = null
+                smartStartWatchdogJob?.cancel()
+                smartStartWatchdogJob = null
+                pendingSmartVpnPermission = false
+                pendingSmartVpnAttemptId = 0L
                 smartConnecting = false
                 smartConnectionFailed = false
                 smartCountdownSeconds = 0
@@ -432,46 +447,32 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun smartConnectAndStart() {
-        if (mainViewModel.isRunning.value == true) {
-            V2RayServiceManager.stopVService(this)
-            clearSmartConnectState()
-            return
-        }
-        if (smartConnecting) {
+        val serviceRunning = mainViewModel.isRunning.value == true ||
+                runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false)
+        if (serviceRunning || smartConnecting) {
             cancelSmartConnect()
             return
         }
 
+        val attemptId = beginSmartConnectAttempt()
         ensureSelectedServerForCurrentSubscription()
         val immediateServer = mainViewModel.currentServerGuids().singleOrNull()
         if (immediateServer != null) {
-            smartConnectJob?.cancel()
-            mainViewModel.cancelRealPing()
             MmkvManager.setSelectServer(immediateServer)
-            smartConnecting = true
-            lastConnectedPing = null
-            smartConnectionFailed = false
-            smartCountdownSeconds = 0
             refreshSelectedServerUi()
-            requestVpnPermissionAndStart(true)
+            requestVpnPermissionAndStart(true, attemptId)
             return
         }
 
-        smartConnecting = true
-        lastConnectedPing = null
-        smartConnectionFailed = false
-        smartCountdownSeconds = 0
-        refreshSelectedServerUi()
-
-        smartConnectJob?.cancel()
         smartConnectJob = lifecycleScope.launch {
             val smartDeadline = SystemClock.elapsedRealtime() + SMART_CONNECT_TIMEOUT_MS
             val refreshGrace = (smartDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L).coerceAtMost(750L)
             if (refreshGrace > 0L) {
                 withTimeoutOrNull(refreshGrace) {
-                    while (subscriptionRefreshing && isActive) delay(50L)
+                    while (subscriptionRefreshing && isActive && isSmartAttemptActive(attemptId)) delay(50L)
                 }
             }
+            if (!isSmartAttemptActive(attemptId)) return@launch
 
             val groups = mainViewModel.getSubscriptions(this@MainActivity)
             if (mainViewModel.subscriptionId.isBlank()) {
@@ -481,11 +482,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 mainViewModel.reloadServerList()
             }
             ensureSelectedServerForCurrentSubscription()
-            delay(100L)
+            if (!isSmartAttemptActive(attemptId)) return@launch
 
             val serverGuids = mainViewModel.currentServerGuids()
             if (serverGuids.isEmpty()) {
-                markSmartConnectFailed()
+                markSmartConnectFailed(attemptId)
                 toast(R.string.title_file_chooser)
                 return@launch
             }
@@ -493,63 +494,110 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             if (serverGuids.size == 1) {
                 MmkvManager.setSelectServer(serverGuids.first())
                 refreshSelectedServerUi()
-                requestVpnPermissionAndStart(true)
+                requestVpnPermissionAndStart(true, attemptId)
                 return@launch
             }
 
-            val generation = mainViewModel.realPingGeneration
             val remainingForPing = (smartDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
             if (remainingForPing <= 0L) {
-                markSmartConnectFailed()
+                markSmartConnectFailed(attemptId)
                 return@launch
             }
             smartCountdownSeconds = ceil(remainingForPing / 1000.0).toInt().coerceIn(1, SMART_CONNECT_TIMEOUT_SECONDS)
             refreshSelectedServerUi()
 
             val countdownJob = launch {
-                while (isActive) {
+                var lastShown = -1
+                while (isActive && isSmartAttemptActive(attemptId)) {
                     val remaining = smartDeadline - SystemClock.elapsedRealtime()
                     if (remaining <= 0L) break
-                    smartCountdownSeconds = ceil(remaining / 1000.0).toInt().coerceAtLeast(1)
-                    refreshSelectedServerUi()
+                    val seconds = ceil(remaining / 1000.0).toInt().coerceAtLeast(1)
+                    if (seconds != lastShown) {
+                        lastShown = seconds
+                        smartCountdownSeconds = seconds
+                        refreshSelectedServerUi()
+                    }
                     delay(100L)
                 }
             }
 
             mainViewModel.testAllRealPing()
             val finished = withTimeoutOrNull(remainingForPing) {
-                while (mainViewModel.realPingGeneration == generation) delay(40L)
-                true
+                while (isActive && isSmartAttemptActive(attemptId)) {
+                    val allResolved = withContext(Dispatchers.IO) {
+                        serverGuids.all { guid ->
+                            (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) != 0L
+                        }
+                    }
+                    if (allResolved) return@withTimeoutOrNull true
+                    delay(SMART_PING_RESULT_POLL_MS)
+                }
+                false
             } ?: false
 
             countdownJob.cancel()
+            if (!isSmartAttemptActive(attemptId)) return@launch
             smartCountdownSeconds = 0
             if (!finished) mainViewModel.cancelRealPing()
 
-            val best = serverGuids.mapNotNull { guid ->
-                val ping = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
-                if (ping > 0L) guid to ping else null
-            }.minByOrNull { it.second }
+            val best = withContext(Dispatchers.IO) {
+                serverGuids.mapNotNull { guid ->
+                    val ping = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
+                    if (ping > 0L) guid to ping else null
+                }.minByOrNull { it.second }
+            }
 
+            if (!isSmartAttemptActive(attemptId)) return@launch
             if (best == null) {
-                markSmartConnectFailed()
+                markSmartConnectFailed(attemptId)
                 toast(R.string.mobiletina_no_working_server)
                 return@launch
             }
 
             MmkvManager.setSelectServer(best.first)
-            mainViewModel.sortByTestResults()
-            mainViewModel.reloadServerList()
             refreshSelectedServerUi()
-            requestVpnPermissionAndStart(true)
+            requestVpnPermissionAndStart(true, attemptId)
+
+            // Sorting the manual list is useful, but it must not delay the actual VPN start.
+            withContext(Dispatchers.IO) { mainViewModel.sortByTestResults() }
+            if (attemptId == smartAttemptId) mainViewModel.reloadServerList()
         }
     }
 
-    private fun cancelSmartConnect() {
+    private fun beginSmartConnectAttempt(): Long {
+        smartAttemptId += 1L
         smartConnectJob?.cancel()
         smartConnectJob = null
+        smartStartWatchdogJob?.cancel()
+        smartStartWatchdogJob = null
         mainViewModel.cancelRealPing()
         pendingSmartVpnPermission = false
+        pendingSmartVpnAttemptId = 0L
+        smartConnecting = true
+        lastConnectedPing = null
+        smartConnectionFailed = false
+        smartCountdownSeconds = 0
+        refreshSelectedServerUi()
+        return smartAttemptId
+    }
+
+    private fun isSmartAttemptActive(attemptId: Long): Boolean {
+        return attemptId > 0L && attemptId == smartAttemptId && smartConnecting
+    }
+
+    private fun invalidateSmartConnectAttempt() {
+        smartAttemptId += 1L
+        smartConnectJob?.cancel()
+        smartConnectJob = null
+        smartStartWatchdogJob?.cancel()
+        smartStartWatchdogJob = null
+        mainViewModel.cancelRealPing()
+        pendingSmartVpnPermission = false
+        pendingSmartVpnAttemptId = 0L
+    }
+
+    private fun cancelSmartConnect() {
+        invalidateSmartConnectAttempt()
         smartConnecting = false
         smartConnectionFailed = false
         smartCountdownSeconds = 0
@@ -557,24 +605,27 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         refreshSelectedServerUi()
     }
 
-    private fun requestVpnPermissionAndStart(isSmartConnect: Boolean) {
+    private fun requestVpnPermissionAndStart(isSmartConnect: Boolean, attemptId: Long = 0L) {
+        if (isSmartConnect && !isSmartAttemptActive(attemptId)) return
         if (SettingsManager.isVpnMode()) {
             val intent = VpnService.prepare(this)
             if (intent == null) {
-                startV2Ray(isSmartConnect)
+                startV2Ray(isSmartConnect, attemptId)
             } else {
                 pendingSmartVpnPermission = isSmartConnect
+                pendingSmartVpnAttemptId = if (isSmartConnect) attemptId else 0L
                 requestVpnPermission.launch(intent)
             }
         } else {
-            startV2Ray(isSmartConnect)
+            startV2Ray(isSmartConnect, attemptId)
         }
     }
 
-    private fun startV2Ray(isSmartConnect: Boolean = false) {
+    private fun startV2Ray(isSmartConnect: Boolean = false, attemptId: Long = 0L) {
+        if (isSmartConnect && !isSmartAttemptActive(attemptId)) return
         if (MmkvManager.getSelectServer().isNullOrEmpty()) {
             if (isSmartConnect) {
-                markSmartConnectFailed()
+                markSmartConnectFailed(attemptId)
             } else {
                 manualConnecting = false
                 refreshSelectedServerUi()
@@ -589,9 +640,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
         V2RayServiceManager.startVService(this)
         if (isSmartConnect) {
-            lifecycleScope.launch {
-                delay(6_000L)
-                if (smartConnecting && mainViewModel.isRunning.value != true) markSmartConnectFailed()
+            smartStartWatchdogJob?.cancel()
+            smartStartWatchdogJob = lifecycleScope.launch {
+                delay(SMART_START_CONFIRM_TIMEOUT_MS)
+                if (!isSmartAttemptActive(attemptId) || mainViewModel.isRunning.value == true) return@launch
+                val coreRunning = withContext(Dispatchers.IO) {
+                    runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false)
+                }
+                if (!coreRunning && isSmartAttemptActive(attemptId)) {
+                    markSmartConnectFailed(attemptId)
+                }
             }
         } else {
             lifecycleScope.launch {
@@ -749,7 +807,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         if (total > 0L) {
             val progress = ((used.toDouble() / total.toDouble()) * 100.0).toInt().coerceIn(0, 100)
             binding.subscriptionProgress.progress = progress
-            binding.subscriptionProgress.visibility = View.VISIBLE
             binding.tvSubscriptionUsage.text = getString(
                 R.string.mobiletina_subscription_usage_compact,
                 formatBytes(used), formatBytes(total)
@@ -782,13 +839,21 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun clearSmartConnectState() {
+        invalidateSmartConnectAttempt()
         smartConnecting = false
         smartConnectionFailed = false
         smartCountdownSeconds = 0
         refreshSelectedServerUi()
     }
 
-    private fun markSmartConnectFailed() {
+    private fun markSmartConnectFailed(attemptId: Long = smartAttemptId) {
+        if (!isSmartAttemptActive(attemptId)) return
+        smartConnectJob = null
+        smartStartWatchdogJob?.cancel()
+        smartStartWatchdogJob = null
+        pendingSmartVpnPermission = false
+        pendingSmartVpnAttemptId = 0L
+        mainViewModel.cancelRealPing()
         smartConnecting = false
         smartConnectionFailed = true
         smartCountdownSeconds = 0
@@ -1300,6 +1365,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     override fun onDestroy() {
+        smartConnectJob?.cancel()
+        smartStartWatchdogJob?.cancel()
+        manualPrewarmJob?.cancel()
         if (expiryReceiverRegistered) {
             unregisterReceiver(expiryDataChangedReceiver)
             expiryReceiverRegistered = false
@@ -1323,6 +1391,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val SUBSCRIPTION_REVEAL_HOLD_MS = 10_000L
         private const val SMART_CONNECT_TIMEOUT_SECONDS = 6
         private const val SMART_CONNECT_TIMEOUT_MS = 6_000L
+        private const val SMART_START_CONFIRM_TIMEOUT_MS = 8_000L
+        private const val SMART_PING_RESULT_POLL_MS = 120L
         private const val INTERNET_DIALOG_DURATION_MS = 3_000L
         private const val DEFAULT_SUBSCRIPTION_NAME = "instagram : mobile.tina"
     }
