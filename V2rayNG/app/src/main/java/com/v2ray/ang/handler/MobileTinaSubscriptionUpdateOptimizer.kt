@@ -87,10 +87,9 @@ object MobileTinaSubscriptionUpdateOptimizer {
                 AppConfig.TAG,
                 "Subscription unchanged; skipped profile rewrite for ${cache.guid}"
             )
-            return SubscriptionUpdateResult(
-                configCount = MmkvManager.decodeServerList(cache.guid).size,
-                successCount = 1
-            )
+            // configCount deliberately stays zero: no profile was added, removed or rewritten.
+            // MainActivity uses this to skip its expensive tab/list rebuild after auto refresh.
+            return SubscriptionUpdateResult(successCount = 1)
         }
 
         // First run, changed remote content, changed filter, or locally modified profiles:
