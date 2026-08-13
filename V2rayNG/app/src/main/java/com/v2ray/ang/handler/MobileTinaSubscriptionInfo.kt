@@ -1,5 +1,6 @@
 package com.v2ray.ang.handler
 
+import android.os.SystemClock
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.dto.entities.SubscriptionItem
@@ -7,14 +8,33 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.InetSocketAddress
 import java.net.Proxy
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/** Reads subscription-userinfo without modifying the v2rayNG 2.2.6 updater or Core. */
+/**
+ * Reads subscription-userinfo and exposes the same successful response body to the
+ * MobileTina subscription optimizer so unchanged subscriptions do not need a second GET.
+ */
 object MobileTinaSubscriptionInfo {
+    data class Snapshot(
+        val body: String,
+        val userInfo: String?
+    )
+
+    private const val RECENT_SNAPSHOT_WINDOW_MS = 5_000L
+    private val recentSnapshotAt = ConcurrentHashMap<String, Long>()
+
     fun refreshAll() {
+        val now = SystemClock.elapsedRealtime()
         MmkvManager.decodeSubscriptions()
             .filter { it.subscription.enabled && it.subscription.url.isNotBlank() }
-            .forEach { cache -> runCatching { refreshOne(cache.guid, cache.subscription) } }
+            .forEach { cache ->
+                val capturedAt = recentSnapshotAt[cache.guid] ?: 0L
+                if (capturedAt > 0L && now - capturedAt <= RECENT_SNAPSHOT_WINDOW_MS) {
+                    return@forEach
+                }
+                runCatching { refreshOne(cache.guid, cache.subscription) }
+            }
     }
 
     fun refresh(subscriptionId: String) {
@@ -23,15 +43,34 @@ object MobileTinaSubscriptionInfo {
         runCatching { refreshOne(subscriptionId, item) }
     }
 
-    private fun refreshOne(guid: String, item: SubscriptionItem) {
+    /**
+     * Fetches the subscription once, preserving the existing local-proxy -> direct fallback.
+     * The response body is used for change detection and subscription-userinfo is applied
+     * immediately so MainActivity.refreshAll() can skip its otherwise duplicate request.
+     */
+    fun captureSnapshot(guid: String, item: SubscriptionItem): Snapshot? {
         val proxyPort = SettingsManager.getHttpPort()
-        val raw = (
-            if (proxyPort > 0) {
-                fetchHeader(item, proxyPort) ?: fetchHeader(item, 0)
-            } else {
-                fetchHeader(item, 0)
-            }
-        ) ?: return
+        val snapshot = if (proxyPort > 0) {
+            fetchSnapshot(item, proxyPort) ?: fetchSnapshot(item, 0)
+        } else {
+            fetchSnapshot(item, 0)
+        } ?: return null
+
+        applyUserInfo(guid, item, snapshot.userInfo)
+        recentSnapshotAt[guid] = SystemClock.elapsedRealtime()
+        return snapshot
+    }
+
+    private fun refreshOne(guid: String, item: SubscriptionItem) {
+        captureSnapshot(guid, item)
+    }
+
+    /**
+     * Applies header metadata only when it actually changed, avoiding an unnecessary MMKV
+     * subscription write on every resume when traffic/expiry values are identical.
+     */
+    private fun applyUserInfo(guid: String, item: SubscriptionItem, raw: String?) {
+        if (raw.isNullOrBlank()) return
 
         val fields = raw.split(';').mapNotNull { segment ->
             val i = segment.indexOf('=')
@@ -41,14 +80,27 @@ object MobileTinaSubscriptionInfo {
             key to value
         }.toMap()
 
-        item.trafficUploadBytes = fields["upload"]?.takeIf { it >= 0L }
-        item.trafficDownloadBytes = fields["download"]?.takeIf { it >= 0L }
-        item.trafficTotalBytes = fields["total"]?.takeIf { it > 0L }
-        item.expireEpochSeconds = fields["expire"]?.takeIf { it > 0L }
-        MmkvManager.encodeSubscription(guid, item)
+        val upload = fields["upload"]?.takeIf { it >= 0L }
+        val download = fields["download"]?.takeIf { it >= 0L }
+        val total = fields["total"]?.takeIf { it > 0L }
+        val expire = fields["expire"]?.takeIf { it > 0L }
+
+        val changed = item.trafficUploadBytes != upload ||
+                item.trafficDownloadBytes != download ||
+                item.trafficTotalBytes != total ||
+                item.expireEpochSeconds != expire
+
+        item.trafficUploadBytes = upload
+        item.trafficDownloadBytes = download
+        item.trafficTotalBytes = total
+        item.expireEpochSeconds = expire
+
+        if (changed) {
+            MmkvManager.encodeSubscription(guid, item)
+        }
     }
 
-    private fun fetchHeader(item: SubscriptionItem, httpPort: Int): String? {
+    private fun fetchSnapshot(item: SubscriptionItem, httpPort: Int): Snapshot? {
         val builder = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
@@ -63,9 +115,17 @@ object MobileTinaSubscriptionInfo {
             .header("User-Agent", item.userAgent?.takeIf { it.isNotBlank() } ?: "v2rayNG/${BuildConfig.VERSION_NAME}")
             .header("Connection", "close")
             .build()
+
         return runCatching {
             builder.build().newCall(request).execute().use { response ->
-                if (!response.isSuccessful) null else response.header("subscription-userinfo")
+                if (!response.isSuccessful) {
+                    null
+                } else {
+                    Snapshot(
+                        body = response.body?.string().orEmpty(),
+                        userInfo = response.header("subscription-userinfo")
+                    )
+                }
             }
         }.getOrNull()
     }
