@@ -2,6 +2,7 @@ package com.v2ray.ang.util
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.pm.Signature
 import android.os.Build
 import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.R
@@ -172,25 +173,29 @@ object MobileTinaIntegrityGuard {
         val expected = hexToBytes(expectedHex)
 
         @Suppress("DEPRECATION")
-        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val signatures: List<Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val info = context.packageManager.getPackageInfo(
                 context.packageName,
                 PackageManager.GET_SIGNING_CERTIFICATES
             )
             val signingInfo = info.signingInfo ?: fail()
-            if (signingInfo.hasMultipleSigners()) {
+            val rawSignatures = if (signingInfo.hasMultipleSigners()) {
                 signingInfo.apkContentsSigners
             } else {
                 signingInfo.signingCertificateHistory
             }
+            rawSignatures?.filterNotNull().orEmpty()
         } else {
             context.packageManager.getPackageInfo(
                 context.packageName,
                 PackageManager.GET_SIGNATURES
-            ).signatures
+            ).signatures?.filterNotNull().orEmpty()
         }
 
-        if (signatures.none { MessageDigest.isEqual(sha256(it.toByteArray()), expected) }) {
+        if (signatures.isEmpty() || signatures.none {
+                MessageDigest.isEqual(sha256(it.toByteArray()), expected)
+            }
+        ) {
             fail()
         }
     }
