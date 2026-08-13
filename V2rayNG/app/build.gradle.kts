@@ -24,11 +24,43 @@ android {
         ?.trim()
         ?.lowercase()
         .orEmpty()
+    val hardenedKeystorePath = (properties["FINAL_HARDENED_KEYSTORE"] as? String).orEmpty()
+    val hardenedStorePassword = (properties["FINAL_HARDENED_STORE_PASSWORD"] as? String).orEmpty()
+    val hardenedKeyAlias = (properties["FINAL_HARDENED_KEY_ALIAS"] as? String).orEmpty()
+    val hardenedKeyPassword = (properties["FINAL_HARDENED_KEY_PASSWORD"] as? String).orEmpty()
 
-    if (hardenedReleaseBuild && !expectedReleaseCertSha256.matches(Regex("[0-9a-f]{64}"))) {
-        throw GradleException(
-            "FINAL_HARDENED_BUILD requires MOBILETINA_EXPECTED_CERT_SHA256 (64 lowercase/uppercase hex chars)"
-        )
+    if (hardenedReleaseBuild) {
+        if (!expectedReleaseCertSha256.matches(Regex("[0-9a-f]{64}"))) {
+            throw GradleException(
+                "FINAL_HARDENED_BUILD requires MOBILETINA_EXPECTED_CERT_SHA256 (64 hex chars)"
+            )
+        }
+        if (hardenedKeystorePath.isBlank() ||
+            hardenedStorePassword.isBlank() ||
+            hardenedKeyAlias.isBlank() ||
+            hardenedKeyPassword.isBlank()
+        ) {
+            throw GradleException(
+                "FINAL_HARDENED_BUILD requires an explicit hardened keystore, passwords and alias"
+            )
+        }
+    }
+
+    signingConfigs {
+        if (hardenedReleaseBuild) {
+            create("mobileTinaHardened") {
+                storeFile = file(hardenedKeystorePath)
+                storePassword = hardenedStorePassword
+                keyAlias = hardenedKeyAlias
+                keyPassword = hardenedKeyPassword
+                enableV1Signing = false
+                enableV2Signing = true
+                enableV3Signing = true
+                // v4 is a sidecar optimized for incremental installation and is not part of
+                // the standalone APK artifact distributed here.
+                enableV4Signing = false
+            }
+        }
     }
 
     defaultConfig {
@@ -83,13 +115,14 @@ android {
                 // repackaging and optimized resource shrinking are enabled for the final build.
                 isMinifyEnabled = true
                 isShrinkResources = true
+                signingConfig = signingConfigs.getByName("mobileTinaHardened")
             } else {
                 // Keep the stable diagnostic release available for regression comparison.
                 isMinifyEnabled = false
                 isShrinkResources = false
-            }
-            if ((properties["FINAL_BUILD_SIGNING"] as? String) == "debug") {
-                signingConfig = signingConfigs.getByName("debug")
+                if ((properties["FINAL_BUILD_SIGNING"] as? String) == "debug") {
+                    signingConfig = signingConfigs.getByName("debug")
+                }
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
