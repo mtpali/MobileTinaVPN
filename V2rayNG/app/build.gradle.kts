@@ -9,7 +9,7 @@ android {
     compileSdk = 37
 
     // A final distribution build can request one installable APK containing only the
-    // two ARM ABIs, instead of producing a separate APK for every architecture.
+    // requested ARM ABIs, instead of producing a separate APK for every architecture.
     val fatApkAbiList = (properties["FAT_APK_ABIS"] as? String)
         ?.split(';')
         ?.map { it.trim() }
@@ -55,11 +55,12 @@ android {
     buildTypes {
         release {
             isDebuggable = false
-            isMinifyEnabled = true
-            isShrinkResources = true
-            // CI can create an installable final artifact when no private production
-            // keystore is configured. Official publishing remains unsigned unless the
-            // signing properties are supplied explicitly by the release owner.
+            // MobileTina has several behavior-sensitive Android/JNI/gomobile/UI paths.
+            // Preserve the exact tested application behavior instead of risking regressions
+            // from optimizer transformations. Release still strips debug-only behavior but
+            // deliberately does not run R8 minification or resource shrinking.
+            isMinifyEnabled = false
+            isShrinkResources = false
             if ((properties["FINAL_BUILD_SIGNING"] as? String) == "debug") {
                 signingConfig = signingConfigs.getByName("debug")
             }
