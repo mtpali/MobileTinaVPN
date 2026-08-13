@@ -32,10 +32,17 @@ object MobileTinaSubscriptionUpdateOptimizer {
 
     fun updateAll(): SubscriptionUpdateResult {
         // Preserve the existing immediate retirement behavior before considering a fast path.
-        MobileTinaSubscriptionMarkerManager.processExistingMarkers()
+        // A retirement mutates the visible server/subscription list, so surface one changed
+        // config to MainActivity to force the normal tab/list rebuild.
+        val retiredBeforeFetch = MobileTinaSubscriptionMarkerManager.processExistingMarkers()
+        val initialResult = if (retiredBeforeFetch) {
+            SubscriptionUpdateResult(configCount = 1, successCount = 1)
+        } else {
+            SubscriptionUpdateResult()
+        }
 
         return MmkvManager.decodeSubscriptions().toList()
-            .fold(SubscriptionUpdateResult()) { total, cache ->
+            .fold(initialResult) { total, cache ->
                 total + updateOne(cache)
             }
     }
