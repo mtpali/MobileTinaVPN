@@ -97,8 +97,9 @@ fun MainViewModel.currentServerGuids(): List<String> {
 fun MainViewModel.updateEverySubscription() = MobileTinaSubscriptionUpdateOptimizer.updateAll()
 
 /**
- * Starts one isolated Smart Connect Real Ping batch. The caller-provided batchId is echoed by
- * CoreTestService only after old workers have been invalidated and this batch's delays are reset.
+ * Starts one isolated Smart Connect Real Ping batch. CoreTestService treats START as
+ * authoritative: it invalidates/cancels older workers, clears these exact GUIDs inside the new
+ * generation, then echoes batchId. No extra CANCEL/CLEAR round-trip is needed here.
  */
 fun MainViewModel.testAllRealPingForSmart(batchId: Long) {
     if (batchId <= 0L) return
@@ -108,11 +109,6 @@ fun MainViewModel.testAllRealPingForSmart(batchId: Long) {
     val guids = currentServerGuids()
     if (guids.isEmpty()) return
 
-    MessageUtil.sendMsg2TestService(
-        getApplication(),
-        TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_CANCEL)
-    )
-    MmkvManager.clearAllTestDelayResults(guids)
     MessageUtil.sendMsg2TestService(
         getApplication(),
         TestServiceMessage(
