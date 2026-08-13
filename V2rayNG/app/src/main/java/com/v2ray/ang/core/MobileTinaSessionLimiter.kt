@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
-import com.v2ray.ang.receiver.MobileTinaSessionLimitReceiver
+import com.v2ray.ang.receiver.MobileTinaExpiryReceiver
 import java.util.concurrent.TimeUnit
 
 object MobileTinaSessionLimiter {
@@ -59,7 +59,7 @@ object MobileTinaSessionLimiter {
     }
 
     private fun sessionLimitPendingIntent(context: Context): PendingIntent {
-        val intent = Intent(context, MobileTinaSessionLimitReceiver::class.java)
+        val intent = Intent(context, MobileTinaExpiryReceiver::class.java)
             .setAction(ACTION_SESSION_LIMIT)
         return PendingIntent.getBroadcast(
             context,
