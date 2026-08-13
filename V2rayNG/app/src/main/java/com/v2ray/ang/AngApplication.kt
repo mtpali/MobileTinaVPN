@@ -8,6 +8,7 @@ import com.tencent.mmkv.MMKV
 import com.v2ray.ang.AppConfig.ANG_PACKAGE
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.util.MobileTinaIntegrityGuard
 
 class AngApplication : MultiDexApplication() {
     companion object {
@@ -32,6 +33,10 @@ class AngApplication : MultiDexApplication() {
      */
     override fun onCreate() {
         super.onCreate()
+
+        // Hardened final releases validate package identity, immutable artwork, branded text,
+        // and the APK signing certificate before any application state is initialized.
+        MobileTinaIntegrityGuard.verify(this)
 
         MMKV.initialize(this)
 
