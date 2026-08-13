@@ -844,17 +844,25 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
-            mainViewModel.updateEverySubscription()
+            val updateResult = mainViewModel.updateEverySubscription()
             MobileTinaSubscriptionInfo.refreshAll()
+            val serverListChanged = updateResult.configCount > 0
             withContext(Dispatchers.Main) {
                 normalizeSubscriptionNames()
                 showExpiredSubscriptionToastIfNeeded()
-                setupGroupTab()
-                mainViewModel.reloadServerList()
-                ensureSelectedServerForCurrentSubscription()
+                if (serverListChanged) {
+                    setupGroupTab()
+                    mainViewModel.reloadServerList()
+                    ensureSelectedServerForCurrentSubscription()
+                    refreshSelectedServerUi()
+                } else {
+                    // Metadata such as traffic/expiry may still change, but the server list and
+                    // tabs are intentionally left untouched when the optimizer found no profile
+                    // additions, removals or rewrites.
+                    refreshSubscriptionCard()
+                }
                 subscriptionRefreshing = false
                 binding.progressBar.visibility = View.INVISIBLE
-                refreshSelectedServerUi()
             }
         }
     }
