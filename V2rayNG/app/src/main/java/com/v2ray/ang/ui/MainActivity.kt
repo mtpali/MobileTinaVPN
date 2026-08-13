@@ -447,8 +447,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun smartConnectAndStart() {
-        val serviceRunning = mainViewModel.isRunning.value == true ||
-                runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false)
+        // Core is the source of truth. LiveData is used only as a fallback if the direct check fails,
+        // so a delayed STOP broadcast cannot force the next click to behave as if VPN were still on.
+        val serviceRunning = runCatching { V2RayServiceManager.isRunning() }
+            .getOrElse { mainViewModel.isRunning.value == true }
         if (serviceRunning || smartConnecting) {
             cancelSmartConnect()
             return
@@ -521,13 +523,29 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 }
             }
 
-            mainViewModel.testAllRealPing()
+            val unresolvedGuids = serverGuids.toMutableSet()
+            mainViewModel.testAllRealPingForSmart(attemptId)
             val finished = withTimeoutOrNull(remainingForPing) {
+                // Do not inspect MMKV until CoreTestService has invalidated the previous batch and
+                // reset these exact GUIDs inside the new generation boundary.
+                while (isActive &&
+                    isSmartAttemptActive(attemptId) &&
+                    mainViewModel.realPingStartedBatchId != attemptId
+                ) {
+                    delay(SMART_BATCH_START_POLL_MS)
+                }
+                if (!isSmartAttemptActive(attemptId) || mainViewModel.realPingStartedBatchId != attemptId) {
+                    return@withTimeoutOrNull false
+                }
+
+                // 6 seconds is only a ceiling. Remove resolved GUIDs as results arrive and exit
+                // immediately when the last server reports either a positive ping or -1 failure.
                 while (isActive && isSmartAttemptActive(attemptId)) {
                     val allResolved = withContext(Dispatchers.IO) {
-                        serverGuids.all { guid ->
+                        unresolvedGuids.removeAll { guid ->
                             (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) != 0L
                         }
+                        unresolvedGuids.isEmpty()
                     }
                     if (allResolved) return@withTimeoutOrNull true
                     delay(SMART_PING_RESULT_POLL_MS)
@@ -1393,6 +1411,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val SMART_CONNECT_TIMEOUT_SECONDS = 6
         private const val SMART_CONNECT_TIMEOUT_MS = 6_000L
         private const val SMART_START_CONFIRM_TIMEOUT_MS = 8_000L
+        private const val SMART_BATCH_START_POLL_MS = 20L
         private const val SMART_PING_RESULT_POLL_MS = 120L
         private const val INTERNET_DIALOG_DURATION_MS = 3_000L
         private const val DEFAULT_SUBSCRIPTION_NAME = "instagram : mobile.tina"
