@@ -25,6 +25,7 @@ class MobileTinaModeContainer @JvmOverloads constructor(
     private var downX = 0f
     private var downY = 0f
     private var trackingGesture = false
+    private var ownsUnclaimedTouchSequence = false
     private var swipeListener: ((direction: Int) -> Unit)? = null
 
     fun setOnModeSwipeListener(listener: (direction: Int) -> Unit) {
@@ -36,6 +37,11 @@ class MobileTinaModeContainer @JvmOverloads constructor(
      * before child views, so a horizontal swipe is still detected even when the manual
      * server list, TabLayout or another child handles the touch sequence itself.
      * Vertical scrolling and normal clicks remain entirely with the child view.
+     *
+     * When Auto has no subscription yet, its ScrollView may be non-scrollable and can
+     * decline ACTION_DOWN on empty space. In that case this container claims only that
+     * otherwise-unhandled sequence so Android keeps delivering MOVE/UP and the first-run
+     * swipe works exactly like it does after subscription content is present.
      */
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
@@ -43,6 +49,10 @@ class MobileTinaModeContainer @JvmOverloads constructor(
                 downX = event.x
                 downY = event.y
                 trackingGesture = true
+
+                val handled = super.dispatchTouchEvent(event)
+                ownsUnclaimedTouchSequence = !handled
+                return handled || ownsUnclaimedTouchSequence
             }
 
             MotionEvent.ACTION_UP -> {
@@ -52,20 +62,31 @@ class MobileTinaModeContainer @JvmOverloads constructor(
                     abs(dx) >= triggerThreshold &&
                     abs(dx) > abs(dy) * horizontalBias
 
-                // Let the child finish its own gesture first, then switch mode. This avoids
-                // cancelling RecyclerView/ScrollView touches midway through a swipe.
+                // Let a child that claimed ACTION_DOWN finish its own gesture first. If no
+                // child claimed the sequence, keep consuming it here until this ACTION_UP.
                 val handled = super.dispatchTouchEvent(event)
+                val ownedByContainer = ownsUnclaimedTouchSequence
                 trackingGesture = false
+                ownsUnclaimedTouchSequence = false
                 if (isHorizontalSwipe) {
                     swipeListener?.invoke(if (dx > 0f) 1 else -1)
                     return true
                 }
-                return handled
+                return handled || ownedByContainer
             }
 
-            MotionEvent.ACTION_CANCEL -> trackingGesture = false
-        }
+            MotionEvent.ACTION_CANCEL -> {
+                val handled = super.dispatchTouchEvent(event)
+                val ownedByContainer = ownsUnclaimedTouchSequence
+                trackingGesture = false
+                ownsUnclaimedTouchSequence = false
+                return handled || ownedByContainer
+            }
 
-        return super.dispatchTouchEvent(event)
+            else -> {
+                val handled = super.dispatchTouchEvent(event)
+                return handled || ownsUnclaimedTouchSequence
+            }
+        }
     }
 }
