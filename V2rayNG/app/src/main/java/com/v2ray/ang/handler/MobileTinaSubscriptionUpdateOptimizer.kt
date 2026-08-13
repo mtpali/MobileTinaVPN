@@ -129,7 +129,7 @@ object MobileTinaSubscriptionUpdateOptimizer {
         keys.forEach { key ->
             updateDigest(digest, key)
             val profile = MmkvManager.decodeServerConfig(key)
-            updateDigest(digest, profile?.let(JsonUtil::toJson).orEmpty())
+            updateDigest(digest, profile?.let { JsonUtil.toJson(it) }.orEmpty())
             // Custom configs can keep important source material outside ProfileItem.
             updateDigest(digest, MmkvManager.decodeServerRaw(key).orEmpty())
         }
@@ -140,7 +140,7 @@ object MobileTinaSubscriptionUpdateOptimizer {
         digest.update(value.toByteArray(StandardCharsets.UTF_8))
         // Explicit separator prevents ambiguous concatenations such as ["ab", "c"] vs
         // ["a", "bc"].
-        digest.update(0)
+        digest.update(0.toByte())
     }
 
     private fun MessageDigest.toHex(): String = digest().joinToString("") { byte ->
