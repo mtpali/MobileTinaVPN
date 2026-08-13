@@ -35,6 +35,10 @@ class RealPingWorkerService(
                 runningCount.incrementAndGet()
                 try {
                     onEvent(RealPingEvent.Result(guid, startRealPing(guid)))
+                } catch (e: CancellationException) {
+                    // Cancellation is not a failed ping. Propagate it so a superseded Smart
+                    // Connect attempt cannot publish an artificial -1 result into a new batch.
+                    throw e
                 } catch (_: Throwable) {
                     onEvent(RealPingEvent.Result(guid, -1L))
                 } finally {
