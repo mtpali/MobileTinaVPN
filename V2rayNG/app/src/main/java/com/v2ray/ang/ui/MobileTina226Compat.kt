@@ -24,20 +24,36 @@ import java.util.concurrent.atomic.AtomicLong
 private object MobileTinaRealPingBridge {
     val finished = MutableLiveData<Long>()
     private val generation = AtomicLong(0L)
+    private val startedBatchId = AtomicLong(0L)
     private val registered = AtomicBoolean(false)
 
     fun generation(): Long = generation.get()
+    fun startedBatchId(): Long = startedBatchId.get()
+    fun prepareSmartBatch() = startedBatchId.set(0L)
 
     fun ensureRegistered(context: Context) {
         if (!registered.compareAndSet(false, true)) return
         val app = context.applicationContext
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent?.getIntExtra("key", 0) != AppConfig.MSG_MEASURE_CONFIG_FINISH) return
-                val status = intent.getSerializableExtra("content")?.toString().orEmpty()
-                if (status == "0") {
-                    val value = generation.incrementAndGet()
-                    finished.postValue(value)
+                when (intent?.getIntExtra("key", 0)) {
+                    AppConfig.MSG_MEASURE_CONFIG_NOTIFY -> {
+                        val content = intent.getSerializableExtra("content")?.toString().orEmpty()
+                        if (content.startsWith(TestServiceMessage.SMART_BATCH_STARTED_PREFIX)) {
+                            content.removePrefix(TestServiceMessage.SMART_BATCH_STARTED_PREFIX)
+                                .toLongOrNull()
+                                ?.takeIf { it > 0L }
+                                ?.let(startedBatchId::set)
+                        }
+                    }
+
+                    AppConfig.MSG_MEASURE_CONFIG_FINISH -> {
+                        val status = intent.getSerializableExtra("content")?.toString().orEmpty()
+                        if (status == "0") {
+                            val value = generation.incrementAndGet()
+                            finished.postValue(value)
+                        }
+                    }
                 }
             }
         }
@@ -62,6 +78,12 @@ val MainViewModel.realPingGeneration: Long
         return MobileTinaRealPingBridge.generation()
     }
 
+val MainViewModel.realPingStartedBatchId: Long
+    get() {
+        MobileTinaRealPingBridge.ensureRegistered(getApplication())
+        return MobileTinaRealPingBridge.startedBatchId()
+    }
+
 fun MainViewModel.currentServerGuids(): List<String> {
     val cached = serversCache.map { it.guid }
     if (cached.isNotEmpty()) return cached
@@ -73,6 +95,34 @@ fun MainViewModel.currentServerGuids(): List<String> {
 }
 
 fun MainViewModel.updateEverySubscription() = MobileTinaSubscriptionUpdateOptimizer.updateAll()
+
+/**
+ * Starts one isolated Smart Connect Real Ping batch. The caller-provided batchId is echoed by
+ * CoreTestService only after old workers have been invalidated and this batch's delays are reset.
+ */
+fun MainViewModel.testAllRealPingForSmart(batchId: Long) {
+    if (batchId <= 0L) return
+    MobileTinaRealPingBridge.ensureRegistered(getApplication())
+    MobileTinaRealPingBridge.prepareSmartBatch()
+
+    val guids = currentServerGuids()
+    if (guids.isEmpty()) return
+
+    MessageUtil.sendMsg2TestService(
+        getApplication(),
+        TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_CANCEL)
+    )
+    MmkvManager.clearAllTestDelayResults(guids)
+    MessageUtil.sendMsg2TestService(
+        getApplication(),
+        TestServiceMessage(
+            key = AppConfig.MSG_MEASURE_CONFIG_START,
+            subscriptionId = subscriptionId,
+            serverGuids = guids,
+            batchId = batchId
+        )
+    )
+}
 
 fun MainViewModel.testServerRealPing(guid: String) {
     if (guid.isBlank()) return
