@@ -111,15 +111,29 @@ jobs:
           zipinfo -1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u > /tmp/apk-abis
           diff -u /tmp/expected-abis /tmp/apk-abis
 
-          unzip -p "$APK" 'classes*.dex' | strings > /tmp/dex-strings
+          DEX_DIR=$(mktemp -d)
+          unzip -q "$APK" 'classes*.dex' -d "$DEX_DIR"
+          find "$DEX_DIR" -type f -name 'classes*.dex' -print > /tmp/dex-files
+          test -s /tmp/dex-files
+
+          has_dex_token() {
+            local token="$1"
+            while IFS= read -r dex; do
+              if grep -aFq -- "$token" "$dex"; then
+                return 0
+              fi
+            done < /tmp/dex-files
+            return 1
+          }
+
           for field in configVersion configType subscriptionId remarks server serverPort password method flow username network headerType host path security sni publicKey shortId; do
-            if ! grep -Fxq "$field" /tmp/dex-strings; then
+            if ! has_dex_token "$field"; then
               echo "::error::Persisted Gson/MMKV field missing after R8: $field"
               exit 1
             fi
           done
           for enum_name in VMESS CUSTOM SHADOWSOCKS SOCKS VLESS TROJAN WIREGUARD HYSTERIA2 HYSTERIA HTTP POLICYGROUP PROXYCHAIN; do
-            if ! grep -Fxq "$enum_name" /tmp/dex-strings; then
+            if ! has_dex_token "$enum_name"; then
               echo "::error::Persisted config enum name missing after R8: $enum_name"
               exit 1
             fi
