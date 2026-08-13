@@ -129,6 +129,9 @@ class PerAppProxyActivity : BaseActivity() {
         "com.chrome.beta" -> 31
         "com.chrome.dev" -> 32
         "com.chrome.canary" -> 33
+
+        // Google app
+        "com.google.android.googlequicksearchbox" -> 40
         else -> Int.MAX_VALUE
     }
 
