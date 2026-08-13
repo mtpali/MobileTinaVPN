@@ -92,6 +92,20 @@ class CoreTestService : Service() {
         }
 
         if (guidsList.isNotEmpty()) {
+            // Clear again inside the generation boundary. A native callback from a cancelled
+            // batch may have returned after the UI-side clear but before START reached here.
+            MmkvManager.clearAllTestDelayResults(guidsList)
+
+            // Smart Connect waits for this exact batch acknowledgement before it considers
+            // any delay value eligible for early-exit selection.
+            if (message.batchId > 0L) {
+                MessageUtil.sendMsg2UI(
+                    this,
+                    AppConfig.MSG_MEASURE_CONFIG_NOTIFY,
+                    TestServiceMessage.SMART_BATCH_STARTED_PREFIX + message.batchId
+                )
+            }
+
             lateinit var worker: RealPingWorkerService
             worker = RealPingWorkerService(
                 context = this,
