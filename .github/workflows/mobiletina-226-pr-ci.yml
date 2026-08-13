@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - agent/v2rayng-2.2.6-base
+  workflow_dispatch:
 
 jobs:
   final-arm:
@@ -98,29 +99,48 @@ jobs:
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
             -PFINAL_BUILD_SIGNING=debug
 
-      - name: Verify final APK signature and architectures
+      - name: Verify final APK, persisted contracts and obfuscation
         run: |
           set -euo pipefail
           APK=$(find V2rayNG/app/build/outputs/apk/playstore/release -type f -name '*armv7-armv8*.apk' -print -quit)
           test -n "$APK"
+          echo "Verifying $APK"
           $ANDROID_HOME/build-tools/37.0.0/apksigner verify --verbose --print-certs "$APK"
+
           printf 'arm64-v8a\narmeabi-v7a\n' > /tmp/expected-abis
           zipinfo -1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u > /tmp/apk-abis
           diff -u /tmp/expected-abis /tmp/apk-abis
+
           unzip -p "$APK" 'classes*.dex' | strings > /tmp/dex-strings
-          for field in configType subscriptionId server serverPort password network enabled url outboundBean streamSettings routing; do
-            grep -Fxq "$field" /tmp/dex-strings
+          for field in configVersion configType subscriptionId remarks server serverPort password method flow username network headerType host path security sni publicKey shortId; do
+            if ! grep -Fxq "$field" /tmp/dex-strings; then
+              echo "::error::Persisted Gson/MMKV field missing after R8: $field"
+              exit 1
+            fi
           done
+          for enum_name in VMESS CUSTOM SHADOWSOCKS SOCKS VLESS TROJAN WIREGUARD HYSTERIA2 HYSTERIA HTTP POLICYGROUP PROXYCHAIN; do
+            if ! grep -Fxq "$enum_name" /tmp/dex-strings; then
+              echo "::error::Persisted config enum name missing after R8: $enum_name"
+              exit 1
+            fi
+          done
+
           MAPPING=V2rayNG/app/build/outputs/mapping/playstoreRelease/mapping.txt
           test -s "$MAPPING"
           MAPPED_NAME=$(sed -n 's/^com\.v2ray\.ang\.handler\.AngConfigManager -> \(.*\):$/\1/p' "$MAPPING")
           test -n "$MAPPED_NAME"
           test "$MAPPED_NAME" != 'com.v2ray.ang.handler.AngConfigManager'
+          echo "AngConfigManager obfuscated as: $MAPPED_NAME"
+
+          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8.sha256
 
       - name: Upload final MobileTina APK
+        if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
           name: MobileTina-2.2.6-armv7-armv8-final
-          path: V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
+          path: |
+            V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8.sha256
           if-no-files-found: error
           retention-days: 90
