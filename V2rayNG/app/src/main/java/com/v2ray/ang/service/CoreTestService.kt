@@ -74,6 +74,7 @@ class CoreTestService : Service() {
         return START_NOT_STICKY
     }
 
+    @Synchronized
     private fun handleMeasureStart(message: TestServiceMessage, startId: Int) {
         LogUtil.i(AppConfig.TAG, "CoreTestService starting worker subscription ${message.subscriptionId}")
 
@@ -104,6 +105,7 @@ class CoreTestService : Service() {
         }
     }
 
+    @Synchronized
     private fun handleWorkerEvent(
         generation: Long,
         worker: RealPingWorkerService,
@@ -129,14 +131,15 @@ class CoreTestService : Service() {
                 activeWorkers.remove(worker)
                 if (isCurrentBatch) {
                     MessageUtil.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_FINISH, event.status)
-                }
-                if (activeWorkers.isEmpty()) {
-                    stopSelf()
+                    if (activeWorkers.isEmpty()) {
+                        stopSelf()
+                    }
                 }
             }
         }
     }
 
+    @Synchronized
     private fun handleMeasureCancel() {
         // Invalidate first, before asking workers to cancel, so any late native callback is ignored.
         batchGeneration.incrementAndGet()
