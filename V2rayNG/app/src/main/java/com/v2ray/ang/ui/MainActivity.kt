@@ -807,6 +807,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         if (total > 0L) {
             val progress = ((used.toDouble() / total.toDouble()) * 100.0).toInt().coerceIn(0, 100)
             binding.subscriptionProgress.progress = progress
+            binding.subscriptionProgress.visibility = View.VISIBLE
             binding.tvSubscriptionUsage.text = getString(
                 R.string.mobiletina_subscription_usage_compact,
                 formatBytes(used), formatBytes(total)
