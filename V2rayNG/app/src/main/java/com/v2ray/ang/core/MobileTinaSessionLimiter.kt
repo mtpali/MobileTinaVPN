@@ -1,39 +1,71 @@
 package com.v2ray.ang.core
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
-import androidx.work.CoroutineWorker
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
-import com.v2ray.ang.AppConfig
-import com.v2ray.ang.util.MessageUtil
+import android.content.Intent
+import android.os.Build
+import android.os.SystemClock
+import com.v2ray.ang.receiver.MobileTinaSessionLimitReceiver
 import java.util.concurrent.TimeUnit
 
 object MobileTinaSessionLimiter {
-    private const val UNIQUE_WORK_NAME = "mobiletina_vpn_24h_limit"
+    const val ACTION_SESSION_LIMIT = "com.v2ray.mobiletina.action.VPN_SESSION_LIMIT"
 
+    private const val REQUEST_CODE = 24001
+    private val MAX_SESSION_MILLIS = TimeUnit.HOURS.toMillis(24L)
+
+    /**
+     * Schedule the 24-hour VPN session cap without WorkManager.
+     *
+     * CoreVpnService runs in a dedicated process. Keeping this timer on AlarmManager avoids
+     * cross-process WorkManager initialization/scheduler issues during VPN startup while
+     * still using elapsed realtime so changing the device wall clock cannot extend a session.
+     */
     fun schedule(context: Context) {
-        val request = OneTimeWorkRequestBuilder<SessionLimitWorker>()
-            .setInitialDelay(24L, TimeUnit.HOURS)
-            .addTag(UNIQUE_WORK_NAME)
-            .build()
-        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
-            UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
-            request
-        )
+        val app = context.applicationContext
+        val alarm = app.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pendingIntent = sessionLimitPendingIntent(app)
+        val triggerAt = SystemClock.elapsedRealtime() + MAX_SESSION_MILLIS
+
+        alarm.cancel(pendingIntent)
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarm.canScheduleExactAlarms()) {
+                alarm.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerAt,
+                    pendingIntent
+                )
+            } else {
+                alarm.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerAt,
+                    pendingIntent
+                )
+            }
+        } catch (_: SecurityException) {
+            alarm.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAt,
+                pendingIntent
+            )
+        }
     }
 
     fun cancel(context: Context) {
-        WorkManager.getInstance(context.applicationContext).cancelUniqueWork(UNIQUE_WORK_NAME)
+        val app = context.applicationContext
+        val alarm = app.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarm.cancel(sessionLimitPendingIntent(app))
     }
 
-    class SessionLimitWorker(appContext: Context, params: WorkerParameters) :
-        CoroutineWorker(appContext, params) {
-        override suspend fun doWork(): Result {
-            MessageUtil.sendMsg2Service(applicationContext, AppConfig.MSG_STATE_STOP, "mobiletina_24h_limit")
-            return Result.success()
-        }
+    private fun sessionLimitPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MobileTinaSessionLimitReceiver::class.java)
+            .setAction(ACTION_SESSION_LIMIT)
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 }
