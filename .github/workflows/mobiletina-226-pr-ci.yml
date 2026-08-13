@@ -88,7 +88,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Test and build obfuscated ARMv7 + ARMv8 APK
+      - name: Test and build obfuscated ARMv7 APK
         run: |
           cd V2rayNG
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
@@ -96,18 +96,18 @@ jobs:
           ./gradlew testPlaystoreDebugUnitTest \
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
             assemblePlaystoreRelease \
-            '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
+            -PABI_FILTERS=armeabi-v7a \
             -PFINAL_BUILD_SIGNING=debug
 
-      - name: Verify final APK, persisted contracts and obfuscation
+      - name: Verify final ARMv7 APK, runtime contracts and obfuscation
         run: |
           set -euo pipefail
-          APK=$(find V2rayNG/app/build/outputs/apk/playstore/release -type f -name '*armv7-armv8*.apk' -print -quit)
+          APK=$(find V2rayNG/app/build/outputs/apk/playstore/release -type f -name '*armeabi-v7a*.apk' -print -quit)
           test -n "$APK"
           echo "Verifying $APK"
           $ANDROID_HOME/build-tools/37.0.0/apksigner verify --verbose --print-certs "$APK"
 
-          printf 'arm64-v8a\narmeabi-v7a\n' > /tmp/expected-abis
+          printf 'armeabi-v7a\n' > /tmp/expected-abis
           zipinfo -1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u > /tmp/apk-abis
           diff -u /tmp/expected-abis /tmp/apk-abis
 
@@ -139,6 +139,18 @@ jobs:
             fi
           done
 
+          for runtime_class in \
+            'Lcom/v2ray/ang/core/CoreServiceManager$CoreCallback;' \
+            'Lcom/v2ray/ang/core/CoreServiceManager$XrayProcessFinder;' \
+            'Lcom/v2ray/ang/service/TProxyService;' \
+            'Llibv2ray/CoreController;' \
+            'Lgo/Seq;'; do
+            if ! has_dex_token "$runtime_class"; then
+              echo "::error::Native/runtime class renamed or removed by R8: $runtime_class"
+              exit 1
+            fi
+          done
+
           MAPPING=V2rayNG/app/build/outputs/mapping/playstoreRelease/mapping.txt
           test -s "$MAPPING"
           MAPPED_NAME=$(sed -n 's/^com\.v2ray\.ang\.handler\.AngConfigManager -> \(.*\):$/\1/p' "$MAPPING")
@@ -146,15 +158,15 @@ jobs:
           test "$MAPPED_NAME" != 'com.v2ray.ang.handler.AngConfigManager'
           echo "AngConfigManager obfuscated as: $MAPPED_NAME"
 
-          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8.sha256
+          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armeabi-v7a.sha256
 
-      - name: Upload final MobileTina APK
+      - name: Upload final MobileTina ARMv7 APK
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: MobileTina-2.2.6-armv7-armv8-final
+          name: MobileTina-2.2.6-armeabi-v7a-final
           path: |
-            V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/*armeabi-v7a*.apk
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armeabi-v7a.sha256
           if-no-files-found: error
           retention-days: 90
