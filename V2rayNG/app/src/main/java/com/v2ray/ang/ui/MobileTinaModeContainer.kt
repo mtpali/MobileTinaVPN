@@ -7,8 +7,10 @@ import android.widget.FrameLayout
 import kotlin.math.abs
 
 /**
- * Owns deliberate horizontal mode swipes while leaving vertical server-list scrolling untouched.
- * Direction: +1 = left-to-right, -1 = right-to-left.
+ * Observes deliberate horizontal swipes without stealing touch events from the child
+ * ScrollView/RecyclerView/ViewPager hierarchy.
+ *
+ * Direction: +1 = left-to-right (Manual), -1 = right-to-left (Auto).
  */
 class MobileTinaModeContainer @JvmOverloads constructor(
     context: Context,
@@ -17,61 +19,53 @@ class MobileTinaModeContainer @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     private val density = resources.displayMetrics.density
-    private val interceptThreshold = 24f * density
     private val triggerThreshold = 58f * density
+    private val horizontalBias = 1.2f
 
     private var downX = 0f
     private var downY = 0f
-    private var intercepting = false
-    private var gestureTriggered = false
+    private var trackingGesture = false
     private var swipeListener: ((direction: Int) -> Unit)? = null
 
     fun setOnModeSwipeListener(listener: (direction: Int) -> Unit) {
         swipeListener = listener
     }
 
-    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-        when (ev.actionMasked) {
+    /**
+     * Observe the complete gesture at container level. dispatchTouchEvent() is called
+     * before child views, so a horizontal swipe is still detected even when the manual
+     * server list, TabLayout or another child handles the touch sequence itself.
+     * Vertical scrolling and normal clicks remain entirely with the child view.
+     */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                downX = ev.x
-                downY = ev.y
-                intercepting = false
-                gestureTriggered = false
+                downX = event.x
+                downY = event.y
+                trackingGesture = true
             }
-            MotionEvent.ACTION_MOVE -> {
-                val dx = ev.x - downX
-                val dy = ev.y - downY
-                if (abs(dx) >= interceptThreshold && abs(dx) > abs(dy) * 1.2f) {
-                    intercepting = true
-                    parent?.requestDisallowInterceptTouchEvent(true)
+
+            MotionEvent.ACTION_UP -> {
+                val dx = event.x - downX
+                val dy = event.y - downY
+                val isHorizontalSwipe = trackingGesture &&
+                    abs(dx) >= triggerThreshold &&
+                    abs(dx) > abs(dy) * horizontalBias
+
+                // Let the child finish its own gesture first, then switch mode. This avoids
+                // cancelling RecyclerView/ScrollView touches midway through a swipe.
+                val handled = super.dispatchTouchEvent(event)
+                trackingGesture = false
+                if (isHorizontalSwipe) {
+                    swipeListener?.invoke(if (dx > 0f) 1 else -1)
                     return true
                 }
+                return handled
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> resetGesture()
-        }
-        return false
-    }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!intercepting) return super.onTouchEvent(event)
-
-        if (event.actionMasked == MotionEvent.ACTION_MOVE && !gestureTriggered) {
-            val dx = event.x - downX
-            if (abs(dx) >= triggerThreshold) {
-                gestureTriggered = true
-                swipeListener?.invoke(if (dx > 0f) 1 else -1)
-            }
+            MotionEvent.ACTION_CANCEL -> trackingGesture = false
         }
 
-        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
-            resetGesture()
-        }
-        return true
-    }
-
-    private fun resetGesture() {
-        intercepting = false
-        gestureTriggered = false
-        parent?.requestDisallowInterceptTouchEvent(false)
+        return super.dispatchTouchEvent(event)
     }
 }
