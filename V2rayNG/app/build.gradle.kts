@@ -15,6 +15,22 @@ android {
         ?.map { it.trim() }
         ?.filter { it.isNotEmpty() }
 
+    // Hardened release is opt-in so normal development/diagnostic builds remain easy to
+    // inspect. The final distribution workflow enables this explicitly after injecting the
+    // signing-certificate fingerprint that the runtime integrity guard must verify.
+    val hardenedReleaseBuild = (properties["FINAL_HARDENED_BUILD"] as? String)
+        ?.equals("true", ignoreCase = true) == true
+    val expectedReleaseCertSha256 = (properties["MOBILETINA_EXPECTED_CERT_SHA256"] as? String)
+        ?.trim()
+        ?.lowercase()
+        .orEmpty()
+
+    if (hardenedReleaseBuild && !expectedReleaseCertSha256.matches(Regex("[0-9a-f]{64}"))) {
+        throw GradleException(
+            "FINAL_HARDENED_BUILD requires MOBILETINA_EXPECTED_CERT_SHA256 (64 lowercase/uppercase hex chars)"
+        )
+    }
+
     defaultConfig {
         applicationId = "com.v2ray.mobiletina"
         minSdk = 24
@@ -22,6 +38,13 @@ android {
         versionCode = 744
         versionName = "2.2.6"
         multiDexEnabled = true
+
+        buildConfigField("boolean", "MOBILETINA_HARDENED_BUILD", hardenedReleaseBuild.toString())
+        buildConfigField(
+            "String",
+            "MOBILETINA_EXPECTED_CERT_SHA256",
+            "\"$expectedReleaseCertSha256\""
+        )
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         if (!fatApkAbiList.isNullOrEmpty()) {
@@ -55,12 +78,16 @@ android {
     buildTypes {
         release {
             isDebuggable = false
-            // MobileTina has several behavior-sensitive Android/JNI/gomobile/UI paths.
-            // Preserve the exact tested application behavior instead of risking regressions
-            // from optimizer transformations. Release still strips debug-only behavior but
-            // deliberately does not run R8 minification or resource shrinking.
-            isMinifyEnabled = false
-            isShrinkResources = false
+            if (hardenedReleaseBuild) {
+                // AGP 9.2 / R8 full optimization path: shrinking, optimization, obfuscation,
+                // repackaging and optimized resource shrinking are enabled for the final build.
+                isMinifyEnabled = true
+                isShrinkResources = true
+            } else {
+                // Keep the stable diagnostic release available for regression comparison.
+                isMinifyEnabled = false
+                isShrinkResources = false
+            }
             if ((properties["FINAL_BUILD_SIGNING"] as? String) == "debug") {
                 signingConfig = signingConfigs.getByName("debug")
             }
