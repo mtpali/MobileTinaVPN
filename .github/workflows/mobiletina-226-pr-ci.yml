@@ -185,8 +185,9 @@ jobs:
             fi
           done
 
-          if ! has_dex_token 'ابتدا یک سرور انتخاب کنید'; then
-            echo "::error::Persian select-server toast missing from packaged APK"
+          $ANDROID_HOME/build-tools/37.0.0/aapt2 dump resources "$APK" > /tmp/apk-resources.txt
+          if ! grep -Fq 'ابتدا یک سرور انتخاب کنید' /tmp/apk-resources.txt; then
+            echo "::error::Persian select-server toast missing from packaged APK resources"
             exit 1
           fi
 
