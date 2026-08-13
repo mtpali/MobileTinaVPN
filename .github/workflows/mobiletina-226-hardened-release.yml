@@ -20,6 +20,9 @@ jobs:
           set -euo pipefail
           grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
+          grep -q 'mobileTinaHardened' V2rayNG/app/build.gradle.kts
+          grep -q 'enableV2Signing = true' V2rayNG/app/build.gradle.kts
+          grep -q 'enableV3Signing = true' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = true' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = true' V2rayNG/app/build.gradle.kts
           grep -q -- '-repackageclasses' V2rayNG/app/proguard-rules.pro
@@ -95,28 +98,40 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Prepare signing certificate lock
+      - name: Prepare dedicated hardened signer and certificate lock
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair \
-              -keystore "$HOME/.android/debug.keystore" \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -dname 'CN=Android Debug,O=Android,C=US' \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -noprompt
-          fi
+          HARDENED_KEYSTORE="$RUNNER_TEMP/mobiletina-2.2.6-hardened.p12"
+          HARDENED_STORE_PASSWORD='mobiletina-2.2.6-hardened-ci'
+          HARDENED_KEY_ALIAS='mobiletina_hardened'
+          HARDENED_KEY_PASSWORD="$HARDENED_STORE_PASSWORD"
+          rm -f "$HARDENED_KEYSTORE"
+
+          keytool -genkeypair \
+            -storetype PKCS12 \
+            -keystore "$HARDENED_KEYSTORE" \
+            -storepass "$HARDENED_STORE_PASSWORD" \
+            -alias "$HARDENED_KEY_ALIAS" \
+            -keypass "$HARDENED_KEY_PASSWORD" \
+            -dname 'CN=MobileTina Hardened,O=MobileTina,C=IR' \
+            -keyalg RSA \
+            -keysize 4096 \
+            -sigalg SHA256withRSA \
+            -validity 10000 \
+            -noprompt
+
           CERT_SHA=$(keytool -exportcert \
-            -keystore "$HOME/.android/debug.keystore" \
-            -storepass android \
-            -alias androiddebugkey | sha256sum | awk '{print $1}')
+            -storetype PKCS12 \
+            -keystore "$HARDENED_KEYSTORE" \
+            -storepass "$HARDENED_STORE_PASSWORD" \
+            -alias "$HARDENED_KEY_ALIAS" | sha256sum | awk '{print $1}')
           test ${#CERT_SHA} -eq 64
+
           echo "CERT_SHA=$CERT_SHA" >> $GITHUB_ENV
+          echo "HARDENED_KEYSTORE=$HARDENED_KEYSTORE" >> $GITHUB_ENV
+          echo "HARDENED_STORE_PASSWORD=$HARDENED_STORE_PASSWORD" >> $GITHUB_ENV
+          echo "HARDENED_KEY_ALIAS=$HARDENED_KEY_ALIAS" >> $GITHUB_ENV
+          echo "HARDENED_KEY_PASSWORD=$HARDENED_KEY_PASSWORD" >> $GITHUB_ENV
           echo "Hardened signer SHA-256: $CERT_SHA"
 
       - name: Test and build hardened ARMv7 + ARMv8 release
@@ -130,9 +145,12 @@ jobs:
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
-            -PFINAL_BUILD_SIGNING=debug \
             -PFINAL_HARDENED_BUILD=true \
-            -PMOBILETINA_EXPECTED_CERT_SHA256="$CERT_SHA"
+            -PMOBILETINA_EXPECTED_CERT_SHA256="$CERT_SHA" \
+            -PFINAL_HARDENED_KEYSTORE="$HARDENED_KEYSTORE" \
+            -PFINAL_HARDENED_STORE_PASSWORD="$HARDENED_STORE_PASSWORD" \
+            -PFINAL_HARDENED_KEY_ALIAS="$HARDENED_KEY_ALIAS" \
+            -PFINAL_HARDENED_KEY_PASSWORD="$HARDENED_KEY_PASSWORD"
 
       - name: Verify hardened APK, obfuscation and anti-tamper payload
         run: |
@@ -142,7 +160,9 @@ jobs:
           echo "Verifying $APK"
 
           $ANDROID_HOME/build-tools/37.0.0/apksigner verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
-          APK_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/apksigner.txt | head -n1 | tr -d ':' | tr 'A-F' 'a-f')
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' /tmp/apksigner.txt
+          grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' /tmp/apksigner.txt
+          APK_CERT=$(sed -n 's/^.*certificate SHA-256 digest: //p' /tmp/apksigner.txt | head -n1 | tr -d ':' | tr 'A-F' 'a-f')
           test "$APK_CERT" = "$CERT_SHA"
 
           printf 'arm64-v8a\narmeabi-v7a\n' > /tmp/expected-abis
