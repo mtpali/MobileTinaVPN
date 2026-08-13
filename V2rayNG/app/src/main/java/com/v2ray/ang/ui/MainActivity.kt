@@ -538,7 +538,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     return@withTimeoutOrNull false
                 }
 
-                // 6 seconds is only a ceiling. Remove resolved GUIDs as results arrive and exit
+                // 5 seconds is only a ceiling. Remove resolved GUIDs as results arrive and exit
                 // immediately when the last server reports either a positive ping or -1 failure.
                 while (isActive && isSmartAttemptActive(attemptId)) {
                     val allResolved = withContext(Dispatchers.IO) {
@@ -1408,8 +1408,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val FIRST_RUN_COMPLETED = "permissions_completed"
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
         private const val SUBSCRIPTION_REVEAL_HOLD_MS = 10_000L
-        private const val SMART_CONNECT_TIMEOUT_SECONDS = 6
-        private const val SMART_CONNECT_TIMEOUT_MS = 6_000L
+        private const val SMART_CONNECT_TIMEOUT_SECONDS = 5
+        private const val SMART_CONNECT_TIMEOUT_MS = 5_000L
         private const val SMART_START_CONFIRM_TIMEOUT_MS = 8_000L
         private const val SMART_BATCH_START_POLL_MS = 20L
         private const val SMART_PING_RESULT_POLL_MS = 120L
