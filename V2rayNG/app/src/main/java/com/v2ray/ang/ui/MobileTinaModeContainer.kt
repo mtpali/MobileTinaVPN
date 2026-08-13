@@ -45,7 +45,8 @@ class MobileTinaModeContainer @JvmOverloads constructor(
     private fun triggerSwipe(event: MotionEvent) {
         if (!isHorizontalSwipe(event)) return
         swipeTriggered = true
-        val direction = if (event.x - downX > 0f) 1 else -1
+        val dx = event.x - downX
+        val direction = if (dx > 0f) 1 else -1
 
         // Switch mode after the current dispatch pass. Empty ViewPager2 can cancel its child
         // sequence before ACTION_UP, so waiting until UP is not reliable on first run.
