@@ -1414,6 +1414,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val SMART_BATCH_START_POLL_MS = 20L
         private const val SMART_PING_RESULT_POLL_MS = 120L
         private const val INTERNET_DIALOG_DURATION_MS = 3_000L
-        private val DEFAULT_SUBSCRIPTION_NAME = intArrayOf(105,110,115,116,97,103,114,97,109,32,58,32,109,111,98,105,108,101,46,116,105,110,97).map { it.toChar() }.joinToString("")
+        private val DEFAULT_SUBSCRIPTION_NAME: String get() = w.a()
     }
 }
