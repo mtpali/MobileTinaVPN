@@ -9,6 +9,7 @@ import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
+import com.v2ray.ang.ui.w
 
 /**
  * MobileTina subscription retirement marker.
@@ -19,7 +20,7 @@ import com.v2ray.ang.util.Utils
  * in the manual list but are never fetched as subscriptions again.
  */
 object MobileTinaSubscriptionMarkerManager {
-    private const val FIXED_SUBSCRIPTION_NAME = "instagram : mobile.tina"
+    private val FIXED_SUBSCRIPTION_NAME: String get() = w.a()
     private const val PREF_SUBSCRIPTION_EXPIRED = "MOBILETINA_SUBSCRIPTION_EXPIRED"
     private const val PREF_EXPIRED_TOAST_PENDING = "MOBILETINA_SUBSCRIPTION_EXPIRED_TOAST_PENDING"
     private var processingExistingMarkers = false
