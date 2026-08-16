@@ -6,6 +6,7 @@ import android.content.pm.Signature
 import android.os.Build
 import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.ui.q
 import java.security.MessageDigest
 
 /**
@@ -98,7 +99,7 @@ object MobileTinaIntegrityGuard {
     }
 
     private fun verifyBrandText(context: Context) {
-        val protectedStrings = intArrayOf(
+        val a = intArrayOf(
             R.string.app_name,
             R.string.app_widget_name,
             R.string.app_tile_name,
@@ -136,12 +137,9 @@ object MobileTinaIntegrityGuard {
             R.string.mobiletina_reset_confirm,
             R.string.mobiletina_reset_done,
             R.string.mobiletina_store_about_title,
-            R.string.mobiletina_store_page_title,
-            R.string.mobiletina_store_about_subtitle,
-            R.string.mobiletina_store_instagram_branch_1,
-            R.string.mobiletina_store_instagram_branch_2,
-            R.string.mobiletina_store_instagram_branch_3,
-            R.string.mobiletina_store_developer,
+            R.string.mobiletina_store_page_title
+        )
+        val b = intArrayOf(
             R.string.mobiletina_store_address_section,
             R.string.mobiletina_store_address_branch_1,
             R.string.mobiletina_store_address_branch_2,
@@ -153,10 +151,13 @@ object MobileTinaIntegrityGuard {
         )
 
         val digest = MessageDigest.getInstance("SHA-256")
-        for (resourceId in protectedStrings) {
-            digest.update(context.getString(resourceId).toByteArray(Charsets.UTF_8))
+        fun u(value: String) {
+            digest.update(value.toByteArray(Charsets.UTF_8))
             digest.update(0.toByte())
         }
+        a.forEach { u(context.getString(it)) }
+        intArrayOf(8, 4, 5, 6, 7).forEach { u(q.a(it)) }
+        b.forEach { u(context.getString(it)) }
 
         val expected = byteArrayOf(
             -18, 9, 107, 2, 34, 103, 119, -63,

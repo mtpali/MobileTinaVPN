@@ -32,7 +32,7 @@ class X7 : AppCompatActivity() {
     }
 }
 
-private object q {
+internal object q {
     private val u = intArrayOf(89,117,192,143,82,248,156,108,250,42,29,3,140,117,32,238,75,44,0,114,250,65,250,46)
     private val v = intArrayOf(227,133,40,91,96,213,68,59,219,235,56,17,31,141,153,234,92,152,132,82,198,92,1,73)
 
