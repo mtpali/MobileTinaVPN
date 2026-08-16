@@ -1,0 +1,56 @@
+name: MobileTina one-time marker brand patch
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/mobiletina-2.2.6-port
+          fetch-depth: 0
+
+      - name: Move remaining marker label into encrypted vault
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaSubscriptionMarkerManager.kt')
+          text = path.read_text()
+          old_import = 'import com.v2ray.ang.util.Utils\n'
+          new_import = old_import + 'import com.v2ray.ang.ui.w\n'
+          if 'import com.v2ray.ang.ui.w\n' not in text:
+              if text.count(old_import) != 1:
+                  raise SystemExit('Utils import anchor not found exactly once')
+              text = text.replace(old_import, new_import, 1)
+
+          old = '    private const val FIXED_SUBSCRIPTION_NAME = "instagram : mobile.tina"'
+          new = '    private val FIXED_SUBSCRIPTION_NAME: String get() = w.a()'
+          if text.count(old) != 1:
+              raise SystemExit('fixed subscription label literal not found exactly once')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          forbidden = ''.join(chr(x) for x in (105,110,115,116,97,103,114,97,109,32,58,32,109,111,98,105,108,101,46,116,105,110,97))
+          if forbidden in path.read_text():
+              raise SystemExit('plaintext social label survived marker manager patch')
+          PY
+
+      - name: Commit patched source
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add V2rayNG/app/src/main/java/com/v2ray/ang/handler/MobileTinaSubscriptionMarkerManager.kt
+          git diff --cached --check
+          git commit -m 'Hide marker subscription label behind encrypted runtime vault'
+          git push origin HEAD:agent/mobiletina-2.2.6-port
