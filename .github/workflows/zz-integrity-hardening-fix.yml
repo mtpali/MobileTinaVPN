@@ -1,0 +1,116 @@
+name: One-shot integrity hardening fix
+
+on:
+  push:
+    branches:
+      - agent/mobiletina-2.2.6-port
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Preserve anti-tamper without plaintext social resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          x = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/X7.kt')
+          s = x.read_text()
+          s = s.replace('private object q {', 'internal object q {', 1)
+          x.write_text(s)
+
+          p = Path('V2rayNG/app/src/main/java/com/v2ray/ang/util/MobileTinaIntegrityGuard.kt')
+          s = p.read_text()
+          if 'import com.v2ray.ang.ui.q' not in s:
+              s = s.replace('import com.v2ray.ang.R\n', 'import com.v2ray.ang.R\nimport com.v2ray.ang.ui.q\n', 1)
+
+          start = s.index('    private fun verifyBrandText(context: Context) {')
+          end = s.index('    private fun verifySigningCertificate(context: Context) {', start)
+          replacement = '''    private fun verifyBrandText(context: Context) {
+        val a = intArrayOf(
+            R.string.app_name,
+            R.string.app_widget_name,
+            R.string.app_tile_name,
+            R.string.mobiletina_status_connected,
+            R.string.mobiletina_status_disconnected,
+            R.string.mobiletina_status_connecting,
+            R.string.mobiletina_status_failed,
+            R.string.mobiletina_testing,
+            R.string.mobiletina_no_working_server,
+            R.string.mobiletina_ping_unknown,
+            R.string.mobiletina_ping_inactive,
+            R.string.mobiletina_ping_format,
+            R.string.mobiletina_enable_internet,
+            R.string.mobiletina_mode_auto,
+            R.string.mobiletina_mode_manual,
+            R.string.mobiletina_tap_for_ping,
+            R.string.mobiletina_manual_smart_connect,
+            R.string.mobiletina_manual_smart_connect_with_icon,
+            R.string.mobiletina_locate_selected,
+            R.string.mobiletina_countdown_format,
+            R.string.mobiletina_smart_countdown_format,
+            R.string.mobiletina_smart_countdown_short,
+            R.string.mobiletina_subscription_status,
+            R.string.mobiletina_subscription_used,
+            R.string.mobiletina_subscription_days_remaining,
+            R.string.mobiletina_subscription_usage_compact,
+            R.string.mobiletina_subscription_secret_title,
+            R.string.mobiletina_copy_subscription_link,
+            R.string.mobiletina_copy_all_configs,
+            R.string.mobiletina_close,
+            R.string.mobiletina_confirm,
+            R.string.mobiletina_delete_vpn,
+            R.string.mobiletina_reset_title,
+            R.string.mobiletina_reset_message,
+            R.string.mobiletina_reset_confirm,
+            R.string.mobiletina_reset_done,
+            R.string.mobiletina_store_about_title,
+            R.string.mobiletina_store_page_title
+        )
+        val b = intArrayOf(
+            R.string.mobiletina_store_address_section,
+            R.string.mobiletina_store_address_branch_1,
+            R.string.mobiletina_store_address_branch_2,
+            R.string.mobiletina_real_delay,
+            R.string.title_file_chooser,
+            R.string.notification_action_stop_v2ray,
+            R.string.per_app_proxy_settings,
+            R.string.title_settings
+        )
+
+        val digest = MessageDigest.getInstance("SHA-256")
+        fun u(value: String) {
+            digest.update(value.toByteArray(Charsets.UTF_8))
+            digest.update(0.toByte())
+        }
+        a.forEach { u(context.getString(it)) }
+        intArrayOf(8, 4, 5, 6, 7).forEach { u(q.a(it)) }
+        b.forEach { u(context.getString(it)) }
+
+        val expected = byteArrayOf(
+            -18, 9, 107, 2, 34, 103, 119, -63,
+            -91, 13, -76, 29, 71, -48, 101, -90,
+            126, -47, -52, -65, -114, -96, -97, 100,
+            105, -19, -93, -116, -10, -56, 35, 70
+        )
+        requireDigest(digest.digest(), expected)
+    }
+
+'''
+          p.write_text(s[:start] + replacement + s[end:])
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add V2rayNG/app/src/main/java/com/v2ray/ang/ui/X7.kt V2rayNG/app/src/main/java/com/v2ray/ang/util/MobileTinaIntegrityGuard.kt
+          git commit -m 'fix: bind encrypted social payload into integrity guard'
+          git push origin HEAD:agent/mobiletina-2.2.6-port
