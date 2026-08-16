@@ -1344,7 +1344,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.mobiletina_store_about -> startActivity(Intent(this, MobileTinaStoreAboutActivity::class.java))
+            R.id.z0 -> startActivity(Intent(this, X7::class.java))
             R.id.per_app_proxy_settings -> requestActivityLauncher.launch(Intent(this, PerAppProxyActivity::class.java))
             R.id.routing_setting -> requestActivityLauncher.launch(Intent(this, RoutingSettingActivity::class.java))
             R.id.user_asset_setting -> requestActivityLauncher.launch(Intent(this, UserAssetActivity::class.java))

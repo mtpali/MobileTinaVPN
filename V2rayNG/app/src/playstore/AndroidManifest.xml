@@ -19,7 +19,7 @@
         </activity>
 
         <activity
-            android:name=".ui.MobileTinaStoreAboutActivity"
+            android:name=".ui.X7"
             android:exported="false" />
 
         <activity

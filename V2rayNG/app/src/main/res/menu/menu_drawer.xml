@@ -5,7 +5,7 @@
 
     <group android:id="@+id/group_mobiletina_store">
         <item
-            android:id="@+id/mobiletina_store_about"
+            android:id="@+id/z0"
             android:icon="@drawable/ic_about_24dp"
             android:title="@string/mobiletina_store_about_title" />
     </group>
