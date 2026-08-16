@@ -3,6 +3,9 @@
 # R8 9.1+ already repackages app classes by default. Keep this explicit so the intended
 # hardening remains obvious even if build-tool defaults change later.
 -repackageclasses
+-obfuscationdictionary obfuscation-dictionary.txt
+-classobfuscationdictionary obfuscation-dictionary.txt
+-packageobfuscationdictionary obfuscation-dictionary.txt
 
 # Preserve only runtime metadata that reflection/serialization genuinely needs.
 -keepattributes Signature,RuntimeVisibleAnnotations,RuntimeVisibleParameterAnnotations,AnnotationDefault,InnerClasses,EnclosingMethod

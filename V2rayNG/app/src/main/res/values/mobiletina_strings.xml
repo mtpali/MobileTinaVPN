@@ -36,11 +36,6 @@
     <string name="mobiletina_reset_done" translatable="false">تمام اشتراک‌ها و کانفیگ‌ها پاک شدند</string>
     <string name="mobiletina_store_about_title" translatable="false">درباره موبایل تینا</string>
     <string name="mobiletina_store_page_title" translatable="false">درباره ما</string>
-    <string name="mobiletina_store_about_subtitle" translatable="false">ما را در شبکه‌های اجتماعی دنبال کنید</string>
-    <string name="mobiletina_store_instagram_branch_1" translatable="false">اینستاگرام شعبه اول : کتالم</string>
-    <string name="mobiletina_store_instagram_branch_2" translatable="false">اینستاگرام شعبه دوم : رامسر</string>
-    <string name="mobiletina_store_instagram_branch_3" translatable="false">اینستاگرام سوم</string>
-    <string name="mobiletina_store_developer" translatable="false">توسعه دهنده برنامه</string>
     <string name="mobiletina_store_address_section" translatable="false">آدرس فروشگاه</string>
     <string name="mobiletina_store_address_branch_1" translatable="false">شعبه اول : کتالم ، جنب دبستان شهید بهشتی</string>
     <string name="mobiletina_store_address_branch_2" translatable="false">شعبه دوم : رامسر ، ابریشم محله ، جنب بانک رفاه</string>

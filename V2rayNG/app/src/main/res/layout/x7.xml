@@ -9,7 +9,7 @@
     android:orientation="vertical">
 
     <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar_store_about"
+        android:id="@+id/a0"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="#111315"
@@ -44,18 +44,18 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/b0"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:paddingTop="8dp"
                 android:paddingBottom="22dp"
-                android:text="@string/mobiletina_store_about_subtitle"
                 android:textDirection="rtl"
                 android:textColor="#B8BCC2"
                 android:textSize="14sp" />
 
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_instagram_1"
+                android:id="@+id/a1"
                 android:layout_width="match_parent"
                 android:layout_height="70dp"
                 android:layout_marginBottom="12dp"
@@ -77,13 +77,13 @@
                         android:layout_height="match_parent"
                         android:background="#E4405F" />
                     <TextView
+                        android:id="@+id/b1"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:gravity="center_vertical|start"
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
-                        android:text="@string/mobiletina_store_instagram_branch_1"
                         android:textDirection="rtl"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp" />
@@ -91,7 +91,7 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_instagram_2"
+                android:id="@+id/a2"
                 android:layout_width="match_parent"
                 android:layout_height="70dp"
                 android:layout_marginBottom="12dp"
@@ -113,13 +113,13 @@
                         android:layout_height="match_parent"
                         android:background="#E4405F" />
                     <TextView
+                        android:id="@+id/b2"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:gravity="center_vertical|start"
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
-                        android:text="@string/mobiletina_store_instagram_branch_2"
                         android:textDirection="rtl"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp" />
@@ -127,7 +127,7 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_instagram_3"
+                android:id="@+id/a3"
                 android:layout_width="match_parent"
                 android:layout_height="70dp"
                 android:layout_marginBottom="12dp"
@@ -149,13 +149,13 @@
                         android:layout_height="match_parent"
                         android:background="#E4405F" />
                     <TextView
+                        android:id="@+id/b3"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:gravity="center_vertical|start"
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
-                        android:text="@string/mobiletina_store_instagram_branch_3"
                         android:textDirection="rtl"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp" />
@@ -163,7 +163,7 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_developer"
+                android:id="@+id/a4"
                 android:layout_width="match_parent"
                 android:layout_height="70dp"
                 android:layout_marginBottom="24dp"
@@ -185,13 +185,13 @@
                         android:layout_height="match_parent"
                         android:background="#229ED9" />
                     <TextView
+                        android:id="@+id/b4"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:gravity="center_vertical|start"
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
-                        android:text="@string/mobiletina_store_developer"
                         android:textDirection="rtl"
                         android:textColor="#FFFFFF"
                         android:textSize="15sp" />
