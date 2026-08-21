@@ -1,4 +1,4 @@
-name: Build signed ARMv7 ARMv8 APK
+name: Validate ARMv7 ARMv8 single APK
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build-fat-arm-apk:
+  validate-fat-arm-apk:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,9 +28,7 @@ jobs:
 
       - name: Install NDK
         run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            --channel=0 \
-            --install "ndk;29.0.14206865"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;29.0.14206865"
           echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
           sed -i '10i\
           \
@@ -71,25 +69,14 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Decode signing keystore
-        uses: timheuer/base64-to-file@v2.0.0
-        id: android_keystore
-        with:
-          fileName: android_keystore.jks
-          encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
-
-      - name: Build signed Play Store fat ARM APK
+      - name: Build unsigned Play Store ARMv7+ARMv8 APK
         run: |
           cd ${{ github.workspace }}/V2rayNG
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           chmod 755 gradlew
-          ./gradlew assemblePlaystoreRelease -PFAT_ARM_APK=true \
-            -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} \
-            -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
+          ./gradlew assemblePlaystoreRelease -PFAT_ARM_APK=true --stacktrace
 
-      - name: Verify APK ABIs and signature
+      - name: Verify exactly two ARM ABIs
         id: verify
         run: |
           APK=$(find "${{ github.workspace }}/V2rayNG/app/build/outputs/apk/playstore/release" -maxdepth 1 -type f -name '*armv7-armv8.apk' -print -quit)
@@ -99,14 +86,12 @@ jobs:
           grep -qx 'armeabi-v7a' /tmp/abis.txt
           grep -qx 'arm64-v8a' /tmp/abis.txt
           if grep -Eq '^x86(_64)?$' /tmp/abis.txt; then exit 1; fi
-          ABI_COUNT=$(wc -l < /tmp/abis.txt | tr -d ' ')
-          test "$ABI_COUNT" = "2"
-          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose "$APK"
+          test "$(wc -l < /tmp/abis.txt | tr -d ' ')" = "2"
 
-      - name: Upload verified fat ARM APK
+      - name: Upload validation APK
         uses: actions/upload-artifact@v7
         with:
-          name: v2rayNG-armv7-armv8-signed
+          name: v2rayNG-armv7-armv8-unsigned-validation
           path: ${{ steps.verify.outputs.apk }}
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
