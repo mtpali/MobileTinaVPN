@@ -7,6 +7,7 @@ import androidx.work.WorkManager
 import com.tencent.mmkv.MMKV
 import com.v2ray.ang.AppConfig.ANG_PACKAGE
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.MobileTinaGeoAssetManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.util.MobileTinaIntegrityGuard
 
@@ -39,6 +40,11 @@ class AngApplication : MultiDexApplication() {
         MobileTinaIntegrityGuard.verify(this)
 
         MMKV.initialize(this)
+
+        // Prepare bundled geo assets synchronously in every Android process before CoreNativeManager
+        // can initialize Xray. This removes the first-run race that could leave geosite.dat partially
+        // written and then permanently skipped on subsequent launches.
+        MobileTinaGeoAssetManager.ensureReady(this, assets)
 
         // MobileTina no longer exposes or supports the two root-only Settings options.
         // Clear stale values from upgrades so an invisible root mode can never remain active.
