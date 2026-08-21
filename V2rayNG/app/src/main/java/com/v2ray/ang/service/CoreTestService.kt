@@ -110,7 +110,12 @@ class CoreTestService : Service() {
             worker = RealPingWorkerService(
                 context = this,
                 guids = guidsList,
-                onEvent = { event -> handleWorkerEvent(generation, worker, event) }
+                onEvent = { event -> handleWorkerEvent(generation, worker, event) },
+                // Native outbound-delay tests are relatively heavy. A 16+ way burst can exhaust
+                // sockets/CPU on some Samsung firmwares and produce a whole batch of false -1s.
+                // Keep regular user-triggered bulk tests configurable, but make Smart Connect
+                // deliberately conservative and deterministic.
+                maxConcurrency = if (message.batchId > 0L) SMART_CONNECT_MAX_CONCURRENCY else null
             )
             activeWorkers.add(worker)
             worker.start()
@@ -162,5 +167,9 @@ class CoreTestService : Service() {
         snapshot.forEach { it.cancel() }
         activeWorkers.clear()
         stopSelf()
+    }
+
+    companion object {
+        private const val SMART_CONNECT_MAX_CONCURRENCY = 8
     }
 }
