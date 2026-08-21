@@ -2,6 +2,7 @@ package com.v2ray.ang.core
 
 import android.content.Context
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.handler.MobileTinaGeoAssetManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import go.Seq
@@ -28,7 +29,13 @@ object CoreNativeManager {
     fun initCoreEnv(context: Context?) {
         if (initialized.compareAndSet(false, true)) {
             try {
-                Seq.setContext(context?.applicationContext)
+                val appContext = context?.applicationContext
+                if (appContext != null) {
+                    // Belt-and-suspenders check for service/test entry points: native Xray must
+                    // never observe a half-written first-run geosite.dat/geoip.dat.
+                    MobileTinaGeoAssetManager.ensureReady(appContext, appContext.assets)
+                }
+                Seq.setContext(appContext)
                 val assetPath = Utils.userAssetPath(context)
                 val deviceId = Utils.getDeviceIdForXUDPBaseKey()
                 Libv2ray.initCoreEnv(assetPath, deviceId)
