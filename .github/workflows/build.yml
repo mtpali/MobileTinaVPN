@@ -9,9 +9,6 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
 
 permissions:
   contents: write
@@ -55,7 +52,7 @@ jobs:
       if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
       run: |
         bash compile-hevtun.sh
-
+    
     - name: Save libhevtun
       if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
@@ -90,7 +87,6 @@ jobs:
         java-version: '21'
 
     - name: Decode Keystore
-      if: github.event_name != 'pull_request'
       uses: timheuer/base64-to-file@v2.0.0
       id: android_keystore
       with:
@@ -103,29 +99,25 @@ jobs:
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
         ./gradlew licenseFdroidReleaseReport
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          ./gradlew assembleRelease
-        else
-          ./gradlew assembleRelease -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
-        fi
-
+        ./gradlew assembleRelease -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
+    
     - name: Upload arm64-v8a APK
       uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      if: ${{  success() }}
       with:
         name: arm64-v8a
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
 
     - name: Upload armeabi-v7a APK
       uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      if: ${{  success() }}
       with:
         name: armeabi-v7a
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
 
     - name: Upload x86 APK
       uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      if: ${{  success() }}
       with:
         name: x86-apk
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
