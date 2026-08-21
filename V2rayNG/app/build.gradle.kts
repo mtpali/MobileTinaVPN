@@ -9,29 +9,39 @@ android {
     namespace = "com.v2ray.ang"
     compileSdk = 37
 
+    val fatArmApk = providers.gradleProperty("FAT_ARM_APK").orNull?.toBoolean() == true
+
     defaultConfig {
         applicationId = "com.v2ray.ang"
         minSdk = 24
         targetSdk = 37
-        versionCode = 743
-        versionName = "2.3.3"
+        versionCode = if (fatArmApk) 744 else 743
+        versionName = if (fatArmApk) "2.3.3-arm-universal" else "2.3.3"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
+        if (fatArmApk) {
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
+        }
+
         splits {
             abi {
-                isEnable = true
-                reset()
-                if (!abiFilterList.isNullOrEmpty()) {
-                    include(*abiFilterList.toTypedArray())
-                } else {
-                    include(
-                        "arm64-v8a",
-                        "armeabi-v7a",
-                        "x86_64",
-                        "x86"
-                    )
+                isEnable = !fatArmApk
+                if (!fatArmApk) {
+                    reset()
+                    if (!abiFilterList.isNullOrEmpty()) {
+                        include(*abiFilterList.toTypedArray())
+                    } else {
+                        include(
+                            "arm64-v8a",
+                            "armeabi-v7a",
+                            "x86_64",
+                            "x86"
+                        )
+                    }
                 }
-                isUniversalApk = abiFilterList.isNullOrEmpty()
+                isUniversalApk = !fatArmApk && abiFilterList.isNullOrEmpty()
             }
         }
 
@@ -84,7 +94,19 @@ android {
     applicationVariants.all {
         val variant = this
         val isFdroid = variant.productFlavors.any { it.name == "fdroid" }
-        if (isFdroid) {
+
+        if (fatArmApk) {
+            variant.outputs
+                .map { it as com.android.build.gradle.internal.api.ApkVariantOutputImpl }
+                .forEach { output ->
+                    output.outputFileName = "v2rayNG_${variant.versionName}_armv7-armv8.apk"
+                    output.versionCodeOverride = if (isFdroid) {
+                        (100 * variant.versionCode).plus(5000000)
+                    } else {
+                        (1000000 * 4).plus(variant.versionCode)
+                    }
+                }
+        } else if (isFdroid) {
             val versionCodes =
                 mapOf(
                     "armeabi-v7a" to 2, "arm64-v8a" to 1, "x86" to 4, "x86_64" to 3, "universal" to 0
