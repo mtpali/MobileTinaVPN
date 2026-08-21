@@ -15,8 +15,8 @@ import com.v2ray.ang.dto.entities.ServerAffiliationInfo
 import com.v2ray.ang.dto.entities.SubscriptionCache
 import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.handler.GeoAssetManager
 import com.v2ray.ang.handler.MmkvManager
-import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.SubscriptionUpdater
 import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.util.LogUtil
@@ -144,8 +144,7 @@ class MainRepository(
             MmkvManager.decodeServerList(groupId)
         }
 
-    override fun decodeServerConfig(guid: String): ProfileItem? =
-        MmkvManager.decodeServerConfig(guid)
+    override fun decodeServerConfig(guid: String): ProfileItem? = MmkvManager.decodeServerConfig(guid)
 
     override fun decodeAffiliationInfo(guid: String): ServerAffiliationInfo? =
         MmkvManager.decodeServerAffiliationInfo(guid)
@@ -154,11 +153,8 @@ class MainRepository(
         MmkvManager.encodeServerList(ArrayList(guids), groupId)
 
     override fun removeServer(guid: String) = MmkvManager.removeServer(guid)
-
     override fun removeAllServer(): Int = MmkvManager.removeAllServer()
-
-    override fun removeInvalidServerByGuid(guid: String): Int =
-        MmkvManager.removeInvalidServer(guid)
+    override fun removeInvalidServerByGuid(guid: String): Int = MmkvManager.removeInvalidServer(guid)
 
     override fun removeInvalidServersInGroup(groupId: String): Int =
         if (groupId.isEmpty()) {
@@ -167,8 +163,7 @@ class MainRepository(
             getServerGuidList(groupId).sumOf(::removeInvalidServerByGuid)
         }
 
-    override fun clearAllTestDelayResults(guids: List<String>) =
-        MmkvManager.clearAllTestDelayResults(guids)
+    override fun clearAllTestDelayResults(guids: List<String>) = MmkvManager.clearAllTestDelayResults(guids)
 
     override fun sortByTestResultsForSub(subId: String) {
         AngConfigManager.sortByTestResultsForSub(subId)
@@ -182,8 +177,7 @@ class MainRepository(
         updateUI: Boolean
     ): Pair<Int, Int> = AngConfigManager.importBatchConfig(server, subscriptionId, updateUI)
 
-    override fun updateConfigViaSubAll(): SubscriptionUpdateResult =
-        AngConfigManager.updateConfigViaSubAll()
+    override fun updateConfigViaSubAll(): SubscriptionUpdateResult = AngConfigManager.updateConfigViaSubAll()
 
     override fun updateConfigViaSub(subscriptionCache: SubscriptionCache): SubscriptionUpdateResult =
         AngConfigManager.updateConfigViaSub(subscriptionCache)
@@ -191,22 +185,16 @@ class MainRepository(
     override fun shareNonCustomConfigsToClipboard(guids: List<String>): Int =
         AngConfigManager.shareNonCustomConfigsToClipboard(app, guids)
 
-    override fun share2QRCode(guid: String): android.graphics.Bitmap? =
-        AngConfigManager.share2QRCode(guid)
+    override fun share2QRCode(guid: String): android.graphics.Bitmap? = AngConfigManager.share2QRCode(guid)
 
-    override fun share2Clipboard(guid: String): Boolean =
-        AngConfigManager.share2Clipboard(app, guid) == 0
+    override fun share2Clipboard(guid: String): Boolean = AngConfigManager.share2Clipboard(app, guid) == 0
 
-    override fun sendMsg2Service(msgId: Int, content: String) =
-        MessageHelper.sendMsg2Service(app, msgId, content)
+    override fun sendMsg2Service(msgId: Int, content: String) = MessageHelper.sendMsg2Service(app, msgId, content)
 
-    override fun sendMsg2TestService(msg: TestServiceMessage) =
-        MessageHelper.sendMsg2TestService(app, msg)
+    override fun sendMsg2TestService(msg: TestServiceMessage) = MessageHelper.sendMsg2TestService(app, msg)
 
     override fun cancelAllPing() {
-        sendMsg2TestService(
-            TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_CANCEL)
-        )
+        sendMsg2TestService(TestServiceMessage(key = AppConfig.MSG_MEASURE_CONFIG_CANCEL))
     }
 
     override fun testCurrentServerRealPing() {
@@ -218,6 +206,6 @@ class MainRepository(
     }
 
     override fun initAssets() {
-        SettingsManager.initAssets(app, app.assets)
+        GeoAssetManager.ensure(app)
     }
 }

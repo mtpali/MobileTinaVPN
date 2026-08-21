@@ -49,8 +49,10 @@ import com.v2ray.ang.ui.userasset.UserAssetActivity
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : HelperBaseComponentActivity() {
 
@@ -58,9 +60,14 @@ class MainActivity : HelperBaseComponentActivity() {
         MainViewModel.Factory(application, MainRepository(application as AngApplication))
     }
 
+    // Prevent rapid repeated FAB taps from overlapping start/stop transitions. The service layer
+    // now provides the real lifecycle synchronization; this is a UI-level double-tap guard.
+    private val fabActionInProgress = AtomicBoolean(false)
+
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (it.resultCode == RESULT_OK) startV2Ray()
+            else fabActionInProgress.set(false)
         }
 
     private val profileEditorLauncher =
@@ -93,7 +100,6 @@ class MainActivity : HelperBaseComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mainViewModel.onAction(MainAction.Initialize)
-
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}
     }
 
@@ -159,6 +165,17 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun handleFabAction() {
+        if (!fabActionInProgress.compareAndSet(false, true)) {
+            LogUtil.i(AppConfig.TAG, "MainActivity: ignored duplicate FAB service action")
+            return
+        }
+        // Safety release: the core/service events remain authoritative, but a vendor framework
+        // must never be able to leave the FAB input permanently locked.
+        lifecycleScope.launch {
+            delay(FAB_ACTION_GUARD_MS)
+            fabActionInProgress.set(false)
+        }
+
         if (mainViewModel.uiState.value.isRunning) {
             LauncherManager.stopService(this)
         } else if (SettingsManager.isVpnMode()) {
@@ -177,6 +194,7 @@ class MainActivity : HelperBaseComponentActivity() {
 
     private fun startV2Ray() {
         if (mainViewModel.uiState.value.selectedGuid.isNullOrEmpty()) {
+            fabActionInProgress.set(false)
             toast(R.string.title_file_chooser)
             return
         }
@@ -189,9 +207,11 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun restartV2Ray() {
-        if (mainViewModel.uiState.value.isRunning) LauncherManager.stopService(this)
-        lifecycleScope.launch {
-            kotlinx.coroutines.delay(500)
+        if (mainViewModel.uiState.value.isRunning) {
+            // The daemon waits for native stopLoop to finish before starting again. Do not use a
+            // fixed delay here: shutdown duration varies substantially across vendor firmware.
+            LauncherManager.restartService(this)
+        } else {
             startV2Ray()
         }
     }
@@ -285,5 +305,9 @@ class MainActivity : HelperBaseComponentActivity() {
             return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    companion object {
+        private const val FAB_ACTION_GUARD_MS = 2_500L
     }
 }

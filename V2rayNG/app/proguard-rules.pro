@@ -1,21 +1,38 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# v2rayNG release hardening
+# R8 optimization/minification/resource shrinking is enabled in app/build.gradle.kts.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve the metadata used by Gson, Kotlin generics and Android reflection.
+-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep JSON field names stable. Many persisted/imported objects are decoded reflectively by Gson;
+# classes and executable code may still be renamed/optimized.
+-keepclassmembers,allowoptimization class com.v2ray.ang.dto.** {
+    <fields>;
+}
+-keepclassmembers,allowoptimization class com.v2ray.ang.handler.** {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+-keepclassmembers,allowoptimization class ** {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# libv2ray is a native-backed AAR. Its Java/Kotlin API names can participate in JNI lookups,
+# therefore keep this narrow boundary while allowing the application code around it to obfuscate.
+-keep class libv2ray.** { *; }
+
+# Keep WebView JavaScript entry points when present.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# WorkManager may instantiate workers by class name from its database.
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
+# Make stack traces reveal less source-layout information in production.
+-renamesourcefileattribute SourceFile
+
+# Let the optimizer collapse visibility/package boundaries when safe.
+-allowaccessmodification
+-adaptclassstrings

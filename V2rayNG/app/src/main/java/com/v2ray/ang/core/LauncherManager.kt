@@ -9,6 +9,7 @@ import com.v2ray.ang.R
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
+import com.v2ray.ang.handler.GeoAssetManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.helper.MessageHelper
@@ -52,12 +53,19 @@ object LauncherManager {
     }
 
     fun stopService(context: Context) {
-        //context.toast(R.string.toast_services_stop)
         MessageHelper.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
+    }
+
+    fun restartService(context: Context) {
+        MessageHelper.sendMsg2Service(context, AppConfig.MSG_STATE_RESTART, "")
     }
 
     @Throws(Exception::class)
     private fun startContextService(context: Context) {
+        // The main screen initializes assets in the background. A fast FAB tap can therefore
+        // reach service startup first on slower devices. Make the service launch itself safe.
+        GeoAssetManager.ensure(context.applicationContext)
+
         // Note: isRunning check is removed here to avoid loading Native libraries in the UI process.
         // The check is performed in CoreServiceManager when the service starts in the daemon process.
 
