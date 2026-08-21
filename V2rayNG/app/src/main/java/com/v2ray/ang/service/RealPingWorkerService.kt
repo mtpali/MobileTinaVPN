@@ -19,10 +19,14 @@ import java.util.concurrent.atomic.AtomicInteger
 class RealPingWorkerService(
     private val context: Context,
     private val guids: List<String>,
-    private val onEvent: (RealPingEvent) -> Unit = {}
+    private val onEvent: (RealPingEvent) -> Unit = {},
+    maxConcurrency: Int? = null
 ) {
     private val job = SupervisorJob()
-    private val concurrency = SettingsManager.getRealPingConcurrency()
+    private val concurrency = minOf(
+        SettingsManager.getRealPingConcurrency(),
+        maxConcurrency ?: Int.MAX_VALUE
+    ).coerceAtLeast(1)
     private val dispatcher = Executors.newFixedThreadPool(concurrency).asCoroutineDispatcher()
     private val scope = CoroutineScope(job + dispatcher + CoroutineName("RealPingBatchWorker"))
     private val runningCount = AtomicInteger(0)
@@ -82,13 +86,16 @@ class RealPingWorkerService(
             return -1L
         }
 
-        return try {
-            CoreNativeManager.measureOutboundDelay(
-                configResult.content,
-                SettingsManager.getDelayTestUrl()
-            )
-        } catch (_: Throwable) {
-            -1L
-        }
+        // Some mobile networks/devices intermittently fail the primary generate_204 endpoint
+        // even though the proxy server itself is healthy. Match the connected-core delay logic:
+        // try the configured/primary endpoint first, then the secondary endpoint before marking
+        // a server dead. This prevents Smart Connect from turning red on a false-negative batch.
+        val primaryUrl = SettingsManager.getDelayTestUrl()
+        val primary = CoreNativeManager.measureOutboundDelay(configResult.content, primaryUrl)
+        if (primary >= 0L) return primary
+
+        val secondaryUrl = SettingsManager.getDelayTestUrl(true)
+        if (secondaryUrl == primaryUrl) return primary
+        return CoreNativeManager.measureOutboundDelay(configResult.content, secondaryUrl)
     }
 }
