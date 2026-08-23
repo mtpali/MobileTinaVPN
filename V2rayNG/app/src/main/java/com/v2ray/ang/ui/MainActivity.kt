@@ -205,17 +205,26 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
         fun style(button: com.google.android.material.button.MaterialButton, selected: Boolean) {
             button.backgroundTintList = ColorStateList.valueOf(
-                if (selected) Color.rgb(86, 86, 91) else Color.rgb(34, 34, 38)
+                ContextCompat.getColor(
+                    this,
+                    if (selected) R.color.mobiletina_mode_selected else R.color.mobiletina_mode_unselected
+                )
             )
-            button.strokeColor = ColorStateList.valueOf(
-                if (selected) Color.rgb(106, 106, 112) else Color.rgb(52, 52, 58)
+            button.setTextColor(
+                ContextCompat.getColor(
+                    this,
+                    if (selected) R.color.mobiletina_mode_text_selected else R.color.mobiletina_mode_text_unselected
+                )
             )
-            button.setTextColor(Color.WHITE)
+            button.animate()
+                .scaleX(if (selected) 1f else 0.98f)
+                .scaleY(if (selected) 1f else 0.98f)
+                .alpha(if (selected) 1f else 0.9f)
+                .setDuration(MODE_SWITCH_ANIMATION_MS)
+                .start()
         }
         style(binding.btnModeManual, manualSelected)
         style(binding.btnModeAuto, autoSelected)
-        binding.modeIndicatorManual.setBackgroundColor(if (manualSelected) Color.WHITE else Color.TRANSPARENT)
-        binding.modeIndicatorAuto.setBackgroundColor(if (autoSelected) Color.WHITE else Color.TRANSPARENT)
     }
 
     private fun setupGroupPager() {
@@ -250,7 +259,13 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun setupActions() {
-        binding.fabAuto.setOnClickListener { smartConnectAndStart() }
+        binding.fabAuto.setOnClickListener {
+            binding.fabAuto.animate().cancel()
+            binding.fabAuto.animate().scaleX(0.96f).scaleY(0.96f).setDuration(70L).withEndAction {
+                binding.fabAuto.animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
+            }.start()
+            smartConnectAndStart()
+        }
         binding.btnSmartConnect.setOnClickListener { smartConnectAndStart() }
         binding.fab.setOnClickListener { handleManualFabAction() }
         binding.tvAutoPing.setOnClickListener { handlePingClick() }
@@ -540,14 +555,24 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
                 // 5 seconds is only a ceiling. Remove resolved GUIDs as results arrive and exit
                 // immediately when the last server reports either a positive ping or -1 failure.
+                var firstPositiveAt = 0L
                 while (isActive && isSmartAttemptActive(attemptId)) {
-                    val allResolved = withContext(Dispatchers.IO) {
+                    val resultState = withContext(Dispatchers.IO) {
                         unresolvedGuids.removeAll { guid ->
                             (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) != 0L
                         }
-                        unresolvedGuids.isEmpty()
+                        val hasPositive = serverGuids.any { guid ->
+                            (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) > 0L
+                        }
+                        unresolvedGuids.isEmpty() to hasPositive
                     }
-                    if (allResolved) return@withTimeoutOrNull true
+                    if (resultState.second && firstPositiveAt == 0L) {
+                        firstPositiveAt = SystemClock.elapsedRealtime()
+                    }
+                    if (resultState.first ||
+                        (firstPositiveAt > 0L &&
+                            SystemClock.elapsedRealtime() - firstPositiveAt >= SMART_FAST_SETTLE_MS)
+                    ) return@withTimeoutOrNull true
                     delay(SMART_PING_RESULT_POLL_MS)
                 }
                 false
@@ -1412,7 +1437,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val SMART_CONNECT_TIMEOUT_MS = 5_000L
         private const val SMART_START_CONFIRM_TIMEOUT_MS = 8_000L
         private const val SMART_BATCH_START_POLL_MS = 20L
-        private const val SMART_PING_RESULT_POLL_MS = 120L
+        private const val SMART_PING_RESULT_POLL_MS = 60L
+        private const val SMART_FAST_SETTLE_MS = 350L
+        private const val MODE_SWITCH_ANIMATION_MS = 180L
         private const val INTERNET_DIALOG_DURATION_MS = 3_000L
         private val DEFAULT_SUBSCRIPTION_NAME: String get() = w.a()
     }
