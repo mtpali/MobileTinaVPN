@@ -101,6 +101,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var lastConnectedPing: String? = null
     private var smartConnectJob: kotlinx.coroutines.Job? = null
     private var smartStartWatchdogJob: kotlinx.coroutines.Job? = null
+    private var smartStopWatchdogJob: kotlinx.coroutines.Job? = null
     private var manualConnecting = false
     private var manualPrewarmGuid: String? = null
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
@@ -462,10 +463,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun smartConnectAndStart() {
-        // Core is the source of truth. LiveData is used only as a fallback if the direct check fails,
-        // so a delayed STOP broadcast cannot force the next click to behave as if VPN were still on.
-        val serviceRunning = runCatching { V2RayServiceManager.isRunning() }
-            .getOrElse { mainViewModel.isRunning.value == true }
+        // Use both sources. On a few OEM builds the cross-process MMKV flag or the UI broadcast can
+        // arrive late; either positive state must make the automatic FAB behave as a stop button.
+        val serviceRunning = runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
+                mainViewModel.isRunning.value == true
         if (serviceRunning || smartConnecting) {
             cancelSmartConnect()
             return
@@ -482,8 +483,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
 
         smartConnectJob = lifecycleScope.launch {
-            val smartDeadline = SystemClock.elapsedRealtime() + SMART_CONNECT_TIMEOUT_MS
-            val refreshGrace = (smartDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L).coerceAtMost(750L)
+            val refreshGrace = SMART_SUBSCRIPTION_REFRESH_GRACE_MS
             if (refreshGrace > 0L) {
                 withTimeoutOrNull(refreshGrace) {
                     while (subscriptionRefreshing && isActive && isSmartAttemptActive(attemptId)) delay(50L)
@@ -515,79 +515,25 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 return@launch
             }
 
-            val remainingForPing = (smartDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
-            if (remainingForPing <= 0L) {
-                markSmartConnectFailed(attemptId)
-                return@launch
-            }
-            smartCountdownSeconds = ceil(remainingForPing / 1000.0).toInt().coerceIn(1, SMART_CONNECT_TIMEOUT_SECONDS)
-            refreshSelectedServerUi()
-
-            val countdownJob = launch {
-                var lastShown = -1
-                while (isActive && isSmartAttemptActive(attemptId)) {
-                    val remaining = smartDeadline - SystemClock.elapsedRealtime()
-                    if (remaining <= 0L) break
-                    val seconds = ceil(remaining / 1000.0).toInt().coerceAtLeast(1)
-                    if (seconds != lastShown) {
-                        lastShown = seconds
-                        smartCountdownSeconds = seconds
-                        refreshSelectedServerUi()
-                    }
-                    delay(100L)
-                }
-            }
-
-            val unresolvedGuids = serverGuids.toMutableSet()
-            mainViewModel.testAllRealPingForSmart(attemptId)
-            val finished = withTimeoutOrNull(remainingForPing) {
-                // Do not inspect MMKV until CoreTestService has invalidated the previous batch and
-                // reset these exact GUIDs inside the new generation boundary.
-                while (isActive &&
-                    isSmartAttemptActive(attemptId) &&
-                    mainViewModel.realPingStartedBatchId != attemptId
-                ) {
-                    delay(SMART_BATCH_START_POLL_MS)
-                }
-                if (!isSmartAttemptActive(attemptId) || mainViewModel.realPingStartedBatchId != attemptId) {
-                    return@withTimeoutOrNull false
-                }
-
-                // 5 seconds is only a ceiling. Remove resolved GUIDs as results arrive and exit
-                // immediately when the last server reports either a positive ping or -1 failure.
-                var firstPositiveAt = 0L
-                while (isActive && isSmartAttemptActive(attemptId)) {
-                    val resultState = withContext(Dispatchers.IO) {
-                        unresolvedGuids.removeAll { guid ->
-                            (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) != 0L
-                        }
-                        val hasPositive = serverGuids.any { guid ->
-                            (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) > 0L
-                        }
-                        unresolvedGuids.isEmpty() to hasPositive
-                    }
-                    if (resultState.second && firstPositiveAt == 0L) {
-                        firstPositiveAt = SystemClock.elapsedRealtime()
-                    }
-                    if (resultState.first ||
-                        (firstPositiveAt > 0L &&
-                            SystemClock.elapsedRealtime() - firstPositiveAt >= SMART_FAST_SETTLE_MS)
-                    ) return@withTimeoutOrNull true
-                    delay(SMART_PING_RESULT_POLL_MS)
-                }
-                false
-            } ?: false
-
-            countdownJob.cancel()
+            val firstBatchId = attemptId * SMART_BATCH_ID_MULTIPLIER
+            awaitSmartPingBatch(attemptId, firstBatchId, serverGuids, SMART_FIRST_PING_TIMEOUT_MS)
             if (!isSmartAttemptActive(attemptId)) return@launch
-            smartCountdownSeconds = 0
-            if (!finished) mainViewModel.cancelRealPing()
 
-            val best = withContext(Dispatchers.IO) {
-                serverGuids.mapNotNull { guid ->
-                    val ping = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
-                    if (ping > 0L) guid to ping else null
-                }.minByOrNull { it.second }
+            var best = findBestServer(serverGuids)
+            if (best == null) {
+                // Some devices need one service warm-up cycle. Retry inside the same click instead
+                // of showing a false red failure and requiring the user to press FAB again.
+                mainViewModel.cancelRealPing()
+                delay(SMART_RETRY_DELAY_MS)
+                if (!isSmartAttemptActive(attemptId)) return@launch
+                awaitSmartPingBatch(
+                    attemptId,
+                    firstBatchId + 1L,
+                    serverGuids,
+                    SMART_RETRY_PING_TIMEOUT_MS
+                )
+                if (!isSmartAttemptActive(attemptId)) return@launch
+                best = findBestServer(serverGuids)
             }
 
             if (!isSmartAttemptActive(attemptId)) return@launch
@@ -607,8 +553,60 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
     }
 
+    private suspend fun awaitSmartPingBatch(
+        attemptId: Long,
+        batchId: Long,
+        serverGuids: List<String>,
+        timeoutMs: Long
+    ): Boolean {
+        val unresolvedGuids = serverGuids.toMutableSet()
+        mainViewModel.testAllRealPingForSmart(batchId)
+        return withTimeoutOrNull(timeoutMs) {
+            while (isActive && isSmartAttemptActive(attemptId) &&
+                mainViewModel.realPingStartedBatchId != batchId
+            ) {
+                delay(SMART_BATCH_START_POLL_MS)
+            }
+            if (!isSmartAttemptActive(attemptId) || mainViewModel.realPingStartedBatchId != batchId) {
+                return@withTimeoutOrNull false
+            }
+
+            var firstPositiveAt = 0L
+            while (isActive && isSmartAttemptActive(attemptId)) {
+                val resultState = withContext(Dispatchers.IO) {
+                    unresolvedGuids.removeAll { guid ->
+                        (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) != 0L
+                    }
+                    val hasPositive = serverGuids.any { guid ->
+                        (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) > 0L
+                    }
+                    unresolvedGuids.isEmpty() to hasPositive
+                }
+                if (resultState.second && firstPositiveAt == 0L) {
+                    firstPositiveAt = SystemClock.elapsedRealtime()
+                }
+                if (resultState.first ||
+                    (firstPositiveAt > 0L &&
+                        SystemClock.elapsedRealtime() - firstPositiveAt >= SMART_FAST_SETTLE_MS)
+                ) return@withTimeoutOrNull true
+                delay(SMART_PING_RESULT_POLL_MS)
+            }
+            false
+        } ?: false
+    }
+
+    private suspend fun findBestServer(serverGuids: List<String>): Pair<String, Long>? =
+        withContext(Dispatchers.IO) {
+            serverGuids.mapNotNull { guid ->
+                val ping = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
+                if (ping > 0L) guid to ping else null
+            }.minByOrNull { it.second }
+        }
+
     private fun beginSmartConnectAttempt(): Long {
         smartAttemptId += 1L
+        smartStopWatchdogJob?.cancel()
+        smartStopWatchdogJob = null
         smartConnectJob?.cancel()
         smartConnectJob = null
         smartStartWatchdogJob?.cancel()
@@ -645,6 +643,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         smartConnectionFailed = false
         smartCountdownSeconds = 0
         V2RayServiceManager.stopVService(this)
+        smartStopWatchdogJob?.cancel()
+        smartStopWatchdogJob = lifecycleScope.launch {
+            for (retryDelay in SMART_STOP_RETRY_DELAYS_MS) {
+                delay(retryDelay)
+                val stillRunning = runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
+                        mainViewModel.isRunning.value == true
+                if (!stillRunning) break
+                V2RayServiceManager.stopVService(this@MainActivity)
+            }
+        }
         refreshSelectedServerUi()
     }
 
@@ -1409,6 +1417,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     override fun onDestroy() {
         smartConnectJob?.cancel()
         smartStartWatchdogJob?.cancel()
+        smartStopWatchdogJob?.cancel()
         manualPrewarmJob?.cancel()
         if (expiryReceiverRegistered) {
             unregisterReceiver(expiryDataChangedReceiver)
@@ -1431,12 +1440,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val FIRST_RUN_COMPLETED = "permissions_completed"
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
         private const val SUBSCRIPTION_REVEAL_HOLD_MS = 10_000L
-        private const val SMART_CONNECT_TIMEOUT_SECONDS = 5
-        private const val SMART_CONNECT_TIMEOUT_MS = 5_000L
-        private const val SMART_START_CONFIRM_TIMEOUT_MS = 8_000L
+        private const val SMART_SUBSCRIPTION_REFRESH_GRACE_MS = 1_200L
+        private const val SMART_FIRST_PING_TIMEOUT_MS = 6_000L
+        private const val SMART_RETRY_PING_TIMEOUT_MS = 5_000L
+        private const val SMART_RETRY_DELAY_MS = 300L
+        private const val SMART_START_CONFIRM_TIMEOUT_MS = 15_000L
+        private const val SMART_BATCH_ID_MULTIPLIER = 10L
         private const val SMART_BATCH_START_POLL_MS = 20L
         private const val SMART_PING_RESULT_POLL_MS = 60L
         private const val SMART_FAST_SETTLE_MS = 350L
+        private val SMART_STOP_RETRY_DELAYS_MS = longArrayOf(300L, 900L, 1_800L)
         private const val MODE_SWITCH_ANIMATION_MS = 180L
         private const val INTERNET_DIALOG_DURATION_MS = 3_000L
         private val DEFAULT_SUBSCRIPTION_NAME: String get() = w.a()
