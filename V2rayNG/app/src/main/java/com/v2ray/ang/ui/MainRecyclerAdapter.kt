@@ -1,7 +1,6 @@
 package com.v2ray.ang.ui
 
 import android.annotation.SuppressLint
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -60,8 +59,22 @@ class MainRecyclerAdapter(
         )
 
         holder.itemMainBinding.layoutIndicator.setBackgroundColor(
-            if (guid == MmkvManager.getSelectServer()) ContextCompat.getColor(context, R.color.color_fab_active) else Color.TRANSPARENT
+            if (guid == MmkvManager.getSelectServer()) ContextCompat.getColor(context, R.color.mobiletina_server_stroke_selected)
+            else ContextCompat.getColor(context, android.R.color.transparent)
         )
+        val selected = guid == MmkvManager.getSelectServer()
+        holder.itemMainBinding.itemBg.setCardBackgroundColor(
+            ContextCompat.getColor(
+                context,
+                if (selected) R.color.mobiletina_server_card_selected else R.color.mobiletina_server_card
+            )
+        )
+        holder.itemMainBinding.itemBg.strokeColor = ContextCompat.getColor(
+            context,
+            if (selected) R.color.mobiletina_server_stroke_selected else R.color.mobiletina_server_stroke
+        )
+        holder.itemMainBinding.itemBg.strokeWidth = context.resources.displayMetrics.density
+            .times(if (selected) 1.5f else 1f).toInt().coerceAtLeast(1)
         holder.itemMainBinding.infoContainer.setOnClickListener { adapterListener?.onSelectServer(guid) }
     }
 
