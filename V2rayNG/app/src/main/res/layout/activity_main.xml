@@ -115,7 +115,7 @@
                     android:gravity="center_horizontal"
                     android:orientation="vertical"
                     android:paddingStart="18dp"
-                    android:paddingTop="94dp"
+                    android:paddingTop="70dp"
                     android:paddingEnd="18dp"
                     android:paddingBottom="24dp">
 
@@ -136,7 +136,7 @@
                         android:id="@+id/tv_auto_status"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="22dp"
+                        android:layout_marginTop="18dp"
                         android:gravity="center"
                         android:text="@string/mobiletina_status_disconnected"
                         android:textAppearance="@style/TextAppearance.AppCompat.Title"
@@ -164,7 +164,7 @@
                         android:id="@+id/tv_auto_server"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="26dp"
+                        android:layout_marginTop="20dp"
                         android:ellipsize="end"
                         android:gravity="center"
                         android:maxLines="2"
@@ -175,24 +175,24 @@
                         android:id="@+id/subscription_card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="2dp"
-                        android:layout_marginTop="38dp"
-                        android:layout_marginEnd="2dp"
+                        android:layout_marginStart="18dp"
+                        android:layout_marginTop="26dp"
+                        android:layout_marginEnd="18dp"
                         android:visibility="gone"
-                        app:cardBackgroundColor="@android:color/transparent"
-                        app:cardCornerRadius="22dp"
-                        app:cardElevation="0dp"
-                        app:strokeColor="#54545A"
+                        app:cardBackgroundColor="@color/mobiletina_subscription_card"
+                        app:cardCornerRadius="20dp"
+                        app:cardElevation="2dp"
+                        app:strokeColor="@color/mobiletina_subscription_stroke"
                         app:strokeWidth="1dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
-                            android:paddingStart="20dp"
-                            android:paddingTop="18dp"
-                            android:paddingEnd="20dp"
-                            android:paddingBottom="17dp">
+                            android:paddingStart="18dp"
+                            android:paddingTop="15dp"
+                            android:paddingEnd="18dp"
+                            android:paddingBottom="14dp">
 
                             <TextView
                                 android:id="@+id/tv_subscription_name"
@@ -208,8 +208,9 @@
                                 android:id="@+id/subscription_progress"
                                 android:layout_width="match_parent"
                                 android:layout_height="8dp"
-                                android:layout_marginTop="16dp"
+                                android:layout_marginTop="13dp"
                                 android:max="100"
+                                app:trackCornerRadius="4dp"
                                 android:progress="0"
                                 app:indicatorColor="@color/mobiletina_subscription_progress_indicator"
                                 app:trackColor="@color/mobiletina_subscription_progress_track" />
@@ -217,7 +218,7 @@
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
+                                android:layout_marginTop="10dp"
                                 android:gravity="center_vertical"
                                 android:orientation="horizontal">
 
