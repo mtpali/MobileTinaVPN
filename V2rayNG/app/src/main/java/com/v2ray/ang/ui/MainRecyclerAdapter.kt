@@ -51,6 +51,10 @@ class MainRecyclerAdapter(
             delay < 0L -> context.getString(R.string.mobiletina_ping_inactive)
             else -> ""
         }
+        holder.itemMainBinding.tvTestResult.visibility = if (delay == 0L) View.GONE else View.VISIBLE
+        holder.itemMainBinding.tvTestResult.setBackgroundResource(
+            if (delay < 0L) R.drawable.mobiletina_ping_chip_inactive else R.drawable.mobiletina_ping_chip
+        )
         holder.itemMainBinding.tvTestResult.setTextColor(
             ContextCompat.getColor(
                 context,
@@ -75,6 +79,7 @@ class MainRecyclerAdapter(
         )
         holder.itemMainBinding.itemBg.strokeWidth = context.resources.displayMetrics.density
             .times(if (selected) 1.5f else 1f).toInt().coerceAtLeast(1)
+        holder.itemMainBinding.tvName.alpha = if (delay < 0L) 0.62f else 1f
         holder.itemMainBinding.infoContainer.setOnClickListener { adapterListener?.onSelectServer(guid) }
     }
 
