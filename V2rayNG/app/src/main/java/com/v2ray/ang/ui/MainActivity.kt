@@ -787,8 +787,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.tvAutoServer.visibility = if (showAutoDetails) View.VISIBLE else View.GONE
         binding.tvAutoServer.text = if (showAutoDetails) profile?.remarks.orEmpty() else ""
         binding.tvAutoPing.text = when {
-            smartConnecting && smartCountdownSeconds > 0 ->
-                getString(R.string.mobiletina_smart_countdown_format, smartCountdownSeconds)
             smartConnecting -> getString(R.string.mobiletina_testing)
             running && !lastConnectedPing.isNullOrBlank() ->
                 getString(R.string.mobiletina_ping_format, lastConnectedPing)
