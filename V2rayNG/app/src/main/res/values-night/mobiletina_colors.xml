@@ -8,6 +8,8 @@
     <color name="mobiletina_smart_connect_stroke">#FFFFFF</color>
     <color name="mobiletina_subscription_progress_indicator">#C8C8C8</color>
     <color name="mobiletina_subscription_progress_track">#54545A</color>
+    <color name="mobiletina_subscription_card">#17191E</color>
+    <color name="mobiletina_subscription_stroke">#30333A</color>
     <color name="mobiletina_mode_surface">#17181C</color>
     <color name="mobiletina_mode_selected">#F4F5F7</color>
     <color name="mobiletina_mode_unselected">#17181C</color>
@@ -20,4 +22,5 @@
     <color name="mobiletina_server_stroke_selected">#7AA2FF</color>
     <color name="mobiletina_server_name">#F2F3F5</color>
     <color name="mobiletina_server_ping_chip">#183426</color>
+    <color name="mobiletina_server_ping_chip_inactive">#3A2024</color>
 </resources>
