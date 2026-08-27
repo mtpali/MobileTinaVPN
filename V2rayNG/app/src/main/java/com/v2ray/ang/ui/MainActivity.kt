@@ -18,11 +18,13 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -247,6 +249,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.drawerLayout.addDrawerListener(toggle)
         toggle.syncState()
         binding.navView.setNavigationItemSelectedListener(this)
+        binding.navView.layoutDirection = View.LAYOUT_DIRECTION_LTR
+        binding.navView.textDirection = View.TEXT_DIRECTION_LTR
+        binding.navView.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        binding.navView.post { forceLtrTree(binding.navView) }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -257,6 +263,20 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 }
             }
         })
+    }
+
+    private fun forceLtrTree(view: View) {
+        view.layoutDirection = View.LAYOUT_DIRECTION_LTR
+        view.textDirection = View.TEXT_DIRECTION_LTR
+        view.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        if (view is TextView) {
+            view.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                forceLtrTree(view.getChildAt(index))
+            }
+        }
     }
 
     private fun setupActions() {
