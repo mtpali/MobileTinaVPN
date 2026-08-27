@@ -109,8 +109,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
     private var internetDialog: AlertDialog? = null
     private val internetDialogHandler = Handler(Looper.getMainLooper())
-    private val subscriptionHoldHandler = Handler(Looper.getMainLooper())
-    private var subscriptionHoldRunnable: Runnable? = null
     private var subscriptionTapId: String? = null
     private var subscriptionTapCount = 0
     private var subscriptionSecretDialog: AlertDialog? = null
@@ -265,7 +263,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.navView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         binding.navView.textDirection = View.TEXT_DIRECTION_LTR
         binding.navView.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        binding.navView.menu.findItem(R.id.mobiletina_subscriptions)?.isVisible = false
+        binding.navView.menu.findItem(R.id.mobiletina_subscriptions)?.apply {
+            title = r.a(4)
+            isVisible = false
+        }
         binding.navView.post { forceLtrTree(binding.navView) }
         installHiddenSubscriptionsEntry()
 
@@ -443,65 +444,41 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
     }
 
-    private fun cancelSubscriptionHold() {
-        subscriptionHoldRunnable?.let(subscriptionHoldHandler::removeCallbacks)
-        subscriptionHoldRunnable = null
-    }
-
     private fun resetSubscriptionRevealGesture() {
-        cancelSubscriptionHold()
         subscriptionTapId = null
         subscriptionTapCount = 0
     }
 
     private fun installSecretHold(view: View, subscriptionId: String) {
-        val githubProtected = MmkvManager.decodeSubscription(subscriptionId)
-            ?.url
-            ?.let(MobileTinaHiddenAccessPolicy::requiresMultiTap)
-            ?: false
-        view.setOnTouchListener { _, event ->
-            if (githubProtected) {
-                if (event.actionMasked == MotionEvent.ACTION_UP &&
-                    !isFinishing && !isDestroyed && view.isAttachedToWindow
-                ) {
-                    val selectedPosition = binding.tabGroup.selectedTabPosition
-                    val selectedId = if (selectedPosition >= 0) {
-                        binding.tabGroup.getTabAt(selectedPosition)?.tag as? String
-                    } else null
-                    if (selectedId == subscriptionId) {
-                        if (subscriptionTapId != subscriptionId) {
-                            subscriptionTapId = subscriptionId
-                            subscriptionTapCount = 0
-                        }
-                        subscriptionTapCount++
-                        if (subscriptionTapCount >= GITHUB_SUBSCRIPTION_REVEAL_TAPS) {
-                            resetSubscriptionRevealGesture()
-                            showSubscriptionSecret(subscriptionId)
-                        }
-                    }
-                }
-                return@setOnTouchListener false
-            }
+        val tab = (0 until binding.tabGroup.tabCount)
+            .mapNotNull(binding.tabGroup::getTabAt)
+            .firstOrNull { it.tag == subscriptionId }
+        val subscriptionUrl = MmkvManager.decodeSubscription(subscriptionId)?.url.orEmpty()
+        val githubProtected = MobileTinaHiddenAccessPolicy.requiresMultiTap(subscriptionUrl)
 
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    cancelSubscriptionHold()
-                    val reveal = Runnable {
-                        subscriptionHoldRunnable = null
-                        val selectedPosition = binding.tabGroup.selectedTabPosition
-                        val selectedId = if (selectedPosition >= 0) {
-                            binding.tabGroup.getTabAt(selectedPosition)?.tag as? String
-                        } else null
-                        if (!isFinishing && !isDestroyed && view.isAttachedToWindow && selectedId == subscriptionId) {
-                            showSubscriptionSecret(subscriptionId)
-                        }
-                    }
-                    subscriptionHoldRunnable = reveal
-                    subscriptionHoldHandler.postDelayed(reveal, SUBSCRIPTION_REVEAL_HOLD_MS)
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> cancelSubscriptionHold()
+        // A click listener must own the gesture. The previous ACTION_UP observer returned false
+        // on ACTION_DOWN, so Android was allowed to stop delivering the rest of the sequence.
+        // Non-GitHub subscriptions intentionally receive no secret-header action at all.
+        view.setOnTouchListener(null)
+        view.setOnClickListener {
+            if (!githubProtected || isFinishing || isDestroyed || !view.isAttachedToWindow) {
+                resetSubscriptionRevealGesture()
+                return@setOnClickListener
             }
-            false
+            if (binding.tabGroup.selectedTabPosition != tab?.position) {
+                resetSubscriptionRevealGesture()
+                tab?.select()
+                return@setOnClickListener
+            }
+            if (subscriptionTapId != subscriptionId) {
+                subscriptionTapId = subscriptionId
+                subscriptionTapCount = 0
+            }
+            subscriptionTapCount++
+            if (MobileTinaHiddenAccessPolicy.shouldRevealAfterTap(subscriptionUrl, subscriptionTapCount)) {
+                resetSubscriptionRevealGesture()
+                showSubscriptionSecret(subscriptionId)
+            }
         }
         view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) = Unit
@@ -536,14 +513,14 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             })
         }
         container.addView(Button(this).apply {
-            setText(R.string.mobiletina_copy_subscription_link)
+            text = r.a(5)
             setOnClickListener { Utils.setClipboard(this@MainActivity, secretContent) }
         })
 
         subscriptionSecretDialog = AlertDialog.Builder(this)
-            .setTitle(subscription.remarks.ifBlank { getString(R.string.mobiletina_subscription_secret_title) })
+            .setTitle(subscription.remarks.ifBlank { r.a(4) })
             .setView(container)
-            .setNegativeButton(R.string.mobiletina_close, null)
+            .setNegativeButton(r.a(6), null)
             .create()
             .also { dialog ->
                 dialog.setOnDismissListener {
@@ -979,7 +956,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
         if (expire > 0L) {
             val days = ceil(((expire * 1000L - System.currentTimeMillis()).coerceAtLeast(0L)) / 86_400_000.0).toLong()
-            binding.tvSubscriptionDays.text = getString(R.string.mobiletina_subscription_days_remaining, days)
+            binding.tvSubscriptionDays.text = String.format(java.util.Locale.ROOT, r.a(7), days)
             binding.tvSubscriptionDays.visibility = View.VISIBLE
         } else {
             binding.tvSubscriptionDays.visibility = View.GONE
@@ -1537,8 +1514,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             unregisterReceiver(expiryDataChangedReceiver)
             expiryReceiverRegistered = false
         }
-        cancelSubscriptionHold()
-        subscriptionHoldHandler.removeCallbacksAndMessages(null)
         cancelDrawerReveal()
         drawerSecretHandler.removeCallbacksAndMessages(null)
         drawerRevealRunnable = null
@@ -1557,10 +1532,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val MODE_MANUAL = 1
         private const val FIRST_RUN_COMPLETED = "permissions_completed"
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
-        private const val SUBSCRIPTION_REVEAL_HOLD_MS = 10_000L
-        private const val GITHUB_SUBSCRIPTION_REVEAL_TAPS = 15
         private const val DRAWER_SUBSCRIPTION_HOLD_MS = 10_000L
-        private const val DRAWER_SUBSCRIPTION_VISIBLE_MS = 120_000L
+        private const val DRAWER_SUBSCRIPTION_VISIBLE_MS = 60_000L
         private const val SMART_SUBSCRIPTION_REFRESH_GRACE_MS = 1_200L
         private const val SMART_FIRST_PING_TIMEOUT_MS = 6_000L
         private const val SMART_RETRY_PING_TIMEOUT_MS = 5_000L

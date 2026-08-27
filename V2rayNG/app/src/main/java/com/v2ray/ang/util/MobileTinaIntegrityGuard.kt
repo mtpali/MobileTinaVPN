@@ -7,6 +7,7 @@ import android.os.Build
 import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.ui.q
+import com.v2ray.ang.ui.r
 import java.security.MessageDigest
 
 /**
@@ -159,7 +160,17 @@ object MobileTinaIntegrityGuard {
             digest.update(value.toByteArray(Charsets.UTF_8))
             digest.update(0.toByte())
         }
-        a.forEach { u(context.getString(it)) }
+        a.forEach { resourceId ->
+            u(
+                when (resourceId) {
+                    R.string.mobiletina_subscription_days_remaining -> r.a(7)
+                    R.string.mobiletina_subscription_secret_title -> r.a(4)
+                    R.string.mobiletina_copy_subscription_link -> r.a(5)
+                    R.string.mobiletina_close -> r.a(6)
+                    else -> context.getString(resourceId)
+                }
+            )
+        }
         intArrayOf(8, 4, 5, 6, 7).forEach { u(q.a(it)) }
         b.forEach { u(context.getString(it)) }
 

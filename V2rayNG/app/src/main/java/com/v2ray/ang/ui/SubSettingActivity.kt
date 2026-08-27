@@ -52,10 +52,7 @@ class SubSettingActivity : BaseActivity() {
         setContentViewWithToolbar(
             binding.root,
             showHomeAsUp = true,
-            title = getString(
-                if (hiddenMode) R.string.mobiletina_subscription_secret_title
-                else R.string.title_sub_setting
-            )
+            title = if (hiddenMode) r.a(4) else getString(R.string.title_sub_setting)
         )
 
         adapter = SubSettingRecyclerAdapter(
@@ -138,16 +135,16 @@ class SubSettingActivity : BaseActivity() {
             })
         }
         container.addView(Button(this).apply {
-            setText(R.string.mobiletina_copy_subscription_link)
+            text = r.a(5)
             setOnClickListener { Utils.setClipboard(this@SubSettingActivity, link) }
         })
 
         secretDialog = AlertDialog.Builder(this)
             .setTitle(subscription.remarks.ifBlank {
-                getString(R.string.mobiletina_subscription_secret_title)
+                r.a(4)
             })
             .setView(container)
-            .setNegativeButton(R.string.mobiletina_close, null)
+            .setNegativeButton(r.a(6), null)
             .create()
             .also { dialog ->
                 dialog.setOnDismissListener {

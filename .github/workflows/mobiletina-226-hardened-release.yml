@@ -27,6 +27,7 @@ jobs:
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = true' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = true' V2rayNG/app/build.gradle.kts
+          grep -q 'resourceConfigurations.add("fa")' V2rayNG/app/build.gradle.kts
           grep -q -- '-repackageclasses' V2rayNG/app/proguard-rules.pro
           grep -q -- '-obfuscationdictionary obfuscation-dictionary.txt' V2rayNG/app/proguard-rules.pro
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
@@ -144,6 +145,9 @@ jobs:
           echo "Signer source: $SIGNING_SOURCE"
           echo "Signer SHA-256: $CERT_SHA"
 
+      - name: Randomize protected string resource identifiers
+        run: python3 scripts/obfuscate-string-resources.py V2rayNG/app/src/main
+
       - name: Test and build hardened ARMv7 + ARMv8 release
         run: |
           set -euo pipefail
@@ -219,13 +223,47 @@ jobs:
           # Hidden-access values are AES-GCM records, never plaintext DEX constants.
           for protected_text in \
             'raw.githubusercontent.com' \
-            'بخش اشتراک‌ها به مدت ۱۲۰ ثانیه فعال شد' \
+            'بخش اشتراک‌ها به مدت ۶۰ ثانیه فعال شد' \
             'تمام کانفیگ‌های این اشتراک کپی شدند'; do
             if has_dex_token "$protected_text"; then
               echo "::error::Protected hidden-access text survived as plaintext: $protected_text"
               exit 1
             fi
           done
+
+          # Custom string identifiers are randomized per build. Critical hidden-feature text is
+          # decrypted only at runtime and must not remain in the compiled resource table.
+          $ANDROID_HOME/build-tools/37.0.0/aapt2 dump resources "$APK" > /tmp/resources-dump.txt
+          if grep -Eq 'string/mobiletina_' /tmp/resources-dump.txt; then
+            echo "::error::Readable MobileTina string resource identifier survived"
+            exit 1
+          fi
+          unzip -p "$APK" resources.arsc > /tmp/resources.arsc
+          for protected_resource_text in \
+            '%1$d روز باقی‌مانده' \
+            'کپی لینک اشتراک'; do
+            if grep -aFq -- "$protected_resource_text" /tmp/resources.arsc; then
+              echo "::error::Protected UI text survived in resources.arsc: $protected_resource_text"
+              exit 1
+            fi
+          done
+
+          # Only Persian-qualified and unqualified fallback resources may remain. Dependency
+          # locales (af, ar, de, etc.) are rejected to prevent the large editable string list.
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          dump = Path('/tmp/resources-dump.txt').read_text(errors='replace')
+          locales = set()
+          for config in re.findall(r'config \(([^)]*)\)', dump):
+              for token in config.split('-'):
+                  if re.fullmatch(r'[a-z]{2,3}', token) and token not in {'any'}:
+                      locales.add(token)
+          unexpected = sorted(locales - {'fa'})
+          if unexpected:
+              raise SystemExit(f'Unexpected packaged locales: {unexpected}')
+          print(f'Packaged qualified locales: {sorted(locales)}')
+          PY
 
           # Native/gomobile descriptors must remain exact or the core can crash.
           for runtime_class in \

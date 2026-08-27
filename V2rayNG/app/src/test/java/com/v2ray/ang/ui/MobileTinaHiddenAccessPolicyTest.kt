@@ -20,9 +20,22 @@ class MobileTinaHiddenAccessPolicyTest {
     }
 
     @Test
-    fun otherSubscriptionLinksKeepLongHoldAccess() {
+    fun onlyRawGitHubLinksMayRevealAtExactlyFifteenTaps() {
         assertFalse(MobileTinaHiddenAccessPolicy.requiresMultiTap("https://example.com/sub"))
         assertFalse(MobileTinaHiddenAccessPolicy.requiresMultiTap("https://github.com/example/repo"))
         assertFalse(MobileTinaHiddenAccessPolicy.requiresMultiTap(""))
+        assertFalse(
+            MobileTinaHiddenAccessPolicy.shouldRevealAfterTap(
+                "https://raw.githubusercontent.com/example/repo/main/sub",
+                14
+            )
+        )
+        assertTrue(
+            MobileTinaHiddenAccessPolicy.shouldRevealAfterTap(
+                "https://raw.githubusercontent.com/example/repo/main/sub",
+                15
+            )
+        )
+        assertFalse(MobileTinaHiddenAccessPolicy.shouldRevealAfterTap("https://example.com/sub", 15))
     }
 }
