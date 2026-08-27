@@ -57,6 +57,7 @@ object MobileTinaSubscriptionInfo {
         } ?: return null
 
         applyUserInfo(guid, item, snapshot.userInfo)
+        MobileTinaExpiryManager.updateDisplayExpiryFromPayload(guid, snapshot.body)
         recentSnapshotAt[guid] = SystemClock.elapsedRealtime()
         return snapshot
     }

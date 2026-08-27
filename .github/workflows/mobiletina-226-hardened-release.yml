@@ -153,6 +153,7 @@ jobs:
           ./gradlew \
             testPlaystoreDebugUnitTest \
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
+            --tests com.v2ray.ang.ui.MobileTinaHiddenAccessPolicyTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
             -PFINAL_HARDENED_BUILD=true \
@@ -207,9 +208,21 @@ jobs:
           for internal_name in \
             'Lcom/v2ray/ang/util/MobileTinaIntegrityGuard;' \
             'Lcom/v2ray/ang/handler/MobileTinaGeoAssetManager;' \
+            'Lcom/v2ray/ang/ui/MobileTinaHiddenAccessPolicy;' \
             'Lcom/v2ray/ang/handler/V2RayServiceManager;'; do
             if has_dex_token "$internal_name"; then
               echo "::error::Internal class was not obfuscated/repackaged: $internal_name"
+              exit 1
+            fi
+          done
+
+          # Hidden-access values are AES-GCM records, never plaintext DEX constants.
+          for protected_text in \
+            'raw.githubusercontent.com' \
+            'بخش اشتراک‌ها به مدت ۱۲۰ ثانیه فعال شد' \
+            'تمام کانفیگ‌های این اشتراک کپی شدند'; do
+            if has_dex_token "$protected_text"; then
+              echo "::error::Protected hidden-access text survived as plaintext: $protected_text"
               exit 1
             fi
           done

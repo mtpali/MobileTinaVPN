@@ -10,6 +10,14 @@
             android:title="@string/mobiletina_store_about_title" />
     </group>
 
+    <group android:id="@+id/group_mobiletina_subscriptions">
+        <item
+            android:id="@+id/mobiletina_subscriptions"
+            android:icon="@drawable/ic_baseline_view_list_24"
+            android:title="@string/mobiletina_subscription_secret_title"
+            android:visible="false" />
+    </group>
+
     <group android:id="@+id/group_mobiletina_per_app">
         <item
             android:id="@+id/per_app_proxy_settings"

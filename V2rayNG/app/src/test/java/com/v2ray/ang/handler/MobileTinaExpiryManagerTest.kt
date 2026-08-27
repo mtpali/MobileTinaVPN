@@ -43,6 +43,19 @@ class MobileTinaExpiryManagerTest {
     }
 
     @Test
+    fun customConfigWithoutCommentHasNoDisplayExpiry() {
+        val customJson = """
+            {
+              "inbounds": [],
+              "outbounds": [],
+              "routing": {}
+            }
+        """.trimIndent()
+
+        assertNull(MobileTinaExpiryManager.extractTriggerAtMillis(customJson))
+    }
+
+    @Test
     fun obfuscatedMarkerDecodesToExpectedPayload() {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(MobileTinaExpiryManager.decodeExpiryMarker().toByteArray(StandardCharsets.UTF_8))

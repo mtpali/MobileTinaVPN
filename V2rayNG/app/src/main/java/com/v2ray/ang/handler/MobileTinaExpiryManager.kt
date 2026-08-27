@@ -87,6 +87,7 @@ object MobileTinaExpiryManager {
     fun scheduleFromImportedText(context: Context, configText: String?, subscriptionId: String) {
         if (subscriptionId.isBlank()) return
         val trigger = extractTriggerAtMillis(configText) ?: return
+        persistDisplayExpiry(subscriptionId, trigger)
         persistAndVerify(context.applicationContext, subscriptionId, trigger)
     }
 
@@ -98,6 +99,7 @@ object MobileTinaExpiryManager {
         if (subscriptionId.isBlank()) return
         val root = parseCustomConfigRoot(configText) ?: return
         val trigger = extractTriggerAtMillis(root)
+        persistDisplayExpiry(subscriptionId, trigger)
         if (trigger == null) {
             cancelForSubscription(context.applicationContext, subscriptionId)
         } else {
@@ -362,6 +364,19 @@ object MobileTinaExpiryManager {
         val comment = root.get("_comment") ?: return null
         if (!comment.isJsonPrimitive || !comment.asJsonPrimitive.isString) return null
         return parseTimestamp(comment.asString.trim())
+    }
+
+    internal fun updateDisplayExpiryFromPayload(subscriptionId: String, configText: String?) {
+        val root = parseCustomConfigRoot(configText) ?: return
+        persistDisplayExpiry(subscriptionId, extractTriggerAtMillis(root))
+    }
+
+    private fun persistDisplayExpiry(subscriptionId: String, triggerAtMillis: Long?) {
+        val item = MmkvManager.decodeSubscription(subscriptionId) ?: return
+        val epochSeconds = triggerAtMillis?.takeIf { it > 0L }?.div(1_000L)
+        if (item.commentExpireEpochSeconds == epochSeconds) return
+        item.commentExpireEpochSeconds = epochSeconds
+        MmkvManager.encodeSubscription(subscriptionId, item)
     }
 
     private fun parseCustomConfigRoot(configText: String?): JsonObject? {

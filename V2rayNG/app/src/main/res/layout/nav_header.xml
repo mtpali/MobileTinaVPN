@@ -9,6 +9,7 @@
     android:paddingBottom="8dp">
 
     <ImageView
+        android:id="@+id/mobiletina_nav_logo"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:adjustViewBounds="true"

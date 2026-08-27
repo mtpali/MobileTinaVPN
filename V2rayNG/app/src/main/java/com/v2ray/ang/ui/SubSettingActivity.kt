@@ -6,6 +6,9 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
@@ -19,6 +22,7 @@ import com.v2ray.ang.databinding.ItemQrcodeBinding
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.MobileTinaHiddenShareManager
 import com.v2ray.ang.helper.SimpleItemTouchHelperCallback
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.QRCodeDecoder
@@ -35,6 +39,9 @@ class SubSettingActivity : BaseActivity() {
     private val viewModel: SubscriptionsViewModel by viewModels()
     private lateinit var adapter: SubSettingRecyclerAdapter
     private var mItemTouchHelper: ItemTouchHelper? = null
+    private var secretDialog: AlertDialog? = null
+    private val hiddenMode: Boolean
+        get() = intent.getBooleanExtra(EXTRA_HIDDEN_MODE, false)
     private val share_method: Array<out String> by lazy {
         resources.getStringArray(R.array.share_sub_method)
     }
@@ -42,9 +49,21 @@ class SubSettingActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         //setContentView(binding.root)
-        setContentViewWithToolbar(binding.root, showHomeAsUp = true, title = getString(R.string.title_sub_setting))
+        setContentViewWithToolbar(
+            binding.root,
+            showHomeAsUp = true,
+            title = getString(
+                if (hiddenMode) R.string.mobiletina_subscription_secret_title
+                else R.string.title_sub_setting
+            )
+        )
 
-        adapter = SubSettingRecyclerAdapter(viewModel, ActivityAdapterListener())
+        adapter = SubSettingRecyclerAdapter(
+            viewModel = viewModel,
+            adapterListener = ActivityAdapterListener(),
+            secretMode = hiddenMode,
+            onSecretTap = ::revealSubscription
+        )
 
         binding.recyclerView.setHasFixedSize(true)
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
@@ -52,7 +71,7 @@ class SubSettingActivity : BaseActivity() {
         binding.recyclerView.adapter = adapter
 
         mItemTouchHelper = ItemTouchHelper(SimpleItemTouchHelperCallback(adapter))
-        mItemTouchHelper?.attachToRecyclerView(binding.recyclerView)
+        if (!hiddenMode) mItemTouchHelper?.attachToRecyclerView(binding.recyclerView)
     }
 
     override fun onResume() {
@@ -61,6 +80,7 @@ class SubSettingActivity : BaseActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        if (hiddenMode) return super.onCreateOptionsMenu(menu)
         menuInflater.inflate(R.menu.action_sub_setting, menu)
         return super.onCreateOptionsMenu(menu)
     }
@@ -94,6 +114,53 @@ class SubSettingActivity : BaseActivity() {
     fun refreshData() {
         viewModel.reload()
         adapter.notifyDataSetChanged()
+    }
+
+    private fun revealSubscription(subscriptionId: String) {
+        if (!hiddenMode || secretDialog?.isShowing == true) return
+        val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
+        val link = subscription.url.trim()
+        if (link.isEmpty()) {
+            val copied = MobileTinaHiddenShareManager.copyAllConfigs(this, subscriptionId)
+            toast(r.a(if (copied > 0) 2 else 3))
+            return
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 12, 40, 12)
+        }
+        QRCodeDecoder.createQRCode(link)?.let { bitmap ->
+            container.addView(ImageView(this).apply {
+                setImageBitmap(bitmap)
+                adjustViewBounds = true
+                layoutParams = LinearLayout.LayoutParams(-1, 520)
+            })
+        }
+        container.addView(Button(this).apply {
+            setText(R.string.mobiletina_copy_subscription_link)
+            setOnClickListener { Utils.setClipboard(this@SubSettingActivity, link) }
+        })
+
+        secretDialog = AlertDialog.Builder(this)
+            .setTitle(subscription.remarks.ifBlank {
+                getString(R.string.mobiletina_subscription_secret_title)
+            })
+            .setView(container)
+            .setNegativeButton(R.string.mobiletina_close, null)
+            .create()
+            .also { dialog ->
+                dialog.setOnDismissListener {
+                    if (secretDialog === dialog) secretDialog = null
+                }
+                dialog.show()
+            }
+    }
+
+    override fun onDestroy() {
+        secretDialog?.dismiss()
+        secretDialog = null
+        super.onDestroy()
     }
 
     private inner class ActivityAdapterListener : BaseAdapterListener {
@@ -152,5 +219,9 @@ class SubSettingActivity : BaseActivity() {
         override fun onRefreshData() {
             refreshData()
         }
+    }
+
+    companion object {
+        const val EXTRA_HIDDEN_MODE = "m.h.1"
     }
 }
