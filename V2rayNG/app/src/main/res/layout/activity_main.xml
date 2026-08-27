@@ -131,7 +131,7 @@
                         android:focusable="true"
                         android:padding="0dp"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/mt_auto_white"
+                        android:src="@drawable/white"
                         app:shapeAppearanceOverlay="@style/MobileTinaCircleFab" />
 
                     <TextView
@@ -297,7 +297,7 @@
                         android:outlineProvider="none"
                         android:padding="0dp"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/mt_manual_stop"
+                        android:src="@drawable/stop"
                         android:stateListAnimator="@null"
                         android:translationY="-28dp"
                         app:shapeAppearanceOverlay="@style/MobileTinaCircleFab" />
@@ -305,7 +305,7 @@
                     <com.google.android.material.imageview.ShapeableImageView
                         android:id="@+id/btn_smart_connect"
                         android:layout_width="145dp"
-                        android:layout_height="47dp"
+                        android:layout_height="52dp"
                         android:layout_gravity="top|center_horizontal"
                         android:layout_marginTop="72dp"
                         android:background="@android:color/transparent"
@@ -316,7 +316,7 @@
                         android:outlineProvider="none"
                         android:padding="0dp"
                         android:scaleType="fitCenter"
-                        android:src="@drawable/mt_manual_auto"
+                        android:src="@drawable/auto"
                         android:stateListAnimator="@null" />
 
                     <LinearLayout

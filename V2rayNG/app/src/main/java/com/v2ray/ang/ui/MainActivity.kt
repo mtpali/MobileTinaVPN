@@ -765,23 +765,23 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         val status: String
         when {
             MobileTinaSubscriptionMarkerManager.isSubscriptionExpired() -> {
-                autoArtwork = R.drawable.mt_auto_red
+                autoArtwork = R.drawable.red
                 status = "اشتراک شما به پایان رسید"
             }
             running -> {
-                autoArtwork = R.drawable.mt_auto_blue
+                autoArtwork = R.drawable.blue
                 status = getString(R.string.mobiletina_status_connected)
             }
             smartConnecting -> {
-                autoArtwork = R.drawable.mt_auto_yellow
+                autoArtwork = R.drawable.yellow
                 status = getString(R.string.mobiletina_status_connecting)
             }
             smartConnectionFailed -> {
-                autoArtwork = R.drawable.mt_auto_red
+                autoArtwork = R.drawable.red
                 status = getString(R.string.mobiletina_status_failed)
             }
             else -> {
-                autoArtwork = R.drawable.mt_auto_white
+                autoArtwork = R.drawable.white
                 status = getString(R.string.mobiletina_status_disconnected)
             }
         }
@@ -808,7 +808,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.fab.backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
         binding.fab.imageTintList = null
         binding.fab.setImageResource(
-            if (running) R.drawable.mt_manual_fab else R.drawable.mt_manual_stop
+            if (running) R.drawable.fab else R.drawable.stop
         )
         binding.subscriptionCard.translationY = if (running) -12f * resources.displayMetrics.density else 0f
         refreshSubscriptionCard()

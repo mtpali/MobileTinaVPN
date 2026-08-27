@@ -33,14 +33,7 @@ jobs:
           grep -q -- '-obfuscationdictionary obfuscation-dictionary.txt' V2rayNG/app/proguard-rules.pro
           ! grep -q 'android.enableR8.fullMode=false' V2rayNG/gradle.properties
 
-          echo '44d73fbbbf50b037ab0184059e0d890f4fa87a13121d5b9b8fe82c59d67f6903  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_white.png' | sha256sum -c -
-          echo 'efa8450467ec7ebe208d71a9b84a55877c416a5193e50c53fba0e50ea8cfc76c  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_yellow.png' | sha256sum -c -
-          echo '14a34d2485c19090f29e74547a126a59180014659dc045fa7594ad62434e8e89  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_blue.png' | sha256sum -c -
-          echo '5c46b28c45361fad6b93612b5cb4e8dff6793437ad9908e44cec695360380eb9  V2rayNG/app/src/main/res/drawable-nodpi/mt_auto_red.png' | sha256sum -c -
-          echo '9c785413bec4f4e707e69decfeaa387e1c4d6268f40a1ad357c135770b763abc  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_stop.webp' | sha256sum -c -
-          echo 'a4dee906b06e9f0833b35efa77182ac8d567a3e9d0ab335ffe4c70e7aa261026  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_fab.webp' | sha256sum -c -
-          echo '22b1878853ee3793b81d545d01dfe5b8fad837689913e8530d55b90f510aa55a  V2rayNG/app/src/main/res/drawable-nodpi/mt_manual_auto.webp' | sha256sum -c -
-          echo 'f33b9e6d04c2f6ec344c917f3a2412075c8f62af841b444ffa7a864099e395f7  V2rayNG/app/src/main/res/drawable-nodpi/mt_nav.png' | sha256sum -c -
+          bash scripts/verify-artwork.sh
 
       - uses: android-actions/setup-android@v4
         with:
@@ -174,7 +167,7 @@ jobs:
             fi
           done
 
-          if zipinfo -1 "$APK" | grep -Eq 'mt_auto_|mt_manual_|mt_nav'; then
+          if zipinfo -1 "$APK" | grep -Eq '/(auto|blue|fab|nav|red|stop|white|yellow)\.webp$'; then
             echo '::error::Protected artwork filenames survived resource shrinking'
             exit 1
           fi
