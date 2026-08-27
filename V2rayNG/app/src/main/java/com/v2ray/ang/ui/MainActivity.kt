@@ -242,10 +242,18 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun setupDrawer() {
-        val toggle = ActionBarDrawerToggle(
+        val toggle = object : ActionBarDrawerToggle(
             this, binding.drawerLayout, binding.toolbar,
             R.string.navigation_drawer_open, R.string.navigation_drawer_close
-        )
+        ) {
+            override fun onDrawerOpened(drawerView: View) {
+                super.onDrawerOpened(drawerView)
+                // NavigationMenuItemView can re-bind its CheckedTextView after the first
+                // layout pass. Re-apply the absolute left alignment whenever the drawer
+                // opens so RTL locales cannot move Persian labels to the far right.
+                binding.navView.post { forceLtrTree(binding.navView) }
+            }
+        }
         binding.drawerLayout.addDrawerListener(toggle)
         toggle.syncState()
         binding.navView.setNavigationItemSelectedListener(this)
@@ -270,7 +278,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         view.textDirection = View.TEXT_DIRECTION_LTR
         view.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         if (view is TextView) {
-            view.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            // LEFT is intentional here: START resolves back to the right on some
+            // OEM builds when the TextView content is Persian.
+            view.gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
         }
         if (view is ViewGroup) {
             for (index in 0 until view.childCount) {
