@@ -43,7 +43,7 @@ internal object MobileTinaFirstLaunchDialog {
 
         val surface = MaterialColors.getColor(activity, MaterialR.attr.colorSurface, Color.WHITE)
         val onSurface = MaterialColors.getColor(activity, MaterialR.attr.colorOnSurface, Color.BLACK)
-        val primary = MaterialColors.getColor(activity, MaterialR.attr.colorPrimary, Color.rgb(103, 80, 164))
+        val primary = Color.rgb(193, 53, 132)
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
