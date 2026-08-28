@@ -12,10 +12,7 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.graphics.ColorUtils
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.color.MaterialColors
-import com.google.android.material.R as MaterialR
 import java.security.MessageDigest
 
 /** Builds the install-scoped social notice without placing its text in Android resources. */
@@ -41,8 +38,6 @@ internal object MobileTinaFirstLaunchDialog {
         val lines = arrayOf(q.a(9), q.a(10), q.a(11))
         verify(lines)
 
-        val surface = MaterialColors.getColor(activity, MaterialR.attr.colorSurface, Color.WHITE)
-        val onSurface = MaterialColors.getColor(activity, MaterialR.attr.colorOnSurface, Color.BLACK)
         val primary = Color.rgb(193, 53, 132)
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -51,7 +46,8 @@ internal object MobileTinaFirstLaunchDialog {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(activity, 24).toFloat()
-                setColor(surface)
+                setColor(Color.BLACK)
+                setStroke(dp(activity, 1), Color.WHITE)
             }
         }
 
@@ -66,7 +62,7 @@ internal object MobileTinaFirstLaunchDialog {
 
         root.addView(TextView(activity).apply {
             text = q.a(8)
-            setTextColor(onSurface)
+            setTextColor(Color.WHITE)
             textSize = 19f
             gravity = Gravity.CENTER
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -77,7 +73,7 @@ internal object MobileTinaFirstLaunchDialog {
         lines.forEach { value ->
             root.addView(TextView(activity).apply {
                 text = value
-                setTextColor(onSurface)
+                setTextColor(Color.WHITE)
                 textSize = 15f
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
@@ -87,8 +83,8 @@ internal object MobileTinaFirstLaunchDialog {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
                     cornerRadius = dp(activity, 14).toFloat()
-                    setColor(ColorUtils.setAlphaComponent(onSurface, 16))
-                    setStroke(dp(activity, 1), ColorUtils.setAlphaComponent(onSurface, 34))
+                    setColor(Color.rgb(18, 18, 20))
+                    setStroke(dp(activity, 1), Color.WHITE)
                 }
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(activity, 10)

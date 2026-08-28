@@ -173,11 +173,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         expiryReceiverRegistered = true
         MobileTinaExpiryManager.recoverPending(this)
 
-        if (firstRunPrefs.getBoolean(FIRST_RUN_COMPLETED, false)) {
-            continueFirstRunFlow()
-        } else {
-            handleFirstRunPermissions()
-        }
+        continueInitialLaunch()
     }
 
     private fun setupModeTabs() {
@@ -1034,18 +1030,26 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     private fun markFirstRunPermissionCompleted() {
         firstRunPrefs.edit().putBoolean(FIRST_RUN_COMPLETED, true).apply()
-        continueFirstRunFlow()
+        checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
     }
 
-    private fun continueFirstRunFlow() {
+    private fun continueInitialLaunch() {
         firstLaunchDialog = MobileTinaFirstLaunchDialog.showOnce(this, firstRunPrefs) {
             firstLaunchDialog = null
             if (!isFinishing && !isDestroyed && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
-                checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
+                continuePermissionFlow()
             }
         }
         if (firstLaunchDialog == null) {
+            continuePermissionFlow()
+        }
+    }
+
+    private fun continuePermissionFlow() {
+        if (firstRunPrefs.getBoolean(FIRST_RUN_COMPLETED, false)) {
             checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
+        } else {
+            handleFirstRunPermissions()
         }
     }
 

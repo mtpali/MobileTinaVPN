@@ -38,6 +38,9 @@ jobs:
           ! grep -q 'android.enableR8.fullMode=false' V2rayNG/gradle.properties
           ! grep -Eq 'installSecretHold|shouldRevealAfterTap|MobileTinaHiddenAccessPolicy' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'MobileTinaFirstLaunchDialog.showOnce' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'continueInitialLaunch()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'setColor(Color.BLACK)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
+          grep -q 'setStroke(dp(activity, 1), Color.WHITE)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
           grep -q 'setNavigationOnClickListener' V2rayNG/app/src/main/java/com/v2ray/ang/ui/X7.kt
 
           bash scripts/verify-artwork.sh
