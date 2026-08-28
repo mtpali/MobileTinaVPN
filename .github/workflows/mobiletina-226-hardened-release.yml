@@ -29,6 +29,7 @@ jobs:
           grep -q 'isShrinkResources = true' V2rayNG/app/build.gradle.kts
           grep -q 'resourceConfigurations.add("fa")' V2rayNG/app/build.gradle.kts
           grep -q -- '-repackageclasses' V2rayNG/app/proguard-rules.pro
+          grep -q -- '-allowaccessmodification' V2rayNG/app/proguard-rules.pro
           grep -q -- '-obfuscationdictionary obfuscation-dictionary.txt' V2rayNG/app/proguard-rules.pro
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
           grep -q 'MobileTinaGeoAssetManager.ensureReady' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
@@ -37,10 +38,15 @@ jobs:
           ! grep -q 'START_PENDING_GRACE_MS' V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt
           ! grep -q 'android.enableR8.fullMode=false' V2rayNG/gradle.properties
           ! grep -Eq 'installSecretHold|shouldRevealAfterTap|MobileTinaHiddenAccessPolicy' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'showManualSubscriptionQr(subscriptionId)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'startsWith(a(0), ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
           grep -q 'MobileTinaFirstLaunchDialog.showOnce' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'continueInitialLaunch()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'setColor(Color.BLACK)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
           grep -q 'setStroke(dp(activity, 1), Color.WHITE)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
+          grep -q 'textAlignment = View.TEXT_ALIGNMENT_CENTER' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
+          ! grep -q 'text = q.a(8)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
           grep -q 'setNavigationOnClickListener' V2rayNG/app/src/main/java/com/v2ray/ang/ui/X7.kt
 
           bash scripts/verify-artwork.sh
@@ -164,6 +170,7 @@ jobs:
             testPlaystoreDebugUnitTest \
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
             --tests com.v2ray.ang.ui.MobileTinaFirstLaunchTextTest \
+            --tests com.v2ray.ang.ui.MobileTinaHiddenAccessTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
             -PFINAL_HARDENED_BUILD=true \
@@ -231,8 +238,10 @@ jobs:
             'raw.githubusercontent.com' \
             'بخش اشتراک‌ها به مدت ۶۰ ثانیه فعال شد' \
             'تمام کانفیگ‌های این اشتراک کپی شدند' \
+            'showManualSubscriptionQr' \
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
+            'instagram 3 : mobile.tinaa' \
             'instagram 3 : mbile.tinaa'; do
             if has_dex_token "$protected_text"; then
               echo "::error::Protected hidden-access text survived as plaintext: $protected_text"
@@ -253,6 +262,7 @@ jobs:
             'کپی لینک اشتراک' \
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
+            'instagram 3 : mobile.tinaa' \
             'instagram 3 : mbile.tinaa'; do
             if grep -aFq -- "$protected_resource_text" /tmp/resources.arsc; then
               echo "::error::Protected UI text survived in resources.arsc: $protected_resource_text"

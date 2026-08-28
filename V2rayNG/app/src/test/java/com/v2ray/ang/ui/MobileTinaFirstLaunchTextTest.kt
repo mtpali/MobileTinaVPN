@@ -10,7 +10,7 @@ class MobileTinaFirstLaunchTextTest {
             arrayOf(
                 "instagram 1 : mobile.tina",
                 "instagram 2 : mobile.tina2",
-                "instagram 3 : mbile.tinaa"
+                "instagram 3 : mobile.tinaa"
             ),
             arrayOf(q.a(9), q.a(10), q.a(11))
         )

@@ -19,10 +19,10 @@ import java.security.MessageDigest
 internal object MobileTinaFirstLaunchDialog {
     private val k = byteArrayOf(110, 95, 55, 100, 50, 99, 57, 49)
     private val expected = byteArrayOf(
-        -122, 66, 42, 113, 37, -81, -15, -21,
-        45, -101, -64, -117, -52, -116, 118, -77,
-        104, -31, -25, -9, -99, 6, -114, 62,
-        26, 51, -16, 1, 55, -96, -86, 0
+        -120, 26, 127, -109, -62, -16, -34, -79,
+        101, 96, 54, -117, 117, 41, 86, -31,
+        -78, 17, 18, 23, 8, 70, -94, -12,
+        22, -7, 55, -49, 6, 108, 106, 43
     )
 
     fun showOnce(
@@ -60,24 +60,15 @@ internal object MobileTinaFirstLaunchDialog {
             bottomMargin = dp(activity, 18)
         })
 
-        root.addView(TextView(activity).apply {
-            text = q.a(8)
-            setTextColor(Color.WHITE)
-            textSize = 19f
-            gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = dp(activity, 16)
-        })
-
         lines.forEach { value ->
             root.addView(TextView(activity).apply {
                 text = value
                 setTextColor(Color.WHITE)
                 textSize = 15f
-                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                gravity = Gravity.CENTER
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
                 textDirection = View.TEXT_DIRECTION_LTR
+                textAlignment = View.TEXT_ALIGNMENT_CENTER
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 setPadding(dp(activity, 16), dp(activity, 14), dp(activity, 16), dp(activity, 14))
                 background = GradientDrawable().apply {

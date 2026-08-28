@@ -72,4 +72,9 @@ internal object r {
             packed.fill(0)
         }
     }
+
+    fun b(value: String): Boolean {
+        val candidate = value.trim()
+        return candidate.isNotEmpty() && !candidate.startsWith(a(0), ignoreCase = true)
+    }
 }

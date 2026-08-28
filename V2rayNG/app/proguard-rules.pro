@@ -3,6 +3,7 @@
 # R8 9.1+ already repackages app classes by default. Keep this explicit so the intended
 # hardening remains obvious even if build-tool defaults change later.
 -repackageclasses
+-allowaccessmodification
 -obfuscationdictionary obfuscation-dictionary.txt
 -classobfuscationdictionary obfuscation-dictionary.txt
 -packageobfuscationdictionary obfuscation-dictionary.txt

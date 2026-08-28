@@ -1,6 +1,7 @@
 package com.v2ray.ang.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -26,7 +27,9 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -57,6 +60,7 @@ import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.MobileTinaImportNormalizer
+import com.v2ray.ang.util.QRCodeDecoder
 import com.v2ray.ang.util.Utils
 import com.v2ray.ang.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +109,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
     private var internetDialog: AlertDialog? = null
     private var firstLaunchDialog: Dialog? = null
+    private var manualSubscriptionDialog: AlertDialog? = null
     private val internetDialogHandler = Handler(Looper.getMainLooper())
     private val drawerSecretHandler = Handler(Looper.getMainLooper())
     private var drawerRevealRunnable: Runnable? = null
@@ -402,6 +407,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 textSize = 16f
                 setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorTextPrimary))
             }
+            installManualSubscriptionHold(textView, tab, group.id)
             tab.customView = textView
             tab.tag = group.id
         }.also { it.attach() }
@@ -414,6 +420,78 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.viewPager.setCurrentItem(targetIndex, false)
         ensureSelectedServerForCurrentSubscription()
         refreshSubscriptionCard()
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun installManualSubscriptionHold(
+        header: TextView,
+        tab: com.google.android.material.tabs.TabLayout.Tab,
+        subscriptionId: String
+    ) {
+        var pendingReveal: Runnable? = null
+        header.isClickable = true
+        header.isFocusable = true
+        header.setOnClickListener { tab.select() }
+        header.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    pendingReveal?.let(view::removeCallbacks)
+                    val reveal = Runnable {
+                        pendingReveal = null
+                        if (
+                            currentMode == MODE_MANUAL &&
+                            !isFinishing &&
+                            !isDestroyed &&
+                            view.isAttachedToWindow
+                        ) {
+                            showManualSubscriptionQr(subscriptionId)
+                        }
+                    }
+                    pendingReveal = reveal
+                    view.postDelayed(reveal, MANUAL_SUBSCRIPTION_HOLD_MS)
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    pendingReveal?.let(view::removeCallbacks)
+                    pendingReveal = null
+                }
+            }
+            false
+        }
+    }
+
+    private fun showManualSubscriptionQr(subscriptionId: String) {
+        if (currentMode != MODE_MANUAL || manualSubscriptionDialog?.isShowing == true) return
+        val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
+        val link = subscription.url.trim()
+        if (!r.b(link)) return
+        val bitmap = QRCodeDecoder.createQRCode(link) ?: return
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 12, 40, 12)
+            addView(ImageView(this@MainActivity).apply {
+                setImageBitmap(bitmap)
+                adjustViewBounds = true
+                layoutParams = LinearLayout.LayoutParams(-1, 520)
+            })
+            addView(Button(this@MainActivity).apply {
+                text = r.a(5)
+                setOnClickListener { Utils.setClipboard(this@MainActivity, link) }
+            })
+        }
+
+        manualSubscriptionDialog = AlertDialog.Builder(this)
+            .setTitle(subscription.remarks.ifBlank { r.a(4) })
+            .setView(container)
+            .setNegativeButton(r.a(6), null)
+            .create()
+            .also { dialog ->
+                dialog.setOnDismissListener {
+                    if (manualSubscriptionDialog === dialog) manualSubscriptionDialog = null
+                }
+                dialog.show()
+            }
     }
 
     private fun ensureSelectedServerForCurrentSubscription() {
@@ -1440,6 +1518,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         internetDialog = null
         firstLaunchDialog?.dismiss()
         firstLaunchDialog = null
+        manualSubscriptionDialog?.dismiss()
+        manualSubscriptionDialog = null
         tabMediator?.detach()
         super.onDestroy()
     }
@@ -1451,6 +1531,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
         private const val DRAWER_SUBSCRIPTION_HOLD_MS = 10_000L
         private const val DRAWER_SUBSCRIPTION_VISIBLE_MS = 60_000L
+        private const val MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L
         private const val SMART_SUBSCRIPTION_REFRESH_GRACE_MS = 1_200L
         private const val SMART_FIRST_PING_TIMEOUT_MS = 6_000L
         private const val SMART_RETRY_PING_TIMEOUT_MS = 5_000L
