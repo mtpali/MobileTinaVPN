@@ -13,8 +13,11 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="#111315"
-        android:layoutDirection="rtl"
-        app:navigationIconTint="#FFFFFF" />
+        android:layoutDirection="ltr"
+        app:navigationIcon="@drawable/ic_mobiletina_back_24dp"
+        app:navigationIconTint="#FFFFFF"
+        app:title="@string/mobiletina_store_about_title"
+        app:titleTextColor="#FFFFFF" />
 
     <ScrollView
         android:layout_width="match_parent"

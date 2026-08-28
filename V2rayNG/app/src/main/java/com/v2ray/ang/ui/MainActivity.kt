@@ -1,6 +1,7 @@
 package com.v2ray.ang.ui
 
 import android.Manifest
+import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -25,9 +26,7 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,7 +36,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
@@ -51,7 +49,6 @@ import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.MobileTinaExpiryManager
-import com.v2ray.ang.handler.MobileTinaHiddenShareManager
 import com.v2ray.ang.handler.MobileTinaResetManager
 import com.v2ray.ang.handler.MobileTinaSubscriptionInfo
 import com.v2ray.ang.handler.MobileTinaSubscriptionMarkerManager
@@ -60,7 +57,6 @@ import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.MobileTinaImportNormalizer
-import com.v2ray.ang.util.QRCodeDecoder
 import com.v2ray.ang.util.Utils
 import com.v2ray.ang.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -108,10 +104,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var manualPrewarmGuid: String? = null
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
     private var internetDialog: AlertDialog? = null
+    private var firstLaunchDialog: Dialog? = null
     private val internetDialogHandler = Handler(Looper.getMainLooper())
-    private var subscriptionTapId: String? = null
-    private var subscriptionTapCount = 0
-    private var subscriptionSecretDialog: AlertDialog? = null
     private val drawerSecretHandler = Handler(Looper.getMainLooper())
     private var drawerRevealRunnable: Runnable? = null
     private var drawerHideRunnable: Runnable? = null
@@ -180,7 +174,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         MobileTinaExpiryManager.recoverPending(this)
 
         if (firstRunPrefs.getBoolean(FIRST_RUN_COMPLETED, false)) {
-            checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
+            continueFirstRunFlow()
         } else {
             handleFirstRunPermissions()
         }
@@ -237,11 +231,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         groupPagerAdapter = GroupPagerAdapter(this, emptyList())
         binding.viewPager.adapter = groupPagerAdapter
         binding.viewPager.isUserInputEnabled = false
-        binding.tabGroup.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab?) = resetSubscriptionRevealGesture()
-            override fun onTabUnselected(tab: TabLayout.Tab?) = resetSubscriptionRevealGesture()
-            override fun onTabReselected(tab: TabLayout.Tab?) = Unit
-        })
     }
 
     private fun setupDrawer() {
@@ -396,7 +385,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun setupGroupTab() {
-        resetSubscriptionRevealGesture()
         val groups = mainViewModel.getSubscriptions(this)
         groupPagerAdapter.update(groups)
         tabMediator?.detach()
@@ -418,7 +406,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 textSize = 16f
                 setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorTextPrimary))
             }
-            installSecretHold(textView, group.id)
             tab.customView = textView
             tab.tag = group.id
         }.also { it.attach() }
@@ -442,92 +429,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         if (selected.isNullOrBlank() || selected !in guids) {
             MmkvManager.setSelectServer(guids.first())
         }
-    }
-
-    private fun resetSubscriptionRevealGesture() {
-        subscriptionTapId = null
-        subscriptionTapCount = 0
-    }
-
-    private fun installSecretHold(view: View, subscriptionId: String) {
-        val tab = (0 until binding.tabGroup.tabCount)
-            .mapNotNull(binding.tabGroup::getTabAt)
-            .firstOrNull { it.tag == subscriptionId }
-        val subscriptionUrl = MmkvManager.decodeSubscription(subscriptionId)?.url.orEmpty()
-        val githubProtected = MobileTinaHiddenAccessPolicy.requiresMultiTap(subscriptionUrl)
-
-        // A click listener must own the gesture. The previous ACTION_UP observer returned false
-        // on ACTION_DOWN, so Android was allowed to stop delivering the rest of the sequence.
-        // Non-GitHub subscriptions intentionally receive no secret-header action at all.
-        view.setOnTouchListener(null)
-        view.setOnClickListener {
-            if (!githubProtected || isFinishing || isDestroyed || !view.isAttachedToWindow) {
-                resetSubscriptionRevealGesture()
-                return@setOnClickListener
-            }
-            if (binding.tabGroup.selectedTabPosition != tab?.position) {
-                resetSubscriptionRevealGesture()
-                tab?.select()
-                return@setOnClickListener
-            }
-            if (subscriptionTapId != subscriptionId) {
-                subscriptionTapId = subscriptionId
-                subscriptionTapCount = 0
-            }
-            subscriptionTapCount++
-            if (MobileTinaHiddenAccessPolicy.shouldRevealAfterTap(subscriptionUrl, subscriptionTapCount)) {
-                resetSubscriptionRevealGesture()
-                showSubscriptionSecret(subscriptionId)
-            }
-        }
-        view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) = Unit
-            override fun onViewDetachedFromWindow(v: View) = resetSubscriptionRevealGesture()
-        })
-    }
-
-    private fun showSubscriptionSecret(subscriptionId: String) {
-        resetSubscriptionRevealGesture()
-        if (subscriptionSecretDialog?.isShowing == true) return
-        val selectedPosition = binding.tabGroup.selectedTabPosition
-        val selectedId = if (selectedPosition >= 0) binding.tabGroup.getTabAt(selectedPosition)?.tag as? String else null
-        if (selectedId != subscriptionId) return
-
-        val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
-        val secretContent = subscription.url.trim()
-        if (secretContent.isEmpty()) {
-            val copied = MobileTinaHiddenShareManager.copyAllConfigs(this, subscriptionId)
-            toast(r.a(if (copied > 0) 2 else 3))
-            return
-        }
-
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 12, 40, 12)
-        }
-        QRCodeDecoder.createQRCode(secretContent)?.let { bitmap ->
-            container.addView(ImageView(this).apply {
-                setImageBitmap(bitmap)
-                adjustViewBounds = true
-                layoutParams = LinearLayout.LayoutParams(-1, 520)
-            })
-        }
-        container.addView(Button(this).apply {
-            text = r.a(5)
-            setOnClickListener { Utils.setClipboard(this@MainActivity, secretContent) }
-        })
-
-        subscriptionSecretDialog = AlertDialog.Builder(this)
-            .setTitle(subscription.remarks.ifBlank { r.a(4) })
-            .setView(container)
-            .setNegativeButton(r.a(6), null)
-            .create()
-            .also { dialog ->
-                dialog.setOnDismissListener {
-                    if (subscriptionSecretDialog === dialog) subscriptionSecretDialog = null
-                }
-                dialog.show()
-            }
     }
 
     private fun handleManualFabAction() {
@@ -1133,7 +1034,19 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     private fun markFirstRunPermissionCompleted() {
         firstRunPrefs.edit().putBoolean(FIRST_RUN_COMPLETED, true).apply()
-        checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
+        continueFirstRunFlow()
+    }
+
+    private fun continueFirstRunFlow() {
+        firstLaunchDialog = MobileTinaFirstLaunchDialog.showOnce(this, firstRunPrefs) {
+            firstLaunchDialog = null
+            if (!isFinishing && !isDestroyed && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
+            }
+        }
+        if (firstLaunchDialog == null) {
+            checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -1518,11 +1431,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         drawerSecretHandler.removeCallbacksAndMessages(null)
         drawerRevealRunnable = null
         drawerHideRunnable = null
-        subscriptionSecretDialog?.dismiss()
-        subscriptionSecretDialog = null
         internetDialogHandler.removeCallbacksAndMessages(null)
         internetDialog?.dismiss()
         internetDialog = null
+        firstLaunchDialog?.dismiss()
+        firstLaunchDialog = null
         tabMediator?.detach()
         super.onDestroy()
     }

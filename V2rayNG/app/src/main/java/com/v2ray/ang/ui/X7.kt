@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import com.v2ray.ang.R
 import com.v2ray.ang.util.Utils
 
@@ -12,7 +13,7 @@ class X7 : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.x7)
 
-        findViewById<View>(R.id.a0)?.visibility = View.GONE
+        findViewById<Toolbar>(R.id.a0).setNavigationOnClickListener { finish() }
 
         findViewById<TextView>(R.id.b0).text = q.a(8)
         findViewById<TextView>(R.id.b1).text = q.a(4)

@@ -6,17 +6,8 @@ import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-/** Policy and runtime-only text used by the deliberately undiscoverable subscription UI. */
-internal object MobileTinaHiddenAccessPolicy {
-    fun requiresMultiTap(url: String): Boolean =
-        url.trim().startsWith(r.a(0), ignoreCase = true)
-
-    fun shouldRevealAfterTap(url: String, tapCount: Int): Boolean =
-        requiresMultiTap(url) && tapCount >= 15
-}
-
 /**
- * Keeps the provider prefix and hidden-feature messages out of the compiled string table.
+ * Keeps runtime URLs and hidden-feature messages out of the compiled string table.
  * R8 additionally renames/repackages this class in hardened builds. As with every client-side
  * protection, this raises reverse-engineering cost but cannot make the values unrecoverable.
  */
