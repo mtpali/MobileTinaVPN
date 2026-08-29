@@ -32,13 +32,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.PatternSyntaxException
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var serverList = mutableListOf<String>() // MmkvManager.decodeServerList()
+    @Volatile
     var subscriptionId: String = MmkvManager.decodeSettingsString(AppConfig.CACHE_SUBSCRIPTION_ID, "").orEmpty()
     var keywordFilter = ""
     val serversCache = mutableListOf<ServersCache>()
+    private val reloadGeneration = AtomicLong(0L)
     val isRunning by lazy {
         MutableLiveData(MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING, false))
     }
@@ -68,13 +71,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Reloads the server list based on current subscription filter.
      */
     fun reloadServerList() {
-        serverList = if (subscriptionId.isEmpty()) {
+        // Invalidate an older background snapshot before doing an authoritative foreground load.
+        reloadGeneration.incrementAndGet()
+        val targetSubscriptionId = subscriptionId
+        val targetKeyword = keywordFilter
+        applyServerListSnapshot(loadServerListSnapshot(targetSubscriptionId, targetKeyword))
+    }
+
+    /**
+     * Decodes profiles away from Android's main thread and only publishes the newest result.
+     * Subscription refresh can replace hundreds of MMKV records; doing this work from the UI
+     * callback was enough to trigger visible freezes and ANRs on slower devices.
+     */
+    fun reloadServerListAsync() {
+        val generation = reloadGeneration.incrementAndGet()
+        val targetSubscriptionId = subscriptionId
+        val targetKeyword = keywordFilter
+        viewModelScope.launch {
+            val snapshot = withContext(Dispatchers.IO) {
+                loadServerListSnapshot(targetSubscriptionId, targetKeyword)
+            }
+            if (generation != reloadGeneration.get()) return@launch
+            if (subscriptionId != targetSubscriptionId || keywordFilter != targetKeyword) return@launch
+            applyServerListSnapshot(snapshot)
+        }
+    }
+
+    private data class ServerListSnapshot(
+        val subscriptionId: String,
+        val keyword: String,
+        val guids: MutableList<String>,
+        val cache: MutableList<ServersCache>
+    )
+
+    private fun loadServerListSnapshot(
+        targetSubscriptionId: String,
+        targetKeyword: String
+    ): ServerListSnapshot {
+        val guids = if (targetSubscriptionId.isEmpty()) {
             MmkvManager.decodeAllServerList()
         } else {
-            MmkvManager.decodeServerList(subscriptionId)
+            MmkvManager.decodeServerList(targetSubscriptionId)
         }
+        return ServerListSnapshot(
+            subscriptionId = targetSubscriptionId,
+            keyword = targetKeyword,
+            guids = guids,
+            cache = buildServerCache(guids, targetKeyword)
+        )
+    }
 
-        updateCache()
+    private fun applyServerListSnapshot(snapshot: ServerListSnapshot) {
+        if (subscriptionId != snapshot.subscriptionId || keywordFilter != snapshot.keyword) return
+        serverList = snapshot.guids
+        serversCache.clear()
+        serversCache.addAll(snapshot.cache)
         updateListAction.value = -1
     }
 
@@ -112,17 +163,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     @Synchronized
     fun updateCache() {
+        val rebuilt = buildServerCache(serverList, keywordFilter)
         serversCache.clear()
-        val kw = keywordFilter.trim()
+        serversCache.addAll(rebuilt)
+    }
+
+    private fun buildServerCache(
+        guids: List<String>,
+        keyword: String
+    ): MutableList<ServersCache> {
+        val result = mutableListOf<ServersCache>()
+        val kw = keyword.trim()
         val searchRegex = try {
             if (kw.isNotEmpty()) Regex(kw, setOf(RegexOption.IGNORE_CASE)) else null
         } catch (e: PatternSyntaxException) {
             null // Fallback to literal search if regex is invalid
         }
-        for (guid in serverList) {
+        for (guid in guids) {
             val profile = MmkvManager.decodeServerConfig(guid) ?: continue
             if (kw.isEmpty()) {
-                serversCache.add(ServersCache(guid, profile))
+                result.add(ServersCache(guid, profile))
                 continue
             }
 
@@ -135,9 +195,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 || server.matchesPattern(searchRegex, kw)
                 || protocol.matchesPattern(searchRegex, kw)
             ) {
-                serversCache.add(ServersCache(guid, profile))
+                result.add(ServersCache(guid, profile))
             }
         }
+        return result
     }
 
     /**

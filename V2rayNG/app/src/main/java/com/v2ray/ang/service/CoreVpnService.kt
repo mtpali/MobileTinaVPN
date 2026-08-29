@@ -35,6 +35,8 @@ class CoreVpnService : VpnService(), ServiceControl {
     private lateinit var mInterface: ParcelFileDescriptor
     private var isRunning = false
     private var tun2SocksService: Tun2SocksControl? = null
+    private var teardownStarted = false
+    private var vpnInterfaceClosed = false
 
     /**destroy
      * Unfortunately registerDefaultNetworkCallback is going to return our VPN interface: https://android.googlesource.com/platform/frameworks/base/+/dda156ab0c5d66ad82bdcf76cda07cbc0a9c8a2e
@@ -92,24 +94,13 @@ class CoreVpnService : VpnService(), ServiceControl {
 //    }
 
     override fun onDestroy() {
-        super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
-
-        // Ensure VPN interface is properly closed when the service is destroyed without
-        // going through stopAllService() (e.g. when killed unexpectedly). isRunning is
-        // set to false at the start of stopAllService(), so this guard prevents a double-close.
-        if (isRunning) {
-            try {
-                if (::mInterface.isInitialized) {
-                    mInterface.close()
-                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: VPN interface closed in onDestroy")
-                }
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to close interface in onDestroy", e)
-            }
-        }
-
+        // stopService() can reach this path without the dynamic stop receiver ever firing.
+        // Run the complete idempotent teardown so the native core, TUN and shared running flag
+        // cannot survive an OEM-delayed broadcast.
+        stopAllService(isForced = false)
         NotificationManager.cancelNotification()
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -354,21 +345,25 @@ class CoreVpnService : VpnService(), ServiceControl {
 //        val emptyInfo = VpnNetworkInfo()
 //        val info = loadVpnNetworkInfo(configName, emptyInfo)!! + (lastNetworkInfo ?: emptyInfo)
 //        saveVpnNetworkInfo(configName, info)
+        val firstTeardown = !teardownStarted
+        teardownStarted = true
         isRunning = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            try {
-                connectivity.unregisterNetworkCallback(defaultNetworkCallback)
-            } catch (e: Exception) {
-                LogUtil.w(AppConfig.TAG, "StartCore-VPN: Failed to unregister callback", e)
+        if (firstTeardown) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                try {
+                    connectivity.unregisterNetworkCallback(defaultNetworkCallback)
+                } catch (e: Exception) {
+                    LogUtil.w(AppConfig.TAG, "StartCore-VPN: Failed to unregister callback", e)
+                }
             }
+
+            tun2SocksService?.stopTun2Socks()
+            tun2SocksService = null
+
+            RootLanSharing.stopClientSharing(this)
+
+            CoreServiceManager.stopCoreLoop()
         }
-
-        tun2SocksService?.stopTun2Socks()
-        tun2SocksService = null
-
-        RootLanSharing.stopClientSharing(this)
-
-        CoreServiceManager.stopCoreLoop()
 
         if (isForced) {
             //stopSelf has to be called ahead of mInterface.close(). otherwise v2ray core cannot be stooped
@@ -387,22 +382,29 @@ class CoreVpnService : VpnService(), ServiceControl {
                 LogUtil.w(AppConfig.TAG, "StartCore-VPN: Sleep interrupted", e)
             }
 
-            var vpnInterfaceClosed = !::mInterface.isInitialized
-            try {
-                if (::mInterface.isInitialized) {
-                    mInterface.close()
-                    vpnInterfaceClosed = true
-                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: VPN interface closed")
-                }
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to close interface", e)
-            }
+        }
 
-            // Cross-process acknowledgement for scheduled expiry work. This must stay
-            // after mInterface.close(): the expiry marker may delete the active profile.
-            if (vpnInterfaceClosed) {
-                CoreServiceManager.acknowledgeStopRequest()
-            }
+        closeVpnInterface()
+
+        // Cross-process acknowledgement for scheduled expiry work. This must stay after the
+        // TUN close: the expiry marker may delete the active profile immediately afterwards.
+        if (vpnInterfaceClosed) {
+            CoreServiceManager.acknowledgeStopRequest()
+        }
+    }
+
+    private fun closeVpnInterface() {
+        if (vpnInterfaceClosed) return
+        if (!::mInterface.isInitialized) {
+            vpnInterfaceClosed = true
+            return
+        }
+        try {
+            mInterface.close()
+            vpnInterfaceClosed = true
+            LogUtil.i(AppConfig.TAG, "StartCore-VPN: VPN interface closed")
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to close interface", e)
         }
     }
 }

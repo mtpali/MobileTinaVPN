@@ -15,8 +15,10 @@ class GroupPagerAdapter(activity: FragmentActivity, var groups: List<GroupMapIte
     override fun containsItem(itemId: Long): Boolean = groups.any { it.id.hashCode().toLong() == itemId }
 
     @SuppressLint("NotifyDataSetChanged")
-    fun update(groups: List<GroupMapItem>) {
+    fun update(groups: List<GroupMapItem>): Boolean {
+        val structureChanged = this.groups.map { it.id } != groups.map { it.id }
         this.groups = groups
-        notifyDataSetChanged()
+        if (structureChanged) notifyDataSetChanged()
+        return structureChanged
     }
 }

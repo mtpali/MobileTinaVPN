@@ -32,10 +32,16 @@ jobs:
           grep -q -- '-allowaccessmodification' V2rayNG/app/proguard-rules.pro
           grep -q -- '-obfuscationdictionary obfuscation-dictionary.txt' V2rayNG/app/proguard-rules.pro
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
+          grep -q 'MobileTinaIntegrityGuard.verify(this)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'MobileTinaIntegrityGuard.verify(context.applicationContext)' V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt
           grep -q 'MobileTinaGeoAssetManager.ensureReady' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
           grep -q 'SMART_CONNECT_MAX_CONCURRENCY = 8' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreTestService.kt
           grep -q 'secondaryUrl' V2rayNG/app/src/main/java/com/v2ray/ang/service/RealPingWorkerService.kt
           ! grep -q 'START_PENDING_GRACE_MS' V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt
+          grep -q 'app.stopService(Intent(app, serviceClass))' V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt
+          grep -q 'stopAllService(isForced = false)' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreVpnService.kt
+          grep -q 'isSubscriptionExpiredCached()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'reloadServerListAsync()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           ! grep -q 'android.enableR8.fullMode=false' V2rayNG/gradle.properties
           ! grep -Eq 'installSecretHold|shouldRevealAfterTap|MobileTinaHiddenAccessPolicy' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt

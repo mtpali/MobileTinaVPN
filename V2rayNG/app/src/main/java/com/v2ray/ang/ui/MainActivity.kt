@@ -60,6 +60,7 @@ import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.MobileTinaImportNormalizer
+import com.v2ray.ang.util.MobileTinaIntegrityGuard
 import com.v2ray.ang.util.QRCodeDecoder
 import com.v2ray.ang.util.Utils
 import com.v2ray.ang.viewmodel.MainViewModel
@@ -78,8 +79,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             if (intent?.action != MobileTinaExpiryManager.ACTION_DATA_CHANGED) return
             normalizeSubscriptionNames()
             setupGroupTab()
-            mainViewModel.reloadServerList()
             ensureSelectedServerForCurrentSubscription()
+            mainViewModel.reloadServerListAsync()
             refreshSelectedServerUi()
             showExpiredSubscriptionToastIfNeeded()
         }
@@ -92,6 +93,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private val firstRunPrefs by lazy { getSharedPreferences("mobiletina_first_run", MODE_PRIVATE) }
 
     private var currentMode = MODE_AUTO
+    private var modeInitialized = false
     private var lastSubscriptionRefreshAt = 0L
     private var subscriptionRefreshing = false
     private var pendingSmartVpnPermission = false
@@ -107,6 +109,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var manualConnecting = false
     private var manualPrewarmGuid: String? = null
     private var manualPrewarmJob: kotlinx.coroutines.Job? = null
+    private var markerRecoveryJob: kotlinx.coroutines.Job? = null
     private var internetDialog: AlertDialog? = null
     private var firstLaunchDialog: Dialog? = null
     private var manualSubscriptionDialog: AlertDialog? = null
@@ -155,6 +158,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Defense in depth: keep an activity-level integrity gate in addition to the
+        // process-level Application check so a patched startup path is not sufficient.
+        MobileTinaIntegrityGuard.verify(this)
         setContentView(binding.root)
         setupToolbar(binding.toolbar, false, getString(R.string.mobiletina_app_name))
 
@@ -165,8 +171,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         setupViewModel()
         normalizeSubscriptionNames()
         setupGroupTab()
-        mainViewModel.reloadServerList()
         ensureSelectedServerForCurrentSubscription()
+        mainViewModel.reloadServerListAsync()
         refreshSelectedServerUi()
 
         ContextCompat.registerReceiver(
@@ -191,7 +197,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun setMode(mode: Int, updateTab: Boolean = true) {
-        currentMode = mode.coerceIn(MODE_AUTO, MODE_MANUAL)
+        val requestedMode = mode.coerceIn(MODE_AUTO, MODE_MANUAL)
+        if (modeInitialized && currentMode == requestedMode) return
+        currentMode = requestedMode
+        modeInitialized = true
         binding.autoPanel.visibility = if (currentMode == MODE_AUTO) View.VISIBLE else View.GONE
         binding.manualPanel.visibility = if (currentMode == MODE_MANUAL) View.VISIBLE else View.GONE
         updateModeSelector()
@@ -205,6 +214,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.btnModeAuto.isSelected = autoSelected
 
         fun style(button: com.google.android.material.button.MaterialButton, selected: Boolean) {
+            button.animate().cancel()
             button.backgroundTintList = ColorStateList.valueOf(
                 ContextCompat.getColor(
                     this,
@@ -387,8 +397,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     private fun setupGroupTab() {
         val groups = mainViewModel.getSubscriptions(this)
-        groupPagerAdapter.update(groups)
-        tabMediator?.detach()
+        val counts = groups.associate { group ->
+            group.id to MmkvManager.decodeServerList(group.id).size
+        }
+        val structureChanged = groupPagerAdapter.update(groups)
 
         if (groups.isEmpty()) {
             binding.tabGroup.visibility = View.GONE
@@ -397,20 +409,28 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
         binding.tabGroup.visibility = View.VISIBLE
 
-        tabMediator = TabLayoutMediator(binding.tabGroup, binding.viewPager) { tab, position ->
-            val group = groupPagerAdapter.groups[position]
-            val count = MmkvManager.decodeServerList(group.id).size
-            val textView = TextView(this).apply {
-                text = "${group.remarks} ($count)"
-                setPadding(22, 14, 22, 14)
-                maxLines = 1
-                textSize = 16f
-                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorTextPrimary))
+        if (structureChanged || tabMediator == null) {
+            tabMediator?.detach()
+            tabMediator = TabLayoutMediator(binding.tabGroup, binding.viewPager) { tab, position ->
+                val group = groupPagerAdapter.groups[position]
+                val textView = TextView(this).apply {
+                    setPadding(22, 14, 22, 14)
+                    maxLines = 1
+                    textSize = 16f
+                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorTextPrimary))
+                }
+                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installHold = true)
+                tab.customView = textView
+                tab.tag = group.id
+            }.also { it.attach() }
+        } else {
+            groups.forEachIndexed { index, group ->
+                val tab = binding.tabGroup.getTabAt(index) ?: return@forEachIndexed
+                val textView = tab.customView as? TextView ?: return@forEachIndexed
+                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installHold = false)
+                tab.tag = group.id
             }
-            installManualSubscriptionHold(textView, tab, group.id)
-            tab.customView = textView
-            tab.tag = group.id
-        }.also { it.attach() }
+        }
 
         val targetIndex = groups.indexOfFirst { it.id == mainViewModel.subscriptionId }.let { if (it >= 0) it else 0 }
         val targetGroup = groups[targetIndex]
@@ -420,6 +440,17 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.viewPager.setCurrentItem(targetIndex, false)
         ensureSelectedServerForCurrentSubscription()
         refreshSubscriptionCard()
+    }
+
+    private fun bindGroupTab(
+        textView: TextView,
+        tab: com.google.android.material.tabs.TabLayout.Tab,
+        group: com.v2ray.ang.dto.GroupMapItem,
+        count: Int,
+        installHold: Boolean
+    ) {
+        textView.text = "${group.remarks} ($count)"
+        if (installHold) installManualSubscriptionHold(textView, tab, group.id)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -506,9 +537,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun handleManualFabAction() {
-        if (mainViewModel.isRunning.value == true) {
+        if (isServiceRunningConfirmed() || manualConnecting) {
             manualConnecting = false
-            V2RayServiceManager.stopVService(this)
+            stopServiceReliably()
+            refreshSelectedServerUi()
             return
         }
         if (smartConnecting || manualConnecting) return
@@ -703,18 +735,25 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         smartConnecting = false
         smartConnectionFailed = false
         smartCountdownSeconds = 0
+        stopServiceReliably()
+        refreshSelectedServerUi()
+    }
+
+    private fun isServiceRunningConfirmed(): Boolean =
+        runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
+                mainViewModel.isRunning.value == true
+
+    private fun stopServiceReliably() {
         V2RayServiceManager.stopVService(this)
         smartStopWatchdogJob?.cancel()
         smartStopWatchdogJob = lifecycleScope.launch {
             for (retryDelay in SMART_STOP_RETRY_DELAYS_MS) {
                 delay(retryDelay)
-                val stillRunning = runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
-                        mainViewModel.isRunning.value == true
+                val stillRunning = isServiceRunningConfirmed()
                 if (!stillRunning) break
                 V2RayServiceManager.stopVService(this@MainActivity)
             }
         }
-        refreshSelectedServerUi()
     }
 
     private fun requestVpnPermissionAndStart(isSmartConnect: Boolean, attemptId: Long = 0L) {
@@ -825,7 +864,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         val autoArtwork: Int
         val status: String
         when {
-            MobileTinaSubscriptionMarkerManager.isSubscriptionExpired() -> {
+            MobileTinaSubscriptionMarkerManager.isSubscriptionExpiredCached() -> {
                 autoArtwork = R.drawable.red
                 status = "اشتراک شما به پایان رسید"
             }
@@ -975,12 +1014,29 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     override fun onResume() {
         super.onResume()
         MobileTinaExpiryManager.recoverPending(this)
-        MobileTinaSubscriptionMarkerManager.processExistingMarkers()
         setupGroupTab()
         ensureSelectedServerForCurrentSubscription()
+        mainViewModel.reloadServerListAsync()
         refreshSelectedServerUi()
         showExpiredSubscriptionToastIfNeeded()
+        reconcileExistingMarkersAsync()
         updateSubscriptionOnResume()
+    }
+
+    private fun reconcileExistingMarkersAsync() {
+        markerRecoveryJob?.cancel()
+        markerRecoveryJob = lifecycleScope.launch {
+            val changed = withContext(Dispatchers.IO) {
+                MobileTinaSubscriptionMarkerManager.processExistingMarkers()
+            }
+            if (!changed) return@launch
+            normalizeSubscriptionNames()
+            setupGroupTab()
+            ensureSelectedServerForCurrentSubscription()
+            mainViewModel.reloadServerListAsync()
+            refreshSelectedServerUi()
+            showExpiredSubscriptionToastIfNeeded()
+        }
     }
 
     private fun updateSubscriptionOnResume() {
@@ -1021,16 +1077,19 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
-            val updateResult = mainViewModel.updateEverySubscription()
-            MobileTinaSubscriptionInfo.refreshAll()
+            val updateResult = runCatching {
+                mainViewModel.updateEverySubscription().also {
+                    MobileTinaSubscriptionInfo.refreshAll()
+                }
+            }.getOrDefault(com.v2ray.ang.dto.SubscriptionUpdateResult())
             val serverListChanged = updateResult.configCount > 0
+            normalizeSubscriptionNames()
             withContext(Dispatchers.Main) {
-                normalizeSubscriptionNames()
                 showExpiredSubscriptionToastIfNeeded()
                 if (serverListChanged) {
                     setupGroupTab()
-                    mainViewModel.reloadServerList()
                     ensureSelectedServerForCurrentSubscription()
+                    mainViewModel.reloadServerListAsync()
                     refreshSelectedServerUi()
                 } else {
                     // Metadata such as traffic/expiry may still change, but the server list and
@@ -1049,14 +1108,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
-            mainViewModel.updateEverySubscription()
-            MobileTinaSubscriptionInfo.refreshAll()
+            runCatching {
+                mainViewModel.updateEverySubscription()
+                MobileTinaSubscriptionInfo.refreshAll()
+            }
+            normalizeSubscriptionNames()
             withContext(Dispatchers.Main) {
-                normalizeSubscriptionNames()
                 showExpiredSubscriptionToastIfNeeded()
                 setupGroupTab()
-                mainViewModel.reloadServerList()
                 ensureSelectedServerForCurrentSubscription()
+                mainViewModel.reloadServerListAsync()
                 subscriptionRefreshing = false
                 binding.progressBar.visibility = View.INVISIBLE
                 refreshSelectedServerUi()
@@ -1505,6 +1566,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         smartStartWatchdogJob?.cancel()
         smartStopWatchdogJob?.cancel()
         manualPrewarmJob?.cancel()
+        markerRecoveryJob?.cancel()
         if (expiryReceiverRegistered) {
             unregisterReceiver(expiryDataChangedReceiver)
             expiryReceiverRegistered = false

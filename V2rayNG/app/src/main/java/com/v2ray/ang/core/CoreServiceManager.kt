@@ -31,6 +31,7 @@ import com.v2ray.ang.service.DialerWebviewService
 import com.v2ray.ang.service.IDialerService
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
+import com.v2ray.ang.util.MobileTinaIntegrityGuard
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +132,10 @@ object CoreServiceManager {
      */
     @Throws(Exception::class)
     private fun startContextService(context: Context) {
+        // The daemon process also validates the hardened package before any VPN component starts.
+        // This is deliberately redundant with AngApplication/MainActivity to raise the cost of
+        // bypassing certificate, protected-text and artwork checks in a modified APK.
+        MobileTinaIntegrityGuard.verify(context.applicationContext)
         if (coreController.isRunning) {
             LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
             return

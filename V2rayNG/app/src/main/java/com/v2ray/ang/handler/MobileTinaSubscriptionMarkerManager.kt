@@ -38,9 +38,13 @@ object MobileTinaSubscriptionMarkerManager {
     @Synchronized
     fun isSubscriptionExpired(): Boolean = syncExpiredState()
 
+    /** Fast UI read. Full reconciliation is performed by update/import/resume workers. */
+    fun isSubscriptionExpiredCached(): Boolean =
+        MmkvManager.decodeSettingsBool(PREF_SUBSCRIPTION_EXPIRED, false)
+
     @Synchronized
     fun consumeExpiredToastPending(): Boolean {
-        if (!syncExpiredState()) return false
+        if (!isSubscriptionExpiredCached()) return false
         if (!MmkvManager.decodeSettingsBool(PREF_EXPIRED_TOAST_PENDING, false)) return false
         MmkvManager.encodeSettings(PREF_EXPIRED_TOAST_PENDING, false)
         return true
