@@ -34,6 +34,9 @@ jobs:
           grep -q -- '-obfuscationdictionary obfuscation-dictionary.txt' V2rayNG/app/proguard-rules.pro
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
           grep -q 'MobileTinaIntegrityGuard.verify(this)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'const val AMNEZIAWG = "amneziawg://"' V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt
+          grep -q 'github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828' core/patches/xray-core-amneziawg.patch
+          ! grep -R -q 'sn://awg' V2rayNG/app/src core scripts
           grep -q 'MobileTinaIntegrityGuard.verify(context.applicationContext)' V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt
           grep -q 'MobileTinaGeoAssetManager.ensureReady' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
           grep -q 'SMART_CONNECT_MAX_CONCURRENCY = 8' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreTestService.kt
