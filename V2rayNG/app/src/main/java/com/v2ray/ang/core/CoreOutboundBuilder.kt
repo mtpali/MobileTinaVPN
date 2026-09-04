@@ -276,9 +276,44 @@ object CoreOutboundBuilder {
                 peer.publicKey = profileItem.publicKey.orEmpty()
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()
                 peer.endpoint = Utils.getIpv6Address(profileItem.server) + ":${profileItem.serverPort}"
+                peer.keepAlive = profileItem.keepAlive?.takeIf { it > 0 }
+                peer.allowedIPs = profileItem.allowedIPs
+                    ?.split(',', '\n')
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() }
+                    ?.ifEmpty { null }
             }
             wireguard.mtu = profileItem.mtu
             wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
+            if (profileItem.isAmneziaWG) {
+                wireguard.amnezia = OutboundBean.OutSettingsBean.AmneziaWGOptionsBean(
+                    jc = profileItem.awgJc,
+                    jmin = profileItem.awgJmin,
+                    jmax = profileItem.awgJmax,
+                    s1 = profileItem.awgS1,
+                    s2 = profileItem.awgS2,
+                    s3 = profileItem.awgS3,
+                    s4 = profileItem.awgS4,
+                    h1 = profileItem.awgH1?.takeIf { it.isNotBlank() },
+                    h2 = profileItem.awgH2?.takeIf { it.isNotBlank() },
+                    h3 = profileItem.awgH3?.takeIf { it.isNotBlank() },
+                    h4 = profileItem.awgH4?.takeIf { it.isNotBlank() },
+                    i1 = profileItem.awgI1?.takeIf { it.isNotBlank() },
+                    i2 = profileItem.awgI2?.takeIf { it.isNotBlank() },
+                    i3 = profileItem.awgI3?.takeIf { it.isNotBlank() },
+                    i4 = profileItem.awgI4?.takeIf { it.isNotBlank() },
+                    i5 = profileItem.awgI5?.takeIf { it.isNotBlank() },
+                    headerProtectionKey = profileItem.awgHeaderProtectionKey?.takeIf { it.isNotBlank() },
+                    contentPaddingAddition = profileItem.awgContentPaddingAddition?.takeIf { it.isNotBlank() },
+                    rekeyAfterTime = profileItem.awgRekeyAfterTime?.takeIf { it.isNotBlank() },
+                    rekeyTimeout = profileItem.awgRekeyTimeout?.takeIf { it.isNotBlank() },
+                    rejectAfterTime = profileItem.awgRejectAfterTime?.takeIf { it.isNotBlank() },
+                    keepaliveTimeout = profileItem.awgKeepaliveTimeout?.takeIf { it.isNotBlank() },
+                    maxHandshakeAttempts = profileItem.awgMaxHandshakeAttempts?.takeIf { it.isNotBlank() },
+                    randomizePacketTrailers = profileItem.awgRandomizePacketTrailers,
+                    disableCookieReplies = profileItem.awgDisableCookieReplies,
+                )
+            }
         }
 
         return outboundBean

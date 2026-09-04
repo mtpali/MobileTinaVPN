@@ -59,26 +59,43 @@ jobs:
       - name: Copy libhevtun
         run: cp -r "$GITHUB_WORKSPACE/libs" "$GITHUB_WORKSPACE/V2rayNG/app"
 
-      - name: Resolve libv2ray tag
-        run: |
-          set -euo pipefail
-          pushd AndroidLibXrayLite
-          CURRENT_TAG=$(git describe --tags --abbrev=0)
-          popd
-          echo "CURRENT_TAG=$CURRENT_TAG" >> "$GITHUB_ENV"
-
-      - name: Download matching libv2ray
-        uses: robinraju/release-downloader@v1.13
-        with:
-          repository: '2dust/AndroidLibXrayLite'
-          tag: ${{ env.CURRENT_TAG }}
-          fileName: 'libv2ray.aar'
-          out-file-path: V2rayNG/app/libs/
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: AndroidLibXrayLite/go.mod
+          cache: true
+          cache-dependency-path: |
+            AndroidLibXrayLite/go.sum
+            core/patches/xray-core-amneziawg.patch
+
+      - name: Restore AmneziaWG libv2ray cache
+        id: awg-core-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: V2rayNG/app/libs/libv2ray.aar
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+
+      - name: Build libv2ray with AmneziaWG v3
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          MOBILE_VERSION=$(awk '$1 == "golang.org/x/mobile" { print $2; exit }' AndroidLibXrayLite/go.mod)
+          test -n "$MOBILE_VERSION"
+          go install "golang.org/x/mobile/cmd/gomobile@$MOBILE_VERSION"
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          gomobile init
+          bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
+
+      - name: Save AmneziaWG libv2ray cache
+        if: steps.awg-core-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: V2rayNG/app/libs/libv2ray.aar
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Decode stable release keystore
         uses: timheuer/base64-to-file@v2.0.0
