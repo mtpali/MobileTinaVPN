@@ -204,6 +204,7 @@ jobs:
             --tests com.v2ray.ang.util.MobileTinaImportNormalizerTest \
             --tests com.v2ray.ang.fmt.WireguardFmtTest \
             --tests com.v2ray.ang.core.WireguardAddressPolicyTest \
+            --tests com.v2ray.ang.core.WireguardReservedPolicyTest \
             --tests com.v2ray.ang.core.GeoIpRuleResolverTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
