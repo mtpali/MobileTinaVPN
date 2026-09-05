@@ -6,9 +6,11 @@ object MobileTinaImportNormalizer {
     fun normalize(input: String?): String? {
         if (input == null) return null
         val trimmed = input.trim()
-        if (!trimmed.startsWith('#')) return input
+            .trimStart('\uFEFF', '\u200B', '\u2060')
+            .trim()
+        if (!trimmed.startsWith('#')) return trimmed
         val candidate = trimmed.drop(1).trimStart()
-        if (candidate.length < 8 || !base64Payload.matches(candidate)) return input
+        if (candidate.length < 8 || !base64Payload.matches(candidate)) return trimmed
         return candidate
     }
 }

@@ -255,23 +255,18 @@ object CoreOutboundBuilder {
     private fun toOutboundWireguard(profileItem: ProfileItem): OutboundBean? {
         val outboundBean = createInitOutbound(EConfigType.WIREGUARD)
 
-        val rawAddresses = profileItem.localAddress
-            ?.split(',', '\n')
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.ifEmpty { null }
-            ?: listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4)
-
-        val addresses = if (MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true) {
-            rawAddresses
-        } else {
-            val ipv4Addresses = rawAddresses.filter { !it.contains(":") }
-            ipv4Addresses.ifEmpty { listOf(AppConfig.WIREGUARD_LOCAL_ADDRESS_V4) }
-        }
+        val addresses = WireguardAddressPolicy.activeAddresses(
+            profileItem.localAddress,
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true,
+        )
 
         outboundBean?.settings?.let { wireguard ->
             wireguard.secretKey = profileItem.secretKey
             wireguard.address = addresses
+            // Xray's default ForceIP can randomly choose an IPv6 destination even when
+            // the imported tunnel has only an IPv4 address. The tunnel then starts but
+            // carries no traffic. Keep destination resolution on an available family.
+            wireguard.domainStrategy = WireguardAddressPolicy.domainStrategy(addresses)
             wireguard.peers?.firstOrNull()?.let { peer ->
                 peer.publicKey = profileItem.publicKey.orEmpty()
                 peer.preSharedKey = profileItem.preSharedKey?.nullIfBlank()

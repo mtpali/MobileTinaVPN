@@ -90,6 +90,7 @@ data class V2rayConfig(
             val peers: List<WireGuardBean>? = null,
             var reserved: List<Int>? = null,
             var mtu: Int? = null,
+            var domainStrategy: String? = null,
             var amnezia: AmneziaWGOptionsBean? = null,
             var obfsPassword: String? = null,
             var version: Int? = null,
