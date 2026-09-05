@@ -38,7 +38,7 @@ object WireguardFmt : FmtBase() {
         config.publicKey = queryParam["publickey"].orEmpty()
         config.preSharedKey = queryParam["presharedkey"]?.nullIfBlank()
         config.mtu = Utils.parseInt(queryParam["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
-        config.reserved = queryParam["reserved"] ?: "0,0,0"
+        config.reserved = queryParam["reserved"]?.nullIfBlank()
         config.allowedIPs = queryParam["allowedips"]
         config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it > 0 }
 
@@ -119,7 +119,7 @@ object WireguardFmt : FmtBase() {
             config.server = it.first
             config.serverPort = it.second
         }
-        config.reserved = peerParams["reserved"] ?: "0,0,0"
+        config.reserved = peerParams["reserved"]?.nullIfBlank()
 
         config.isAmneziaWG = forceAmnezia || interfaceParams.keys.any(amneziaKeys::contains)
         if (config.isAmneziaWG) {

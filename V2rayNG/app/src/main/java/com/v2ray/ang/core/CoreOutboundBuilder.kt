@@ -279,7 +279,7 @@ object CoreOutboundBuilder {
                     ?.ifEmpty { null }
             }
             wireguard.mtu = profileItem.mtu
-            wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
+            wireguard.reserved = WireguardReservedPolicy.outboundBytes(profileItem.reserved)
             if (profileItem.isAmneziaWG) {
                 wireguard.amnezia = OutboundBean.OutSettingsBean.AmneziaWGOptionsBean(
                     jc = profileItem.awgJc,

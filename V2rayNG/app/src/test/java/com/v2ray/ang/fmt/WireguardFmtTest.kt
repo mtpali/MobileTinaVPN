@@ -1,6 +1,7 @@
 package com.v2ray.ang.fmt
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -163,5 +164,6 @@ class WireguardFmtTest {
         assertEquals("43293", profile.serverPort)
         assertEquals(1500, profile.keepAlive)
         assertEquals("<b 0x0102>", profile.awgI1)
+        assertNull(profile.reserved)
     }
 }
