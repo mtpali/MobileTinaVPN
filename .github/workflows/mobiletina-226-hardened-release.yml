@@ -1,10 +1,11 @@
-name: MobileTina 2.2.6 Hardened Release
+name: AliMTP 2.2.6 Personal Hardened Release
 
 on:
   push:
     branches:
       - main
       - codex/amneziawg-v3
+      - codex/personal-alimtp
   pull_request:
     branches:
       - main
@@ -25,7 +26,7 @@ jobs:
       - name: Verify MobileTina source and hardening contracts
         run: |
           set -euo pipefail
-          grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
+          grep -q 'applicationId = "com.v2ray.alimtp"' V2rayNG/app/build.gradle.kts
           grep -q 'versionName = "2.2.6"' V2rayNG/app/build.gradle.kts
           grep -q 'versionCode = 744' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
@@ -55,9 +56,12 @@ jobs:
           grep -q 'showManualSubscriptionQr(subscriptionId)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'startsWith(a(0), ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
           grep -q 'MobileTinaFirstLaunchDialog.showOnce' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'R.id.z0 -> openDeveloperTelegram()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'tg://resolve?domain=\$username' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'ارتباط با توسعه دهنده' V2rayNG/app/src/main/res/values/mobiletina_strings.xml
           grep -q 'continueInitialLaunch()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
-          grep -q 'setColor(Color.BLACK)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
-          grep -q 'setStroke(dp(activity, 1), Color.WHITE)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
+          grep -q 'setColor(Color.rgb(8, 15, 27))' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
+          grep -q 'setStroke(dp(activity, 1), primary)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
           grep -q 'textAlignment = View.TEXT_ALIGNMENT_CENTER' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
           ! grep -q 'text = q.a(8)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
           grep -q 'setNavigationOnClickListener' V2rayNG/app/src/main/java/com/v2ray/ang/ui/X7.kt
@@ -274,6 +278,8 @@ jobs:
             'بخش اشتراک‌ها به مدت ۶۰ ثانیه فعال شد' \
             'تمام کانفیگ‌های این اشتراک کپی شدند' \
             'showManualSubscriptionQr' \
+            'Developed By ALIMTP' \
+            '@VPN963' \
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
             'instagram 3 : mobile.tinaa' \
@@ -295,6 +301,8 @@ jobs:
           for protected_resource_text in \
             '%1$d روز باقی‌مانده' \
             'کپی لینک اشتراک' \
+            'Developed By ALIMTP' \
+            '@VPN963' \
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
             'instagram 3 : mobile.tinaa' \
@@ -340,18 +348,18 @@ jobs:
 
           SHA=$(sha256sum "$APK" | awk '{print $1}')
           SIZE=$(stat -c '%s' "$APK")
-          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8-hardened.sha256
+          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-armv7-armv8-hardened.sha256
           printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\nsigning_source=%s\n' \
             "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" "$SIGNING_SOURCE" \
-            > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-hardened-report.txt
+            > V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-hardened-report.txt
 
-      - name: Upload hardened MobileTina APK
+      - name: Upload hardened AliMTP APK
         uses: actions/upload-artifact@v7
         with:
-          name: MobileTina-2.2.6-armv7-armv8-webp-final
+          name: AliMTP-2.2.6-armv7-armv8-personal-final
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8-hardened.sha256
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-hardened-report.txt
+            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-armv7-armv8-hardened.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-hardened-report.txt
           if-no-files-found: error
           retention-days: 90

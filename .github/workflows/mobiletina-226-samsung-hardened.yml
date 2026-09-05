@@ -21,7 +21,7 @@ jobs:
       - name: Verify product identity and protected UI
         run: |
           set -euo pipefail
-          grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
+          grep -q 'applicationId = "com.v2ray.alimtp"' V2rayNG/app/build.gradle.kts
           grep -q 'versionName = "2.2.6"' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt

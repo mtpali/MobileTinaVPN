@@ -1,4 +1,4 @@
-name: MobileTina 2.2.6 PR CI
+name: AliMTP 2.2.6 Personal PR CI
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ jobs:
       - name: Verify MobileTina identity, behavior contracts and exact artwork
         run: |
           set -euo pipefail
-          grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
+          grep -q 'applicationId = "com.v2ray.alimtp"' V2rayNG/app/build.gradle.kts
           grep -q 'versionName = "2.2.6"' V2rayNG/app/build.gradle.kts
           grep -q 'versionCode = 744' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = false' V2rayNG/app/build.gradle.kts
@@ -213,15 +213,15 @@ jobs:
             exit 1
           fi
 
-          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8.sha256
+          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-armv7-armv8.sha256
 
-      - name: Upload final MobileTina dual-ARM APK
+      - name: Upload final AliMTP dual-ARM APK
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: MobileTina-2.2.6-armv7-armv8-stable
+          name: AliMTP-2.2.6-armv7-armv8-personal-stable
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-armv7-armv8.sha256
           if-no-files-found: error
           retention-days: 90
