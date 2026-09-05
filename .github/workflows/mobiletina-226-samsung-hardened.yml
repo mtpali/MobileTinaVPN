@@ -59,7 +59,7 @@ jobs:
       - name: Copy libhevtun
         run: cp -r "$GITHUB_WORKSPACE/libs" "$GITHUB_WORKSPACE/V2rayNG/app"
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
