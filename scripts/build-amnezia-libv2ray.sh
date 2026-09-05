@@ -40,6 +40,30 @@ chmod -R u+w "$patched_core" "$wrapper"
 
 patch --batch --forward --silent -p1 -d "$patched_core" < "$core_patch"
 
+# The pinned Xray snapshot predates upstream's WireGuard initialization-race
+# fix (XTLS/Xray-core#6461). Keep Device.Up() under Handler.mu, matching the
+# serialized device lifecycle used by Exclave's WireGuard client.
+python3 - "$patched_core/proxy/wireguard/client.go" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text()
+process_start = source.index("func (h *Handler) Process(")
+process_end = source.index("func (h *Handler) Close()", process_start)
+process = source[process_start:process_end]
+init_start = source.index("func (h *Handler) init(")
+init_end = source.index("func (h *Handler) resolveLocal(", init_start)
+init = source[init_start:init_end]
+
+if 'if err := h.init(ctx); err != nil {' not in process:
+    raise SystemExit("WireGuard Process must initialize and raise the device through the locked helper")
+if 'if h.dev == nil {' in process or 'h.dev.Up()' in process:
+    raise SystemExit("WireGuard Device.Up must not run outside Handler.mu")
+for required in ('if h.tun == nil {', 'return errors.New("closed")', 'return h.dev.Up()'):
+    if required not in init:
+        raise SystemExit(f"missing locked WireGuard lifecycle contract: {required}")
+PY
+
 (
     cd "$patched_core"
     GOWORK=off go test ./infra/conf -run 'TestAmneziaWG' -count=1
