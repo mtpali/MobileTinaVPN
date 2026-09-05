@@ -55,6 +55,35 @@ data class ProfileItem(
     var localAddress: String? = null,
     var reserved: String? = null,
     var mtu: Int? = null,
+    var allowedIPs: String? = null,
+    var keepAlive: Int? = null,
+
+    var isAmneziaWG: Boolean = false,
+    var awgJc: Int = 0,
+    var awgJmin: Int = 0,
+    var awgJmax: Int = 0,
+    var awgS1: Int = 0,
+    var awgS2: Int = 0,
+    var awgS3: Int = 0,
+    var awgS4: Int = 0,
+    var awgH1: String? = null,
+    var awgH2: String? = null,
+    var awgH3: String? = null,
+    var awgH4: String? = null,
+    var awgI1: String? = null,
+    var awgI2: String? = null,
+    var awgI3: String? = null,
+    var awgI4: String? = null,
+    var awgI5: String? = null,
+    var awgHeaderProtectionKey: String? = null,
+    var awgContentPaddingAddition: String? = null,
+    var awgRekeyAfterTime: String? = null,
+    var awgRekeyTimeout: String? = null,
+    var awgRejectAfterTime: String? = null,
+    var awgKeepaliveTimeout: String? = null,
+    var awgMaxHandshakeAttempts: String? = null,
+    var awgRandomizePacketTrailers: Boolean = false,
+    var awgDisableCookieReplies: Boolean = false,
 
     var obfsPassword: String? = null,
     var portHopping: String? = null,
@@ -120,6 +149,34 @@ data class ProfileItem(
                 && this.localAddress == obj.localAddress
                 && this.reserved == obj.reserved
                 && this.mtu == obj.mtu
+                && this.allowedIPs == obj.allowedIPs
+                && this.keepAlive == obj.keepAlive
+                && this.isAmneziaWG == obj.isAmneziaWG
+                && this.awgJc == obj.awgJc
+                && this.awgJmin == obj.awgJmin
+                && this.awgJmax == obj.awgJmax
+                && this.awgS1 == obj.awgS1
+                && this.awgS2 == obj.awgS2
+                && this.awgS3 == obj.awgS3
+                && this.awgS4 == obj.awgS4
+                && this.awgH1 == obj.awgH1
+                && this.awgH2 == obj.awgH2
+                && this.awgH3 == obj.awgH3
+                && this.awgH4 == obj.awgH4
+                && this.awgI1 == obj.awgI1
+                && this.awgI2 == obj.awgI2
+                && this.awgI3 == obj.awgI3
+                && this.awgI4 == obj.awgI4
+                && this.awgI5 == obj.awgI5
+                && this.awgHeaderProtectionKey == obj.awgHeaderProtectionKey
+                && this.awgContentPaddingAddition == obj.awgContentPaddingAddition
+                && this.awgRekeyAfterTime == obj.awgRekeyAfterTime
+                && this.awgRekeyTimeout == obj.awgRekeyTimeout
+                && this.awgRejectAfterTime == obj.awgRejectAfterTime
+                && this.awgKeepaliveTimeout == obj.awgKeepaliveTimeout
+                && this.awgMaxHandshakeAttempts == obj.awgMaxHandshakeAttempts
+                && this.awgRandomizePacketTrailers == obj.awgRandomizePacketTrailers
+                && this.awgDisableCookieReplies == obj.awgDisableCookieReplies
 
                 && this.obfsPassword == obj.obfsPassword
                 && this.portHopping == obj.portHopping

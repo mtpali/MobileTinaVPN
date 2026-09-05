@@ -27,7 +27,7 @@ object MobileTinaHiddenShareManager {
             EConfigType.SOCKS -> profile.configType.protocolScheme + SocksFmt.toUri(profile)
             EConfigType.VLESS -> profile.configType.protocolScheme + VlessFmt.toUri(profile)
             EConfigType.TROJAN -> profile.configType.protocolScheme + TrojanFmt.toUri(profile)
-            EConfigType.WIREGUARD -> profile.configType.protocolScheme + WireguardFmt.toUri(profile)
+            EConfigType.WIREGUARD -> WireguardFmt.exportUri(profile)
             EConfigType.HYSTERIA2 -> profile.configType.protocolScheme + Hysteria2Fmt.toUri(profile)
             EConfigType.CUSTOM -> MmkvManager.decodeServerRaw(guid)
             else -> null
