@@ -13,6 +13,8 @@ import java.net.URLEncoder
 import java.util.Base64
 
 object WireguardFmt : FmtBase() {
+    private val interfaceSection = Regex("(?im)^\\s*\\[interface]\\s*$")
+    private val peerSection = Regex("(?im)^\\s*\\[peer]\\s*$")
     private val amneziaKeys = setOf(
         "jc", "jmin", "jmax", "s1", "s2", "s3", "s4",
         "h1", "h2", "h3", "h4", "i1", "i2", "i3", "i4", "i5",
@@ -36,7 +38,7 @@ object WireguardFmt : FmtBase() {
         config.publicKey = queryParam["publickey"].orEmpty()
         config.preSharedKey = queryParam["presharedkey"]?.nullIfBlank()
         config.mtu = Utils.parseInt(queryParam["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
-        config.reserved = queryParam["reserved"] ?: "0,0,0"
+        config.reserved = queryParam["reserved"]?.nullIfBlank()
         config.allowedIPs = queryParam["allowedips"]
         config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it > 0 }
 
@@ -63,13 +65,14 @@ object WireguardFmt : FmtBase() {
         forceAmnezia: Boolean = false,
         profileName: String? = null,
     ): ProfileItem {
+        val normalizedConfig = normalizeConfText(str)
         val config = ProfileItem.create(EConfigType.WIREGUARD)
         val interfaceParams = linkedMapOf<String, String>()
         val peerParams = linkedMapOf<String, String>()
         val interfaceAddresses = mutableListOf<String>()
         var currentSection: String? = null
 
-        str.lines().forEach { line ->
+        normalizedConfig.lines().forEach { line ->
             val trimmedLine = line.trim()
             if (trimmedLine.isEmpty() || trimmedLine.startsWith("#") || trimmedLine.startsWith(";")) {
                 return@forEach
@@ -116,7 +119,7 @@ object WireguardFmt : FmtBase() {
             config.server = it.first
             config.serverPort = it.second
         }
-        config.reserved = peerParams["reserved"] ?: "0,0,0"
+        config.reserved = peerParams["reserved"]?.nullIfBlank()
 
         config.isAmneziaWG = forceAmnezia || interfaceParams.keys.any(amneziaKeys::contains)
         if (config.isAmneziaWG) {
@@ -150,6 +153,32 @@ object WireguardFmt : FmtBase() {
         }
 
         return config
+    }
+
+    /**
+     * Normalizes WireGuard/AmneziaWG INI copied from files, messages, or Markdown.
+     * Some Android clipboards prepend invisible Unicode characters, while chat apps
+     * commonly wrap configuration blocks in ```ini fences.
+     */
+    fun normalizeConfText(str: String): String {
+        var normalized = str.trim()
+            .trimStart('\uFEFF', '\u200B', '\u2060')
+            .trim()
+
+        if (normalized.startsWith("```")) {
+            normalized = normalized.substringAfter('\n', "")
+            if (normalized.trimEnd().endsWith("```")) {
+                normalized = normalized.trimEnd().dropLast(3)
+            }
+        }
+
+        return normalized.trim()
+    }
+
+    fun isWireguardConf(str: String): Boolean {
+        val normalized = normalizeConfText(str)
+        return interfaceSection.containsMatchIn(normalized) &&
+                peerSection.containsMatchIn(normalized)
     }
 
     fun toUri(config: ProfileItem): String {
