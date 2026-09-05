@@ -146,6 +146,8 @@ jobs:
           chmod 755 gradlew
           ./gradlew testPlaystoreDebugUnitTest \
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
+            --tests com.v2ray.ang.fmt.WireguardFmtTest \
+            --tests com.v2ray.ang.core.GeoIpRuleResolverTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
             -PFINAL_BUILD_SIGNING=debug
