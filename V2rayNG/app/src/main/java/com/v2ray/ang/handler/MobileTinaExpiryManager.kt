@@ -47,8 +47,8 @@ import java.util.concurrent.TimeUnit
  * alarm fires), internet time is sampled again before the subscription is retired.
  */
 object MobileTinaExpiryManager {
-    const val ACTION_EXPIRE = "com.v2ray.mobiletina.action.CONFIG_EXPIRE"
-    const val ACTION_DATA_CHANGED = "com.v2ray.mobiletina.action.DATA_CHANGED"
+    const val ACTION_EXPIRE = "com.v2ray.alimtp.action.CONFIG_EXPIRE"
+    const val ACTION_DATA_CHANGED = "com.v2ray.alimtp.action.DATA_CHANGED"
     const val EXTRA_SUBSCRIPTION_ID = "mobiletina_expiry_subscription_id"
 
     private const val PREFS_NAME = "mobiletina_config_expiry"

@@ -10,7 +10,7 @@ import com.v2ray.ang.receiver.MobileTinaExpiryReceiver
 import java.util.concurrent.TimeUnit
 
 object MobileTinaSessionLimiter {
-    const val ACTION_SESSION_LIMIT = "com.v2ray.mobiletina.action.VPN_SESSION_LIMIT"
+    const val ACTION_SESSION_LIMIT = "com.v2ray.alimtp.action.VPN_SESSION_LIMIT"
 
     private const val REQUEST_CODE = 24001
     private val MAX_SESSION_MILLIS = TimeUnit.HOURS.toMillis(24L)

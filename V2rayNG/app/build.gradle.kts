@@ -64,7 +64,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.v2ray.mobiletina"
+        applicationId = "com.v2ray.alimtp"
         minSdk = 24
         targetSdk = 37
         versionCode = 744
@@ -75,6 +75,8 @@ android {
         resourceConfigurations.add("fa")
 
         buildConfigField("boolean", "MOBILETINA_HARDENED_BUILD", hardenedReleaseBuild.toString())
+        // The encrypted copy stays stable across the store and personal application IDs.
+        buildConfigField("String", "MOBILETINA_VAULT_NAMESPACE", "\"com.v2ray.mobiletina\"")
         buildConfigField(
             "String",
             "MOBILETINA_EXPECTED_CERT_SHA256",
@@ -180,7 +182,7 @@ android {
                 .forEach { output ->
                     val abi = if (!fatApkAbiList.isNullOrEmpty()) "armv7-armv8"
                     else output.getFilter("ABI") ?: "universal"
-                    output.outputFileName = "MobileTina_${variant.versionName}-fdroid_${abi}.apk"
+                    output.outputFileName = "AliMTP_${variant.versionName}-fdroid_${abi}.apk"
                     if (versionCodes.containsKey(abi)) {
                         output.versionCodeOverride =
                             (100 * variant.versionCode + versionCodes[abi]!!).plus(5000000)
@@ -205,7 +207,7 @@ android {
                     else
                         "universal"
 
-                    output.outputFileName = "MobileTina_${variant.versionName}_${abi}.apk"
+                    output.outputFileName = "AliMTP_${variant.versionName}_${abi}.apk"
                     if (versionCodes.containsKey(abi)) {
                         output.versionCodeOverride =
                             (1000000 * versionCodes[abi]!!).plus(variant.versionCode)

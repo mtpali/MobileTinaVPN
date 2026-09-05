@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# These checks guarantee the exact WebP files supplied for MobileTina are committed
-# byte-for-byte. No conversion, resize, or recompression is allowed for app artwork.
+# These checks guarantee the exact WebP files supplied for the personal edition are committed
+# byte-for-byte. The launcher WebP is the uncropped icon centered on a larger black canvas.
 sha256sum -c <<'EOF'
 0556978fd6eb7a20b1e23d355ad70ceeb5011600dab7ee13cad05a5204a2ed7e  V2rayNG/app/src/main/res/drawable-nodpi/auto.webp
-e13ee902042ab5e560ee71744db016fea2404f9b5d6c4b664cdd05f1187bfc75  V2rayNG/app/src/main/res/drawable-nodpi/blue.webp
-dd42c60232c45e87cb009b1f41959f785958e0f27e180b89be46ff86359fe494  V2rayNG/app/src/main/res/drawable-nodpi/fab.webp
-b93ea494eb517d9fe940e7780dd2eab58ed5fd3994f6dd876114b8a4db4039c8  V2rayNG/app/src/main/res/drawable-nodpi/nav.webp
-a24baa9ccb77c06453f9864634974b769879eeb42bb9a87908971a9713e6bf28  V2rayNG/app/src/main/res/drawable-nodpi/red.webp
-87ec504cdc3c7ac3287e32140f3a5649df8d2162e7312e752a8748cc50831c2e  V2rayNG/app/src/main/res/drawable-nodpi/stop.webp
-ff4c08b78bca9a1654f918f9b89813be90a5966d65805cc419b5b1482a75b5d5  V2rayNG/app/src/main/res/drawable-nodpi/white.webp
-843afec129b2bbf6ed205854a78d41719054bb3905d706c73ba9e96b6451b6e5  V2rayNG/app/src/main/res/drawable-nodpi/yellow.webp
-4530725a0c14798ec265738d35e8b0409187377b695e716eaff2575d35cde1c2  V2rayNG/app/src/main/res/mipmap-nodpi/icon.webp
-4530725a0c14798ec265738d35e8b0409187377b695e716eaff2575d35cde1c2  V2rayNG/app/src/main/res/mipmap-nodpi/ic_launcher_foreground.webp
+e427b8cba69fb81f27914ef7fd4b3c201008b7d0d5e5f7495f6de8122da59e96  V2rayNG/app/src/main/res/drawable-nodpi/blue.webp
+35cd0c4fccc816a381d38444b8de7db6a946c874958877c19ee0bcbcbdee9246  V2rayNG/app/src/main/res/drawable-nodpi/fab.webp
+3a6486519985de5dbbd4d36e30d20d42cc0fa5461476436d1cc84a96cd2626f4  V2rayNG/app/src/main/res/drawable-nodpi/nav.webp
+c96116b957ccfbf8dfcc59217d7fefbab184a0771e644a14034f476d4648badf  V2rayNG/app/src/main/res/drawable-nodpi/red.webp
+75bb2106f995ee54b71ef4aa4803524761d3111c11f6e1b98ba3447d4e743661  V2rayNG/app/src/main/res/drawable-nodpi/stop.webp
+8d40ffcf8dbbdc2aae3bee9576199375f4a6416de9f404fc75e70c0ff7632a7f  V2rayNG/app/src/main/res/drawable-nodpi/white.webp
+4be7b6b3e6d95bf855589c3fb3a7064ce78a8a0e37f760e39d541deffc1b08c0  V2rayNG/app/src/main/res/drawable-nodpi/yellow.webp
+5d1c3fa178c50c4925adae689bf875afc7fc69c4936b3e59122d719af262c664  V2rayNG/app/src/main/res/mipmap-nodpi/icon.webp
+5d1c3fa178c50c4925adae689bf875afc7fc69c4936b3e59122d719af262c664  V2rayNG/app/src/main/res/mipmap-nodpi/ic_launcher_foreground.webp
 EOF
 
 if find V2rayNG/app/src/main/res -type f \( \
