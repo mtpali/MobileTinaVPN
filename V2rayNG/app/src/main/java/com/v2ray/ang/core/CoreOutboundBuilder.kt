@@ -256,7 +256,7 @@ object CoreOutboundBuilder {
         val outboundBean = createInitOutbound(EConfigType.WIREGUARD)
 
         val rawAddresses = profileItem.localAddress
-            ?.split(",")
+            ?.split(',', '\n')
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
             ?.ifEmpty { null }

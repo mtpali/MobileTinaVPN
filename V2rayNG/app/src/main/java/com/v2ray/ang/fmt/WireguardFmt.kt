@@ -66,6 +66,7 @@ object WireguardFmt : FmtBase() {
         val config = ProfileItem.create(EConfigType.WIREGUARD)
         val interfaceParams = linkedMapOf<String, String>()
         val peerParams = linkedMapOf<String, String>()
+        val interfaceAddresses = mutableListOf<String>()
         var currentSection: String? = null
 
         str.lines().forEach { line ->
@@ -81,7 +82,14 @@ object WireguardFmt : FmtBase() {
                     val parts = trimmedLine.split("=", limit = 2).map { it.trim() }
                     if (parts.size == 2) {
                         when (currentSection) {
-                            "Interface" -> interfaceParams[parts[0].lowercase()] = parts[1]
+                            "Interface" -> {
+                                val key = parts[0].lowercase()
+                                if (key == "address") {
+                                    interfaceAddresses += parts[1]
+                                } else {
+                                    interfaceParams[key] = parts[1]
+                                }
+                            }
                             "Peer" -> peerParams[parts[0].lowercase()] = parts[1]
                         }
                     }
@@ -91,7 +99,13 @@ object WireguardFmt : FmtBase() {
 
         config.secretKey = interfaceParams["privatekey"].orEmpty()
         config.remarks = profileName ?: System.currentTimeMillis().toString()
-        config.localAddress = interfaceParams["address"] ?: AppConfig.WIREGUARD_LOCAL_ADDRESS_V4
+        config.localAddress = interfaceAddresses
+            .flatMap { it.split(',') }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .joinToString("\n")
+            .ifEmpty { AppConfig.WIREGUARD_LOCAL_ADDRESS_V4 }
         config.mtu = Utils.parseInt(interfaceParams["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
         config.publicKey = peerParams["publickey"].orEmpty()
         config.preSharedKey = peerParams["presharedkey"]?.nullIfBlank()
@@ -142,7 +156,13 @@ object WireguardFmt : FmtBase() {
         val query = hashMapOf<String, String>()
         query["publickey"] = config.publicKey.orEmpty()
         config.reserved?.let { query["reserved"] = it.removeWhiteSpace().orEmpty() }
-        query["address"] = config.localAddress.removeWhiteSpace().orEmpty()
+        query["address"] = config.localAddress
+            .orEmpty()
+            .split(',', '\n')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .joinToString(",")
         config.mtu?.let { query["mtu"] = it.toString() }
         config.preSharedKey?.let { query["presharedkey"] = it.removeWhiteSpace().orEmpty() }
         config.allowedIPs?.takeIf { it.isNotBlank() }?.let {
@@ -169,7 +189,13 @@ object WireguardFmt : FmtBase() {
     fun toConf(config: ProfileItem): String = buildString {
         appendLine("[Interface]")
         appendLine("PrivateKey = ${config.secretKey.orEmpty()}")
-        appendLine("Address = ${config.localAddress.orEmpty()}")
+        config.localAddress
+            .orEmpty()
+            .split(',', '\n')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .forEach { appendLine("Address = $it") }
         config.mtu?.let { appendLine("MTU = $it") }
 
         if (config.isAmneziaWG) {

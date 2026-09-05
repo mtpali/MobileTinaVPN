@@ -92,4 +92,40 @@ class WireguardFmtTest {
         assertTrue(!profile.isAmneziaWG)
         assertTrue(WireguardFmt.exportUri(profile).startsWith("wireguard://"))
     }
+
+    @Test
+    fun preservesRepeatedIpv4AndIpv6Addresses() {
+        val dualStack = """
+            [Interface]
+            PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            Address = 172.16.0.2/32
+            Address = 2606:4700:110:8e34:c6d7:9cc9:ce5:b41/128
+            Jc = 4
+            Jmin = 40
+            Jmax = 70
+
+            [Peer]
+            PublicKey = BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+            Endpoint = 162.159.192.1:2408
+            AllowedIPs = 0.0.0.0/0, ::/0
+        """.trimIndent()
+
+        val profile = WireguardFmt.parseWireguardConfFile(dualStack)
+
+        assertEquals(
+            "172.16.0.2/32\n2606:4700:110:8e34:c6d7:9cc9:ce5:b41/128",
+            profile.localAddress,
+        )
+        val exported = WireguardFmt.toConf(profile)
+        assertTrue(exported.contains("Address = 172.16.0.2/32\n"))
+        assertTrue(
+            exported.contains(
+                "Address = 2606:4700:110:8e34:c6d7:9cc9:ce5:b41/128\n"
+            )
+        )
+        assertEquals(
+            profile.localAddress,
+            WireguardFmt.parseWireguardConfFile(exported).localAddress,
+        )
+    }
 }
