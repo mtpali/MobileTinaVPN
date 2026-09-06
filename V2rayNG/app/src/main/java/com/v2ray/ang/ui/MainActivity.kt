@@ -557,10 +557,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun smartConnectAndStart() {
-        // Use both sources. On a few OEM builds the cross-process MMKV flag or the UI broadcast can
-        // arrive late; either positive state must make the automatic FAB behave as a stop button.
-        val serviceRunning = runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
-                mainViewModel.isRunning.value == true
+        val serviceRunning = mainViewModel.reconcileRunningState()
         if (serviceRunning || smartConnecting) {
             cancelSmartConnect()
             return
@@ -740,9 +737,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         refreshSelectedServerUi()
     }
 
-    private fun isServiceRunningConfirmed(): Boolean =
-        runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
-                mainViewModel.isRunning.value == true
+    private fun isServiceRunningConfirmed(): Boolean = mainViewModel.reconcileRunningState()
 
     private fun stopServiceReliably() {
         V2RayServiceManager.stopVService(this)
@@ -1014,6 +1009,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onResume() {
         super.onResume()
+        mainViewModel.reconcileRunningState()
         MobileTinaExpiryManager.recoverPending(this)
         setupGroupTab()
         ensureSelectedServerForCurrentSubscription()
