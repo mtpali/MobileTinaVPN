@@ -46,6 +46,8 @@ jobs:
           grep -q 'SMART_CONNECT_MAX_CONCURRENCY = 8' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreTestService.kt
           grep -q 'secondaryUrl' V2rayNG/app/src/main/java/com/v2ray/ang/service/RealPingWorkerService.kt
           ! grep -q 'START_PENDING_GRACE_MS' V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt
+          grep -q 'VpnTeardownCoordinator' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreVpnService.kt
+          ! grep -q 'Thread.sleep(100)' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreVpnService.kt
           grep -q 'app.stopService(Intent(app, serviceClass))' V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt
           grep -q 'stopAllService(isForced = false)' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreVpnService.kt
           grep -q 'fun reconcileRunningState(context: Context)' V2rayNG/app/src/main/java/com/v2ray/ang/handler/V2RayServiceManager.kt
