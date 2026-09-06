@@ -35,8 +35,8 @@ class CoreVpnService : VpnService(), ServiceControl {
     private lateinit var mInterface: ParcelFileDescriptor
     private var isRunning = false
     private var tun2SocksService: Tun2SocksControl? = null
-    private var teardownStarted = false
     private var vpnInterfaceClosed = false
+    private val teardownCoordinator = VpnTeardownCoordinator()
 
     /**destroy
      * Unfortunately registerDefaultNetworkCallback is going to return our VPN interface: https://android.googlesource.com/platform/frameworks/base/+/dda156ab0c5d66ad82bdcf76cda07cbc0a9c8a2e
@@ -345,52 +345,40 @@ class CoreVpnService : VpnService(), ServiceControl {
 //        val emptyInfo = VpnNetworkInfo()
 //        val info = loadVpnNetworkInfo(configName, emptyInfo)!! + (lastNetworkInfo ?: emptyInfo)
 //        saveVpnNetworkInfo(configName, info)
-        val firstTeardown = !teardownStarted
-        teardownStarted = true
         isRunning = false
-        if (firstTeardown) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                try {
-                    connectivity.unregisterNetworkCallback(defaultNetworkCallback)
-                } catch (e: Exception) {
-                    LogUtil.w(AppConfig.TAG, "StartCore-VPN: Failed to unregister callback", e)
+        teardownCoordinator.teardown(
+            forceServiceStop = isForced,
+            stopService = {
+                // Android must receive stopSelf() before the TUN descriptor is closed. Reversing
+                // this order can leave the native core's listening ports alive across a restart.
+                stopSelf()
+            },
+            closeVpnInterface = ::closeVpnInterface,
+            publishStoppedState = {
+                // This method clears the shared running flag and notifies the UI synchronously,
+                // while native Xray shutdown itself remains off the main thread.
+                CoreServiceManager.stopCoreLoop()
+            },
+            acknowledgeInterfaceClosed = {
+                // Expiry work may remove the active profile only after the TUN is definitely gone.
+                if (vpnInterfaceClosed) CoreServiceManager.acknowledgeStopRequest()
+            },
+            cleanupAuxiliaries = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    try {
+                        connectivity.unregisterNetworkCallback(defaultNetworkCallback)
+                    } catch (e: Exception) {
+                        LogUtil.w(AppConfig.TAG, "StartCore-VPN: Failed to unregister callback", e)
+                    }
                 }
-            }
 
-            tun2SocksService?.stopTun2Socks()
-            tun2SocksService = null
-
-            RootLanSharing.stopClientSharing(this)
-
-            CoreServiceManager.stopCoreLoop()
-        }
-
-        if (isForced) {
-            //stopSelf has to be called ahead of mInterface.close(). otherwise v2ray core cannot be stooped
-            //It's strage but true.
-            //This can be verified by putting stopself() behind and call stopLoop and startLoop
-            //in a row for several times. You will find that later created v2ray core report port in use
-            //which means the first v2ray core somehow failed to stop and release the port.
-            stopSelf()
-
-            // Add a small delay to allow the async core stop operation to complete
-            // before closing the VPN interface, preventing a race condition that can
-            // leave the VPN icon in the status bar after stopping the service.
-            try {
-                Thread.sleep(100)
-            } catch (e: InterruptedException) {
-                LogUtil.w(AppConfig.TAG, "StartCore-VPN: Sleep interrupted", e)
-            }
-
-        }
-
-        closeVpnInterface()
-
-        // Cross-process acknowledgement for scheduled expiry work. This must stay after the
-        // TUN close: the expiry marker may delete the active profile immediately afterwards.
-        if (vpnInterfaceClosed) {
-            CoreServiceManager.acknowledgeStopRequest()
-        }
+                // JNI/plugin cleanup can be slower for large custom configurations. It is kept
+                // after TUN closure so it cannot hold the Android VPN or its UI state hostage.
+                tun2SocksService?.stopTun2Socks()
+                tun2SocksService = null
+                RootLanSharing.stopClientSharing(this)
+            },
+        )
     }
 
     private fun closeVpnInterface() {

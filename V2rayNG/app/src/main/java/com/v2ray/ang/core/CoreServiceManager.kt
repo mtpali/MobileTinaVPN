@@ -35,6 +35,7 @@ import com.v2ray.ang.util.MobileTinaIntegrityGuard
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
@@ -49,6 +50,7 @@ object CoreServiceManager {
     private var currentConfig: ProfileItem? = null
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
+    private val coreCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     var serviceControl: SoftReference<ServiceControl>? = null
         set(value) {
@@ -303,30 +305,14 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
-        // Persist before asynchronous core shutdown and before notifying UI clients.
+        // Persist and notify before any JNI/plugin cleanup. A custom configuration can contain
+        // many transports and observatory workers, making native shutdown noticeably slower.
         MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
         val service = getService() ?: run {
             acknowledgeStopRequest()
             return false
         }
         MobileTinaSessionLimiter.cancel(service)
-
-        if (coreController.isRunning) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    coreController.stopLoop()
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
-                }
-            }
-        }
-
-        // Close existing browser dialer
-        CoreNativeManager.reconcileBrowserDialer("")
-        if (browserDialer != null) {
-            browserDialer!!.stop()
-            browserDialer = null
-        }
 
         MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         NotificationManager.cancelNotification()
@@ -335,6 +321,24 @@ object CoreServiceManager {
             service.unregisterReceiver(mMsgReceive)
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+        }
+
+        val dialerToStop = browserDialer
+        browserDialer = null
+        coreCleanupScope.launch {
+            if (coreController.isRunning) {
+                try {
+                    coreController.stopLoop()
+                } catch (e: Exception) {
+                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
+                }
+            }
+            CoreNativeManager.reconcileBrowserDialer("")
+            try {
+                dialerToStop?.stop()
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop browser dialer", e)
+            }
         }
 
         return true
