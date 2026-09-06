@@ -205,7 +205,7 @@ class SubSettingActivity : BaseActivity() {
                                 Utils.setClipboard(ownerActivity, url)
                             }
 
-                            else -> ownerActivity.toast("else")
+                            else -> ownerActivity.toast(R.string.toast_action_not_allowed)
                         }
                     } catch (e: Exception) {
                         LogUtil.e(AppConfig.TAG, "Share subscription failed", e)

@@ -31,9 +31,9 @@ enum class PermissionType {
     /** Return a human-readable label for the permission */
     fun getLabel(): String {
         return when (this) {
-            CAMERA -> "Camera"
-            POST_NOTIFICATIONS -> "Notification"
-            ACCESS_LOCAL_NETWORK -> "Local Network"
+            CAMERA -> "دوربین"
+            POST_NOTIFICATIONS -> "اعلان‌ها"
+            ACCESS_LOCAL_NETWORK -> "شبکهٔ محلی"
         }
     }
 }
