@@ -25,6 +25,7 @@ import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.MobileTinaSubscriptionMarkerManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MessageUtil
 import com.v2ray.ang.util.Utils
@@ -43,7 +44,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val serversCache = mutableListOf<ServersCache>()
     private val reloadGeneration = AtomicLong(0L)
     val isRunning by lazy {
-        MutableLiveData(MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING, false))
+        MutableLiveData(V2RayServiceManager.reconcileRunningState(getApplication<AngApplication>()))
     }
     val updateListAction by lazy { MutableLiveData<Int>() }
     val updateTestResultAction by lazy { MutableLiveData<String>() }
@@ -55,7 +56,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startListenBroadcast() {
         val mFilter = IntentFilter(AppConfig.BROADCAST_ACTION_ACTIVITY)
         ContextCompat.registerReceiver(getApplication(), mMsgReceiver, mFilter, Utils.receiverFlags())
-        MessageUtil.sendMsg2Service(getApplication(), AppConfig.MSG_REGISTER_CLIENT, "")
+        reconcileRunningState()
+    }
+
+    /** Reconciles the cached flag immediately, then asks a live daemon for confirmation. */
+    fun reconcileRunningState(): Boolean {
+        val application = getApplication<AngApplication>()
+        val running = V2RayServiceManager.reconcileRunningState(application)
+        if (isRunning.value != running) {
+            updateRunningState(running)
+        }
+        MessageUtil.sendMsg2Service(application, AppConfig.MSG_REGISTER_CLIENT, "")
+        return running
     }
 
     /**
