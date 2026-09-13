@@ -3,6 +3,7 @@ package com.v2ray.ang.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -556,10 +557,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun smartConnectAndStart() {
-        // Use both sources. On a few OEM builds the cross-process MMKV flag or the UI broadcast can
-        // arrive late; either positive state must make the automatic FAB behave as a stop button.
-        val serviceRunning = runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
-                mainViewModel.isRunning.value == true
+        val serviceRunning = mainViewModel.reconcileRunningState()
         if (serviceRunning || smartConnecting) {
             cancelSmartConnect()
             return
@@ -739,9 +737,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         refreshSelectedServerUi()
     }
 
-    private fun isServiceRunningConfirmed(): Boolean =
-        runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false) ||
-                mainViewModel.isRunning.value == true
+    private fun isServiceRunningConfirmed(): Boolean = mainViewModel.reconcileRunningState()
 
     private fun stopServiceReliably() {
         V2RayServiceManager.stopVService(this)
@@ -1013,6 +1009,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onResume() {
         super.onResume()
+        mainViewModel.reconcileRunningState()
         MobileTinaExpiryManager.recoverPending(this)
         setupGroupTab()
         ensureSelectedServerForCurrentSubscription()
@@ -1518,7 +1515,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.z0 -> startActivity(Intent(this, X7::class.java))
+            R.id.z0 -> openDeveloperTelegram()
             R.id.per_app_proxy_settings -> requestActivityLauncher.launch(Intent(this, PerAppProxyActivity::class.java))
             R.id.routing_setting -> requestActivityLauncher.launch(Intent(this, RoutingSettingActivity::class.java))
             R.id.user_asset_setting -> requestActivityLauncher.launch(Intent(this, UserAssetActivity::class.java))
@@ -1535,6 +1532,15 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
         binding.drawerLayout.closeDrawer(GravityCompat.START)
         return true
+    }
+
+    private fun openDeveloperTelegram() {
+        val username = q.a(10).removePrefix("@")
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=$username")))
+        } catch (_: ActivityNotFoundException) {
+            Utils.openUri(this, q.a(3))
+        }
     }
 
     private fun confirmResetVpn() {

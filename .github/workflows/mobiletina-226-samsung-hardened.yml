@@ -21,7 +21,7 @@ jobs:
       - name: Verify product identity and protected UI
         run: |
           set -euo pipefail
-          grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
+          grep -q 'applicationId = "com.v2ray.alimtp"' V2rayNG/app/build.gradle.kts
           grep -q 'versionName = "2.2.6"' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
@@ -77,7 +77,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -95,7 +95,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Decode stable release keystore
         uses: timheuer/base64-to-file@v2.0.0
@@ -130,7 +130,12 @@ jobs:
           ./gradlew \
             testPlaystoreDebugUnitTest \
             --tests com.v2ray.ang.handler.MobileTinaExpiryManagerTest \
+            --tests com.v2ray.ang.util.MobileTinaImportNormalizerTest \
             --tests com.v2ray.ang.fmt.WireguardFmtTest \
+            --tests com.v2ray.ang.core.WireguardAddressPolicyTest \
+            --tests com.v2ray.ang.core.WireguardReservedPolicyTest \
+            --tests com.v2ray.ang.service.VpnTeardownCoordinatorTest \
+            --tests com.v2ray.ang.core.AmneziaResumePolicyTest \
             --tests com.v2ray.ang.core.GeoIpRuleResolverTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \

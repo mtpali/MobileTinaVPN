@@ -28,7 +28,7 @@ internal object w {
                     ((i * 37 + 0xa7) and 0xff)
                 ).toByte()
         }
-        val appId = BuildConfig.APPLICATION_ID.toByteArray(Charsets.UTF_8)
+        val appId = BuildConfig.MOBILETINA_VAULT_NAMESPACE.toByteArray(Charsets.UTF_8)
         val prk = try {
             Mac.getInstance("HmacSHA256").run {
                 init(SecretKeySpec(seed, "HmacSHA256"))

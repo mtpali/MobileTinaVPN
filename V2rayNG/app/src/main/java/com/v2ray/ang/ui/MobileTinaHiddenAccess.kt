@@ -39,7 +39,7 @@ internal object r {
     fun a(n: Int): String {
         require(n in l.indices)
         val seed = ByteArray(32) { i -> (x[i] xor y[i] xor z[i]).toByte() }
-        val appId = BuildConfig.APPLICATION_ID.removeSuffix(".fdroid").toByteArray(Charsets.UTF_8)
+        val appId = BuildConfig.MOBILETINA_VAULT_NAMESPACE.toByteArray(Charsets.UTF_8)
         val key = try {
             Mac.getInstance("HmacSHA256").run {
                 init(SecretKeySpec(seed, "HmacSHA256"))

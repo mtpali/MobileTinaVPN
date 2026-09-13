@@ -5,14 +5,13 @@ import org.junit.Test
 
 class MobileTinaFirstLaunchTextTest {
     @Test
-    fun socialNoticeVaultDecryptsExactRequestedText() {
+    fun developerNoticeVaultDecryptsExactRequestedText() {
         assertArrayEquals(
             arrayOf(
-                "instagram 1 : mobile.tina",
-                "instagram 2 : mobile.tina2",
-                "instagram 3 : mobile.tinaa"
+                "Developed By ALIMTP",
+                "Telegram : VPN963"
             ),
-            arrayOf(q.a(9), q.a(10), q.a(11))
+            arrayOf(q.a(9), q.a(10))
         )
     }
 }

@@ -1,10 +1,13 @@
 package com.v2ray.ang.ui
 
 import android.app.Dialog
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -13,16 +16,14 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
+import com.v2ray.ang.util.Utils
 import java.security.MessageDigest
 
 /** Builds the install-scoped social notice without placing its text in Android resources. */
 internal object MobileTinaFirstLaunchDialog {
     private val k = byteArrayOf(110, 95, 55, 100, 50, 99, 57, 49)
     private val expected = byteArrayOf(
-        -120, 26, 127, -109, -62, -16, -34, -79,
-        101, 96, 54, -117, 117, 41, 86, -31,
-        -78, 17, 18, 23, 8, 70, -94, -12,
-        22, -7, 55, -49, 6, 108, 106, 43
+        -128, -126, 64, -64, 84, -3, -75, 98, -95, -65, 115, 9, 78, 78, 62, -123, 10, -93, -94, -124, -49, 72, 12, -49, 61, -52, -8, 19, -44, 18, -123, 127
     )
 
     fun showOnce(
@@ -35,52 +36,79 @@ internal object MobileTinaFirstLaunchDialog {
             return null
         }
 
-        val lines = arrayOf(q.a(9), q.a(10), q.a(11))
+        val lines = arrayOf(q.a(9), q.a(10))
         verify(lines)
 
-        val primary = Color.rgb(193, 53, 132)
+        val primary = Color.rgb(34, 158, 217)
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            setPadding(dp(activity, 24), dp(activity, 20), dp(activity, 24), dp(activity, 18))
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(activity, 24), dp(activity, 22), dp(activity, 24), dp(activity, 20))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(activity, 24).toFloat()
-                setColor(Color.BLACK)
-                setStroke(dp(activity, 1), Color.WHITE)
+                setColor(Color.rgb(8, 15, 27))
+                setStroke(dp(activity, 1), Color.rgb(49, 92, 126))
             }
         }
 
         root.addView(View(activity).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(131, 58, 180), Color.rgb(253, 29, 29), Color.rgb(252, 175, 69))
+                intArrayOf(Color.rgb(42, 171, 238), Color.rgb(34, 115, 165))
             ).apply { cornerRadius = dp(activity, 3).toFloat() }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 5)).apply {
-            bottomMargin = dp(activity, 18)
+            bottomMargin = dp(activity, 20)
         })
 
-        lines.forEach { value ->
-            root.addView(TextView(activity).apply {
-                text = value
-                setTextColor(Color.WHITE)
-                textSize = 15f
-                gravity = Gravity.CENTER
-                layoutDirection = View.LAYOUT_DIRECTION_LTR
-                textDirection = View.TEXT_DIRECTION_LTR
-                textAlignment = View.TEXT_ALIGNMENT_CENTER
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                setPadding(dp(activity, 16), dp(activity, 14), dp(activity, 16), dp(activity, 14))
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(activity, 14).toFloat()
-                    setColor(Color.rgb(18, 18, 20))
-                    setStroke(dp(activity, 1), Color.WHITE)
+        root.addView(TextView(activity).apply {
+            text = lines[0]
+            setTextColor(Color.WHITE)
+            textSize = 19f
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(activity, 16)
+        })
+
+        val telegram = TextView(activity).apply {
+            text = lines[1]
+            setTextColor(Color.rgb(137, 211, 246))
+            textSize = 18f
+            gravity = Gravity.CENTER
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            textDirection = View.TEXT_DIRECTION_LTR
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            isClickable = true
+            isFocusable = true
+            setPadding(dp(activity, 16), dp(activity, 16), dp(activity, 16), dp(activity, 16))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(activity, 16).toFloat()
+                setColor(Color.rgb(13, 31, 50))
+                setStroke(dp(activity, 1), primary)
+            }
+            setOnClickListener {
+                val username = Uri.parse(q.a(3)).lastPathSegment.orEmpty()
+                try {
+                    activity.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=$username"))
+                    )
+                } catch (_: ActivityNotFoundException) {
+                    Utils.openUri(activity, q.a(3))
                 }
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(activity, 10)
-            })
+            }
         }
+        root.addView(
+            telegram,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(activity, 12) }
+        )
 
         val close = MaterialButton(activity).apply {
             text = r.a(6)
