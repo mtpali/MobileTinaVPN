@@ -23,10 +23,7 @@ import java.security.MessageDigest
 internal object MobileTinaFirstLaunchDialog {
     private val k = byteArrayOf(110, 95, 55, 100, 50, 99, 57, 49)
     private val expected = byteArrayOf(
-        126, -106, -45, 48, 54, 46, 41, 67,
-        116, 41, 113, -9, -78, 119, -12, 119,
-        27, 33, 8, 12, 36, 39, -95, -4,
-        -66, 17, 44, 110, 127, -14, 62, 125
+        -128, -126, 64, -64, 84, -3, -75, 98, -95, -65, 115, 9, 78, 78, 62, -123, 10, -93, -94, -124, -49, 72, 12, -49, 61, -52, -8, 19, -44, 18, -123, 127
     )
 
     fun showOnce(
@@ -95,7 +92,7 @@ internal object MobileTinaFirstLaunchDialog {
                 setStroke(dp(activity, 1), primary)
             }
             setOnClickListener {
-                val username = lines[1].removePrefix("@")
+                val username = Uri.parse(q.a(3)).lastPathSegment.orEmpty()
                 try {
                     activity.startActivity(
                         Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=$username"))

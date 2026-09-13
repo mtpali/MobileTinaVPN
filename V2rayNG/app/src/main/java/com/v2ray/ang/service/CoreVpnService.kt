@@ -36,6 +36,8 @@ class CoreVpnService : VpnService(), ServiceControl {
     private var isRunning = false
     private var tun2SocksService: Tun2SocksControl? = null
     private var vpnInterfaceClosed = false
+    @Volatile private var underlyingNetwork: Network? = null
+    @Volatile private var networkWasAvailable = false
     private val teardownCoordinator = VpnTeardownCoordinator()
 
     /**destroy
@@ -47,30 +49,38 @@ class CoreVpnService : VpnService(), ServiceControl {
      *
      * Source: https://android.googlesource.com/platform/frameworks/base/+/2df4c7d/services/core/java/com/android/server/ConnectivityService.java#887
      */
-    @delegate:RequiresApi(Build.VERSION_CODES.P)
+    @delegate:RequiresApi(Build.VERSION_CODES.N)
     private val defaultNetworkRequest by lazy {
         NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
             .build()
     }
 
     private val connectivity by lazy { getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager }
 
-    @delegate:RequiresApi(Build.VERSION_CODES.P)
+    @delegate:RequiresApi(Build.VERSION_CODES.N)
     private val defaultNetworkCallback by lazy {
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
+                val changed = networkWasAvailable && underlyingNetwork != network
+                underlyingNetwork = network
+                networkWasAvailable = true
                 setUnderlyingNetworks(arrayOf(network))
+                if (changed) CoreServiceManager.requestAmneziaRecovery()
             }
 
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                // it's a good idea to refresh capabilities
-                setUnderlyingNetworks(arrayOf(network))
+                if (underlyingNetwork == network) setUnderlyingNetworks(arrayOf(network))
             }
 
             override fun onLost(network: Network) {
-                setUnderlyingNetworks(null)
+                // A late onLost for the old network must not clear its replacement.
+                if (underlyingNetwork == network) {
+                    underlyingNetwork = null
+                    setUnderlyingNetworks(null)
+                }
             }
         }
     }
@@ -258,8 +268,8 @@ class CoreVpnService : VpnService(), ServiceControl {
      * @param builder The VPN Builder to configure
      */
     private fun configurePlatformFeatures(builder: Builder) {
-        // Android P (API 28) and above: Configure network callbacks
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        // Android N (API 24) and above: Configure network callbacks
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
                 connectivity.requestNetwork(defaultNetworkRequest, defaultNetworkCallback)
             } catch (e: Exception) {
@@ -364,7 +374,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 if (vpnInterfaceClosed) CoreServiceManager.acknowledgeStopRequest()
             },
             cleanupAuxiliaries = {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     try {
                         connectivity.unregisterNetworkCallback(defaultNetworkCallback)
                     } catch (e: Exception) {

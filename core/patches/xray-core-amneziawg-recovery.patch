@@ -1,0 +1,127 @@
+--- a/proxy/wireguard/client.go
++++ b/proxy/wireguard/client.go
+@@ -10,0 +11 @@
++	"time"
+@@ -240,0 +242 @@
++	amneziaHandlers.Delete(h)
+@@ -267 +269,4 @@
+-		conn, err := internet.DialSystem(ctx, dest, h.streamSettings.SocketSettings)
++		// The bind outlives the first proxied request, including its cancellation.
++		dialCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
++		defer cancel()
++		conn, err := internet.DialSystem(dialCtx, dest, h.streamSettings.SocketSettings)
+@@ -334,2 +339,2 @@
+-		if peer.KeepAlive != "" {
+-			cfg.WriteString("persistent_keepalive_interval=" + peer.KeepAlive + "\n")
++		if keepAlive := mobileAmneziaKeepalive(h.conf.AmneziaConfig != "", peer.KeepAlive); keepAlive != "" {
++			cfg.WriteString("persistent_keepalive_interval=" + keepAlive + "\n")
+@@ -346,0 +352,3 @@
++	if h.conf.AmneziaConfig != "" {
++		amneziaHandlers.Store(h, struct{}{})
++	}
+--- /dev/null
++++ b/proxy/wireguard/mobile_recovery.go
+@@ -0,0 +1,69 @@
++package wireguard
++
++import (
++	"encoding/hex"
++	"strconv"
++	"sync"
++
++	"github.com/amnezia-vpn/amneziawg-go/v3/device"
++)
++
++// Only live Amnezia devices participate; standard WireGuard is untouched.
++var amneziaHandlers sync.Map
++
++// RefreshAmneziaBindings reconnects protected UDP sockets after Android sleep or
++// a default-network change. The TUN, routing and existing core instance survive.
++func RefreshAmneziaBindings() error {
++	var firstError error
++	amneziaHandlers.Range(func(key, _ any) bool {
++		if err := key.(*Handler).refreshAmneziaBinding(); err != nil && firstError == nil {
++			firstError = err
++		}
++		return true
++	})
++	return firstError
++}
++
++func (h *Handler) refreshAmneziaBinding() error {
++	h.mu.Lock()
++	defer h.mu.Unlock()
++	if h.dev == nil || h.tun == nil || h.conf.AmneziaConfig == "" {
++		return nil
++	}
++	// A previously failed bind can leave the device up with no receive socket.
++	// BindUpdate explicitly reopens it, unlike Up() on an already-up device.
++	if err := h.dev.Up(); err != nil {
++		return err
++	}
++	if err := h.dev.BindUpdate(); err != nil {
++		return err
++	}
++	for _, config := range h.conf.Peers {
++		decoded, err := hex.DecodeString(config.PublicKey)
++		if err != nil || len(decoded) != 32 {
++			continue
++		}
++		var key device.NoisePublicKey
++		copy(key[:], decoded)
++		if peer := h.dev.LookupPeer(key); peer != nil {
++			if err := peer.SendHandshakeInitiation(false); err != nil {
++				return err
++			}
++		}
++	}
++	return nil
++}
++
++// Mobile NAT mappings commonly expire before long INI keepalive intervals.
++// Apply the mobile policy at runtime, also covering custom JSON and old imports.
++// Explicit zero remains an opt-out and stored/exported profiles are not rewritten.
++func mobileAmneziaKeepalive(amnezia bool, configured string) string {
++	if !amnezia || configured == "0" {
++		return configured
++	}
++	seconds, err := strconv.Atoi(configured)
++	if configured == "" || (err == nil && seconds > 25) {
++		return "25"
++	}
++	return configured
++}
+--- /dev/null
++++ b/proxy/wireguard/mobile_recovery_test.go
+@@ -0,0 +1,31 @@
++package wireguard
++
++import "testing"
++
++func TestMobileAmneziaKeepalive(t *testing.T) {
++	for _, tt := range []struct {
++		awg         bool
++		input, want string
++	}{
++		{true, "", "25"}, {true, "1500", "25"}, {true, "60", "25"},
++		{true, "25", "25"}, {true, "10", "10"}, {true, "0", "0"},
++		{false, "", ""}, {false, "1500", "1500"}, {false, "0", "0"},
++		{true, "invalid", "invalid"},
++	} {
++		if got := mobileAmneziaKeepalive(tt.awg, tt.input); got != tt.want {
++			t.Errorf("awg=%v interval=%q: got %q want %q", tt.awg, tt.input, got, tt.want)
++		}
++	}
++}
++
++func TestRefreshClosedAmneziaHandler(t *testing.T) {
++	h := &Handler{}
++	amneziaHandlers.Store(h, struct{}{})
++	defer amneziaHandlers.Delete(h)
++	if err := RefreshAmneziaBindings(); err != nil {
++		t.Fatal(err)
++	}
++	if h.dev != nil {
++		t.Fatal("refresh resurrected a closed device")
++	}
++}

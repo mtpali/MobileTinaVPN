@@ -131,7 +131,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -149,7 +149,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'scripts/build-amnezia-libv2ray.sh') }}
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
 
       - name: Prepare hardened APK signing certificate
         env:
@@ -217,6 +217,7 @@ jobs:
             --tests com.v2ray.ang.core.WireguardReservedPolicyTest \
             --tests com.v2ray.ang.handler.ServiceRunningStatePolicyTest \
             --tests com.v2ray.ang.service.VpnTeardownCoordinatorTest \
+            --tests com.v2ray.ang.core.AmneziaResumePolicyTest \
             --tests com.v2ray.ang.core.GeoIpRuleResolverTest \
             assemblePlaystoreRelease \
             '-PFAT_APK_ABIS=armeabi-v7a;arm64-v8a' \
@@ -288,6 +289,7 @@ jobs:
             'showManualSubscriptionQr' \
             'Developed By ALIMTP' \
             '@VPN963' \
+            'Telegram : VPN963' \
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
             'instagram 3 : mobile.tinaa' \
@@ -311,6 +313,7 @@ jobs:
             'کپی لینک اشتراک' \
             'Developed By ALIMTP' \
             '@VPN963' \
+            'Telegram : VPN963' \
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
             'instagram 3 : mobile.tinaa' \

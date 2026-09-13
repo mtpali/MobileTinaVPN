@@ -9,7 +9,7 @@ class MobileTinaFirstLaunchTextTest {
         assertArrayEquals(
             arrayOf(
                 "Developed By ALIMTP",
-                "@VPN963"
+                "Telegram : VPN963"
             ),
             arrayOf(q.a(9), q.a(10))
         )
