@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - codex/amneziawg-v3
+      - codex/amneziawg-raw-ini-ipv4
   pull_request:
     branches:
       - main
