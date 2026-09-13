@@ -448,15 +448,16 @@ object AngConfigManager {
                 LogUtil.e(AppConfig.TAG, "Failed to parse custom config server as single config", e)
             }
             return 0
-        } else if (server.startsWith("[Interface]") && server.contains("[Peer]")) {
+        } else if (WireguardFmt.isWireguardConf(server)) {
             try {
-                val config = WireguardFmt.parseWireguardConfFile(server) ?: return R.string.toast_incorrect_protocol
+                val normalizedServer = WireguardFmt.normalizeConfText(server)
+                val config = WireguardFmt.parseWireguardConfFile(normalizedServer)
                 config.description = generateDescription(config)
                 if (!append) {
                     MmkvManager.removeServerViaSubid(subid)
                 }
                 val key = MmkvManager.encodeServerConfig("", config)
-                MmkvManager.encodeServerRaw(key, server)
+                MmkvManager.encodeServerRaw(key, normalizedServer)
                 return 1
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "Failed to parse WireGuard config file", e)

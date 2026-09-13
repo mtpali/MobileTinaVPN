@@ -83,11 +83,28 @@ object CoreConfigManager {
         val raw = MmkvManager.decodeServerRaw(configContext.guid)
             ?: return ConfigResult(status = false, guid = configContext.guid, errorMessage = "Custom config is empty")
         val result = ConfigResult(true, configContext.guid, raw)
-        if (!needTun()) {
-            return result
-        }
-
         val json = JsonUtil.parseString(raw)?.takeIf { it.isJsonObject }?.asJsonObject ?: return result
+
+        // Full custom JSON profiles bypass appendRoutingUserRule(). Normalize their embedded
+        // compact GeoIP references here so a config exported by another client still starts on
+        // a fresh install where geoip-only-cn-private.dat is not present.
+        val compactGeoIp = File(
+            Utils.userAssetPath(context),
+            AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT
+        )
+        val compactGeoIpAvailable = compactGeoIp.isFile && compactGeoIp.length() >= 64L * 1024L
+        val customRoutingChanged = GeoIpRuleResolver.normalizeCustomRouting(
+            json,
+            compactGeoIpAvailable,
+        )
+
+        if (!needTun()) {
+            return if (customRoutingChanged) {
+                JsonUtil.toJsonPretty(json)?.let { ConfigResult(true, configContext.guid, it) } ?: result
+            } else {
+                result
+            }
+        }
 
         // Check whether package names need to be replaced with UIDs
         if (SettingsManager.canUseProcessRouting()) {

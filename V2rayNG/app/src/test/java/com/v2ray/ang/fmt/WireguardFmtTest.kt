@@ -1,6 +1,7 @@
 package com.v2ray.ang.fmt
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -127,5 +128,42 @@ class WireguardFmtTest {
             profile.localAddress,
             WireguardFmt.parseWireguardConfFile(exported).localAddress,
         )
+    }
+
+    @Test
+    fun importsRawAmneziaIniFromClipboardOrMarkdown() {
+        val rawConfig = "\uFEFF" + """
+            ```ini
+              [interface]
+            Address = 10.187.192.50/30
+            PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            MTU = 1280
+            Jc = 4
+            Jmin = 40
+            Jmax = 70
+            H1 = 1
+            H2 = 2
+            H3 = 3
+            H4 = 4
+            I1 = <b 0x0102>
+
+            [peer]
+            PublicKey = BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+            Endpoint = 50.7.151.67:43293
+            AllowedIPs = 0.0.0.0/0, ::/0
+            PersistentKeepalive = 1500
+            ```
+        """.trimIndent()
+
+        assertTrue(WireguardFmt.isWireguardConf(rawConfig))
+        val profile = WireguardFmt.parseWireguardConfFile(rawConfig)
+
+        assertTrue(profile.isAmneziaWG)
+        assertEquals("10.187.192.50/30", profile.localAddress)
+        assertEquals("50.7.151.67", profile.server)
+        assertEquals("43293", profile.serverPort)
+        assertEquals(1500, profile.keepAlive)
+        assertEquals("<b 0x0102>", profile.awgI1)
+        assertNull(profile.reserved)
     }
 }

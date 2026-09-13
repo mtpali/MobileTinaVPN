@@ -353,7 +353,26 @@ index 4491886..a047b3b 100644
  )
  
  type Handler struct {
-@@ -319,6 +319,12 @@ func (h *Handler) init(ctx context.Context) error {
+@@ -142,7 +142 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
+-	if h.dev == nil {
+-		if err := h.init(ctx); err != nil {
+-			return err
+-		}
+-	}
+-
+-	if err := h.dev.Up(); err != nil {
++	if err := h.init(ctx); err != nil {
+@@ -261,3 +255,6 @@ func (h *Handler) init(ctx context.Context) error {
+-	if h.dev != nil {
+-		return nil
+-	}
++	if h.tun == nil {
++		return errors.New("closed")
++	}
++	if h.dev != nil {
++		return h.dev.Up()
++	}
+@@ -319,6 +316,12 @@ func (h *Handler) init(ctx context.Context) error {
  	bind.reserved = h.conf.Reserved
  	var cfg strings.Builder
  	cfg.WriteString("private_key=" + h.conf.SecretKey + "\n")
@@ -497,4 +516,3 @@ index eb01754..cebc426 100644
  )
  
  var (
-

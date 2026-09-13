@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.system.OsConstants
 import androidx.core.content.ContextCompat
 import com.v2ray.ang.AppConfig
@@ -35,7 +36,11 @@ import com.v2ray.ang.util.MobileTinaIntegrityGuard
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import libv2ray.Libv2ray
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.ProcessFinder
@@ -49,6 +54,9 @@ object CoreServiceManager {
     private var currentConfig: ProfileItem? = null
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
+    private var amneziaRefreshJob: Job? = null
+    private val resumePolicy = AmneziaResumePolicy()
+    private val coreCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     var serviceControl: SoftReference<ServiceControl>? = null
         set(value) {
@@ -257,6 +265,7 @@ object CoreServiceManager {
         mFilter.addAction(Intent.ACTION_USER_PRESENT)
         ContextCompat.registerReceiver(service, mMsgReceive, mFilter, Utils.receiverFlags())
 
+        resumePolicy.reset()
         currentConfig = config
         var tunFd = vpnInterface?.fd ?: 0
         val dialerAddr = if (currentConfig?.browserDialerMode.isNullOrEmpty()) {
@@ -303,30 +312,15 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
-        // Persist before asynchronous core shutdown and before notifying UI clients.
+        // Persist and notify before any JNI/plugin cleanup. A custom configuration can contain
+        // many transports and observatory workers, making native shutdown noticeably slower.
         MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
+        cancelAmneziaRecovery()
         val service = getService() ?: run {
             acknowledgeStopRequest()
             return false
         }
         MobileTinaSessionLimiter.cancel(service)
-
-        if (coreController.isRunning) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    coreController.stopLoop()
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
-                }
-            }
-        }
-
-        // Close existing browser dialer
-        CoreNativeManager.reconcileBrowserDialer("")
-        if (browserDialer != null) {
-            browserDialer!!.stop()
-            browserDialer = null
-        }
 
         MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         NotificationManager.cancelNotification()
@@ -335,6 +329,24 @@ object CoreServiceManager {
             service.unregisterReceiver(mMsgReceive)
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+        }
+
+        val dialerToStop = browserDialer
+        browserDialer = null
+        coreCleanupScope.launch {
+            if (coreController.isRunning) {
+                try {
+                    coreController.stopLoop()
+                } catch (e: Exception) {
+                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
+                }
+            }
+            CoreNativeManager.reconcileBrowserDialer("")
+            try {
+                dialerToStop?.stop()
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop browser dialer", e)
+            }
         }
 
         return true
@@ -350,6 +362,29 @@ object CoreServiceManager {
         if (request != 0L) {
             MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_STOP_COMPLETED, request)
         }
+    }
+
+    /** Coalesce screen/network events without blocking the receiver or restarting the VPN. */
+    @Synchronized
+    fun requestAmneziaRecovery() {
+        if (!MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING)) return
+        amneziaRefreshJob?.cancel()
+        amneziaRefreshJob = coreCleanupScope.launch {
+            delay(750)
+            if (!MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING)) return@launch
+            try {
+                Libv2ray.refreshAmneziaBindings()
+            } catch (e: Exception) {
+                LogUtil.w(AppConfig.TAG, "AmneziaWG: network recovery failed", e)
+            }
+        }
+    }
+
+    @Synchronized
+    private fun cancelAmneziaRecovery() {
+        amneziaRefreshJob?.cancel()
+        amneziaRefreshJob = null
+        resumePolicy.reset()
     }
 
     /**
@@ -560,11 +595,13 @@ object CoreServiceManager {
 
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
+                    resumePolicy.screenOff(SystemClock.elapsedRealtime())
                     LogUtil.i(AppConfig.TAG, "StartCore-Manager: Screen off")
                     NotificationManager.stopSpeedNotification()
                 }
 
                 Intent.ACTION_SCREEN_ON -> {
+                    if (resumePolicy.screenOn(SystemClock.elapsedRealtime())) requestAmneziaRecovery()
                     LogUtil.i(AppConfig.TAG, "StartCore-Manager: Screen on")
                     NotificationManager.startSpeedNotification()
                 }
