@@ -39,6 +39,8 @@ cp -a "$android_lib/." "$wrapper/"
 chmod -R u+w "$patched_core" "$wrapper"
 
 patch --batch --forward --silent -p1 -d "$patched_core" < "$core_patch"
+patch --batch --forward --silent -p1 -d "$patched_core" < "$repo_root/core/patches/xray-core-amneziawg-recovery.patch"
+cp "$repo_root/core/mobile-recovery/libv2ray_recovery.go" "$wrapper/"
 
 # The pinned Xray snapshot predates upstream's WireGuard initialization-race
 # fix (XTLS/Xray-core#6461). Keep Device.Up() under Handler.mu, matching the

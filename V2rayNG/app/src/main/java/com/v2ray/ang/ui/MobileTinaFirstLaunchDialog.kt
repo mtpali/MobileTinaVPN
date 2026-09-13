@@ -14,6 +14,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import java.security.MessageDigest
+import com.v2ray.ang.util.Utils
 
 /** Builds the install-scoped social notice without placing its text in Android resources. */
 internal object MobileTinaFirstLaunchDialog {
@@ -60,9 +61,12 @@ internal object MobileTinaFirstLaunchDialog {
             bottomMargin = dp(activity, 18)
         })
 
-        lines.forEach { value ->
+        lines.forEachIndexed { index, value ->
             root.addView(TextView(activity).apply {
                 text = value
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { Utils.openUri(activity, q.a(index)) }
                 setTextColor(Color.WHITE)
                 textSize = 15f
                 gravity = Gravity.CENTER
