@@ -38,9 +38,11 @@ object WireguardFmt : FmtBase() {
         config.publicKey = queryParam["publickey"].orEmpty()
         config.preSharedKey = queryParam["presharedkey"]?.nullIfBlank()
         config.mtu = Utils.parseInt(queryParam["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
+        config.remoteDNS = queryParam["dns"] ?: AppConfig.WIREGUARD_LOCAL_REMOTE_DNS
         config.reserved = queryParam["reserved"]?.nullIfBlank()
         config.allowedIPs = queryParam["allowedips"]
         config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it > 0 }
+        config.finalMask = (queryParam["fm"] ?: queryParam["finalmask"] ?: queryParam["finalMask"])?.nullIfBlank()
 
         return config
     }
@@ -110,6 +112,7 @@ object WireguardFmt : FmtBase() {
             .joinToString("\n")
             .ifEmpty { AppConfig.WIREGUARD_LOCAL_ADDRESS_V4 }
         config.mtu = Utils.parseInt(interfaceParams["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
+        config.remoteDNS = interfaceParams["dns"] ?: AppConfig.WIREGUARD_LOCAL_REMOTE_DNS
         config.publicKey = peerParams["publickey"].orEmpty()
         config.preSharedKey = peerParams["presharedkey"]?.nullIfBlank()
         config.allowedIPs = peerParams["allowedips"]?.takeIf { it.isNotBlank() }
@@ -151,6 +154,7 @@ object WireguardFmt : FmtBase() {
             config.awgDisableCookieReplies =
                 interfaceParams["disablecookiereplies"].asBoolean()
         }
+        config.finalMask = (peerParams["finalmask"] ?: peerParams["fm"] ?: interfaceParams["finalmask"] ?: interfaceParams["fm"])?.nullIfBlank()
 
         return config
     }
@@ -254,6 +258,10 @@ object WireguardFmt : FmtBase() {
             if (config.awgRandomizePacketTrailers) appendLine("RandomizePacketTrailers = true")
             if (config.awgDisableCookieReplies) appendLine("DisableCookieReplies = true")
         }
+        if (config.remoteDNS != null) {
+            dicQuery["dns"] = config.remoteDNS.removeWhiteSpace().orEmpty()
+        }
+        config.finalMask?.nullIfBlank()?.let { dicQuery["fm"] = it }
 
         appendLine()
         appendLine("[Peer]")

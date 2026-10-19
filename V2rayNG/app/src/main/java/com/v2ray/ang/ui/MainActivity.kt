@@ -41,6 +41,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.tabs.TabLayoutMediator
+import com.v2ray.ang.ui.server.ProfileEditorResult
+import com.v2ray.ang.ui.server.ServerVmessActivity
+import com.v2ray.ang.ui.server.ServerVlessActivity
+import com.v2ray.ang.ui.server.ServerShadowsocksActivity
+import com.v2ray.ang.ui.server.ServerSocksActivity
+import com.v2ray.ang.ui.server.ServerHttpActivity
+import com.v2ray.ang.ui.server.ServerTrojanActivity
+import com.v2ray.ang.ui.server.ServerWireguardActivity
+import com.v2ray.ang.ui.server.ServerHysteria2Activity
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.MobileTinaSessionLimiter
@@ -150,7 +159,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
 
     private val requestActivityLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK && result.data?.getBooleanExtra(ProfileEditorResult.EXTRA_RESTART_SERVICE, false) == true) restartV2Ray()
             if (SettingsChangeManager.consumeRestartService() && mainViewModel.isRunning.value == true) restartV2Ray()
             if (SettingsChangeManager.consumeSetupGroupTab()) setupGroupTab()
             setupGroupTab()
@@ -1283,15 +1293,22 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun importManually(createConfigType: Int) {
-        val intent = if (createConfigType == EConfigType.POLICYGROUP.value) {
-            Intent()
-                .putExtra("subscriptionId", mainViewModel.subscriptionId)
-                .setClass(this, ServerGroupActivity::class.java)
-        } else {
-            Intent()
-                .putExtra("createConfigType", createConfigType)
-                .putExtra("subscriptionId", mainViewModel.subscriptionId)
-                .setClass(this, ServerActivity::class.java)
+        val intent = when (createConfigType) {
+            EConfigType.POLICYGROUP.value -> Intent(this, ServerGroupActivity::class.java)
+            EConfigType.PROXYCHAIN.value -> Intent(this, ServerProxyChainActivity::class.java)
+            EConfigType.VMESS.value -> Intent(this, ServerVmessActivity::class.java)
+            EConfigType.VLESS.value -> Intent(this, ServerVlessActivity::class.java)
+            EConfigType.SHADOWSOCKS.value -> Intent(this, ServerShadowsocksActivity::class.java)
+            EConfigType.SOCKS.value -> Intent(this, ServerSocksActivity::class.java)
+            EConfigType.HTTP.value -> Intent(this, ServerHttpActivity::class.java)
+            EConfigType.TROJAN.value -> Intent(this, ServerTrojanActivity::class.java)
+            EConfigType.WIREGUARD.value -> Intent(this, ServerWireguardActivity::class.java)
+            EConfigType.HYSTERIA2.value -> Intent(this, ServerHysteria2Activity::class.java)
+            else -> Intent(this, ServerHttpActivity::class.java).apply {
+                putExtra("createConfigType", createConfigType)
+            }
+        }.apply {
+            putExtra("subscriptionId", mainViewModel.subscriptionId)
         }
         requestActivityLauncher.launch(intent)
     }

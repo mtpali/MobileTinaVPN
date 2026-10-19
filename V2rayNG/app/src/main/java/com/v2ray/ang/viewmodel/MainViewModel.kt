@@ -15,6 +15,9 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.GroupMapItem
 import com.v2ray.ang.dto.SubscriptionUpdateResult
+import com.v2ray.ang.dto.ConnectionTestResult
+import com.v2ray.ang.dto.RealPingResult
+import com.v2ray.ang.extension.serializable
 import com.v2ray.ang.dto.TestServiceMessage
 import com.v2ray.ang.dto.entities.ServersCache
 import com.v2ray.ang.dto.entities.SubscriptionCache
@@ -511,13 +514,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     updateRunningState(false)
                 }
 
-                AppConfig.MSG_MEASURE_DELAY_SUCCESS -> {
-                    updateTestResultAction.value = intent.getStringExtra("content")
+                AppConfig.MSG_MEASURE_DELAY_RESULT -> {
+                    intent.serializable<ConnectionTestResult>("content")?.let { result ->
+                        updateTestResultAction.value = if (result.delayMillis >= 0L) "${result.delayMillis} ms" else result.errorMessage
+                    }
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_SUCCESS -> {
-                    val content = intent.getStringExtra("content")
-                    updateListAction.value = getPosition(content ?: "")
+                    val content = intent.serializable<RealPingResult>("content")
+                    updateListAction.value = getPosition(content?.guid.orEmpty())
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_NOTIFY -> {

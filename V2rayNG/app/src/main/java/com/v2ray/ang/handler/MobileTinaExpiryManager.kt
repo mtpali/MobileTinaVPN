@@ -20,7 +20,7 @@ import androidx.work.workDataOf
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.v2ray.ang.AppConfig
-import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.receiver.MobileTinaExpiryReceiver
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.Dispatchers
@@ -195,13 +195,13 @@ object MobileTinaExpiryManager {
 
         // Sending stop is harmless when no service exists and also covers a very small
         // race where the daemon started before its running flag became visible.
-        CoreServiceManager.stopVService(context.applicationContext)
+        LauncherManager.stopService(context.applicationContext)
         if (!wasRunning) {
             delay(350L)
             if (!MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING, false)) return true
             // The service appeared during the race window; make sure its receiver sees
             // the stop command and then wait for the normal acknowledgement below.
-            CoreServiceManager.stopVService(context.applicationContext)
+            LauncherManager.stopService(context.applicationContext)
         }
 
         val deadline = SystemClock.elapsedRealtime() + VPN_STOP_TIMEOUT_MILLIS
@@ -214,7 +214,7 @@ object MobileTinaExpiryManager {
 
         // Keep the expiry record intact. WorkManager will retry and send the stop command
         // again instead of deleting configs while the VPN may still be using them.
-        CoreServiceManager.stopVService(context.applicationContext)
+        LauncherManager.stopService(context.applicationContext)
         return false
     }
 

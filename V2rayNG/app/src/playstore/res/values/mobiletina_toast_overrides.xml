@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_tile_first_use">برای استفاده از این قابلیت، ابتدا یک سرور در برنامه اضافه کنید</string>
     <string name="import_subscription_failure">وارد کردن اشتراک ناموفق بود</string>
@@ -54,4 +54,4 @@
     <string name="toast_warning_pref_proxysharing_short">اتصال از شبکهٔ محلی فعال است؛ مطمئن شوید شبکه قابل اعتماد است</string>
     <string name="update_already_latest_version">برنامه به آخرین نسخه به‌روزرسانی شده است</string>
     <string name="update_checking_for_update">در حال بررسی نسخهٔ جدید…</string>
-</resources>
+<string name="toast_invalid_observatory_duration">مدت‌زمان نامعتبر است؛ مقداری مانند 3m یا 30s وارد کنید.</string><string name="toast_invalid_observatory_sampling">مقدار نمونه‌گیری نامعتبر است؛ یک عدد مثبت وارد کنید.</string><string name="toast_malformed_json">پیکربندی نامعتبر است.</string><string name="toast_malformed_json_detail">پیکربندی نامعتبر است: %1$s</string><string name="toast_permission_denied_for">مجوز %1$s داده نشد.</string><string name="toast_profile_storage_cleanup">پروفایل‌های بدون استفاده حذف شدند: %1$d</string><string name="toast_profile_storage_cleanup_skipped">وضعیت ذخیره‌سازی پروفایل‌ها به‌طور مطمئن مشخص نشد؛ چیزی حذف نشد.</string><string name="toast_system_vpn_settings_unavailable">تنظیمات VPN سیستم در دسترس نیست.</string><string name="subscription_updater_job_tips">کار در پس‌زمینه انجام می‌شود و پیشرفت آن در اعلان نمایش داده خواهد شد.</string><string name="title_update_subscription_no_subscription">اشتراکی وجود ندارد.</string><string name="title_update_subscription_result">%1$d کانفیگ به‌روز شد (%2$d موفق، %3$d ناموفق، %4$d ردشده).</string><string name="title_webdav_config_setting_unknown">ابتدا WebDAV را تنظیم کنید.</string><string name="permission_camera">دوربین</string><string name="permission_notification">اعلان‌ها</string><string name="permission_local_network">شبکهٔ محلی</string></resources>

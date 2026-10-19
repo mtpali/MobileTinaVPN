@@ -7,12 +7,17 @@ import android.os.IBinder
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.core.CoreServiceManager
-import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.AppLocaleManager
+import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.util.LogUtil
-import com.v2ray.ang.util.MyContextWrapper
 import java.lang.ref.SoftReference
+import kotlinx.coroutines.*
 
 class CoreProxyOnlyService : Service(), ServiceControl {
+    private val setupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var setupJob: Job? = null
+    @Volatile private var stopping = false
     /**
      * Initializes the service.
      */
@@ -30,8 +35,16 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * @return The start mode.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
-        CoreServiceManager.startCoreLoop(null)
+
+        if (stopping) return START_NOT_STICKY
+        if (MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING) && CoreServiceManager.isRunning()) return START_STICKY
+        if (setupJob?.isActive == true) return START_STICKY
+        setupJob = setupScope.launch {
+            if (isActive && !stopping && !CoreServiceManager.startCoreLoop(null)) stopSelf()
+        }
+
         return START_STICKY
     }
 
@@ -39,9 +52,11 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * Destroys the service.
      */
     override fun onDestroy() {
-        super.onDestroy()
+        stopping = true
+        setupScope.cancel()
         CoreServiceManager.stopCoreLoop()
         CoreServiceManager.acknowledgeStopRequest()
+        super.onDestroy()
     }
 
     /**
@@ -89,9 +104,7 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * @param newBase The new base context.
      */
     override fun attachBaseContext(newBase: Context?) {
-        val context = newBase?.let {
-            MyContextWrapper.wrap(newBase, SettingsManager.getLocale())
-        }
+        val context = newBase?.let(AppLocaleManager::localizedContext)
         super.attachBaseContext(context)
     }
 }

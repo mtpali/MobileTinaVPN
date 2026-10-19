@@ -4,7 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import com.v2ray.ang.AppConfig
-import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.service.CoreProxyOnlyService
 import com.v2ray.ang.service.CoreRootService
 import com.v2ray.ang.service.CoreVpnService
@@ -30,7 +30,7 @@ object V2RayServiceManager {
     )
 
     fun startVService(context: Context) {
-        CoreServiceManager.startVService(context)
+        LauncherManager.startService(context)
     }
 
     fun stopVService(context: Context) {
@@ -40,7 +40,7 @@ object V2RayServiceManager {
         // possible concrete service explicitly. A few OEM builds occasionally delay/drop the
         // dynamically registered cross-process broadcast; stopService reaches the actual Android
         // component and its idempotent onDestroy teardown even in that state.
-        CoreServiceManager.stopVService(app)
+        LauncherManager.stopService(app)
         arrayOf(
             CoreVpnService::class.java,
             CoreProxyOnlyService::class.java,
