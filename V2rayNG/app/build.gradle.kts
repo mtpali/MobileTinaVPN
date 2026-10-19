@@ -68,8 +68,8 @@ android {
         applicationId = "com.v2ray.mobiletina"
         minSdk = 24
         targetSdk = 37
-        versionCode = 751
-        versionName = "2.3.11"
+        versionCode = 752
+        versionName = "2.3.12"
         multiDexEnabled = true
         // Keep only the app's supported Persian locale plus Android's mandatory
         // unqualified/default resources. This also strips dependency translations.

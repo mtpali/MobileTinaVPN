@@ -1,9 +1,9 @@
-name: MobileTina 2.3.11 Samsung Fix Hardened APK
+name: MobileTina 2.3.12 Samsung Fix Hardened APK
 
 on:
   push:
     branches:
-      - agent/mobiletina-2.3.11-samsung-fixes
+      - agent/mobiletina-2.3.12-samsung-fixes
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.3.11"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.12"' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
           grep -q 'MobileTinaGeoAssetManager.ensureReady' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
@@ -201,16 +201,16 @@ jobs:
 
           SHA=$(sha256sum "$APK" | awk '{print $1}')
           SIZE=$(stat -c '%s' "$APK")
-          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.11-samsung-fix-hardened.sha256
-          printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\n' "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.11-samsung-fix-hardened-report.txt
+          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened.sha256
+          printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\n' "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened-report.txt
 
       - name: Upload hardened fixed APK
         uses: actions/upload-artifact@v7
         with:
-          name: MobileTina-2.3.11-samsung-fix-hardened
+          name: MobileTina-2.3.12-samsung-fix-hardened
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.11-samsung-fix-hardened.sha256
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.11-samsung-fix-hardened-report.txt
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened-report.txt
           if-no-files-found: error
           retention-days: 90
