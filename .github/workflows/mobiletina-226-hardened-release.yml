@@ -1,4 +1,4 @@
-name: AliMTP 2.3.11 Personal Hardened Release
+name: AliMTP 2.3.12 Personal Hardened Release
 
 on:
   push:
@@ -27,8 +27,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'applicationId = "com.v2ray.alimtp"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.3.11"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionCode = 751' V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.12"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionCode = 752' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = true' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = true' V2rayNG/app/build.gradle.kts
@@ -362,18 +362,18 @@ jobs:
 
           SHA=$(sha256sum "$APK" | awk '{print $1}')
           SIZE=$(stat -c '%s' "$APK")
-          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.11-armv7-armv8-hardened.sha256
+          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-armv7-armv8-hardened.sha256
           printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\nsigning_source=%s\n' \
             "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" "$SIGNING_SOURCE" \
-            > V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.11-hardened-report.txt
+            > V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-hardened-report.txt
 
       - name: Upload hardened AliMTP APK
         uses: actions/upload-artifact@v7
         with:
-          name: AliMTP-2.3.11-armv7-armv8-personal-final
+          name: AliMTP-2.3.12-armv7-armv8-personal-final
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.11-armv7-armv8-hardened.sha256
-            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.11-hardened-report.txt
+            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-armv7-armv8-hardened.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-hardened-report.txt
           if-no-files-found: error
           retention-days: 90

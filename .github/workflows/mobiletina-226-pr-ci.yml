@@ -1,9 +1,9 @@
-name: AliMTP 2.3.11 Personal PR CI
+name: AliMTP 2.3.12 Personal PR CI
 
 on:
   pull_request:
     branches:
-      - agent/v2rayng-2.3.11-base
+      - agent/v2rayng-2.3.12-base
   workflow_dispatch:
 
 jobs:
@@ -19,8 +19,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'applicationId = "com.v2ray.alimtp"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.3.11"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionCode = 751' V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.12"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionCode = 752' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = false' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = false' V2rayNG/app/build.gradle.kts
 
@@ -218,15 +218,15 @@ jobs:
             exit 1
           fi
 
-          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.11-armv7-armv8.sha256
+          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-armv7-armv8.sha256
 
       - name: Upload final AliMTP dual-ARM APK
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: AliMTP-2.3.11-armv7-armv8-personal-stable
+          name: AliMTP-2.3.12-armv7-armv8-personal-stable
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.11-armv7-armv8.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-armv7-armv8.sha256
           if-no-files-found: error
           retention-days: 90
