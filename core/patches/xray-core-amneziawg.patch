@@ -340,3 +340,18 @@
 @@ -20 +20 @@
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+--- a/proxy/masque/client.go
++++ b/proxy/masque/client.go
+@@ -13 +13 @@
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+--- a/proxy/masque/server.go
++++ b/proxy/masque/server.go
+@@ -13 +13 @@
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+--- a/proxy/masque/server_test.go
++++ b/proxy/masque/server_test.go
+@@ -17 +17 @@
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"

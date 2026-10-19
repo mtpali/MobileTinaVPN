@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 class UpstreamProfileCompatibilityTest {
     @Test fun `previous AWG profile survives decode edit and encode`() {
         val gson = Gson()
-        val oldJson = """{"configType":"WIREGUARD","isAmneziaWG":true,"localAddress":"10.0.0.2/32","allowedIPs":"0.0.0.0/0","keepAlive":1500,"reserved":"0,0,0","awgJc":4,"awgH1":"1-4","awgI1":"<b 0x01020304>"}"""
+        val oldJson = """{"configVersion":3,"subscriptionId":"","addedTime":0,"remarks":"legacy","configType":"WIREGUARD","isAmneziaWG":true,"localAddress":"10.0.0.2/32","allowedIPs":"0.0.0.0/0","keepAlive":1500,"reserved":"0,0,0","awgJc":4,"awgH1":"1-4","awgI1":"<b 0x01020304>"}"""
         val profile = gson.fromJson(oldJson, ProfileItem::class.java)
         val restored = gson.fromJson(gson.toJson(profile.copy(remarks = "updated", remoteDNS = "1.1.1.1")), ProfileItem::class.java)
         assertTrue(restored.isAmneziaWG)

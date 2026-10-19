@@ -111,6 +111,7 @@ class CoreTestService : Service() {
         return START_NOT_STICKY
     }
 
+    @Synchronized
     private fun handleMeasureStart(message: TestServiceMessage, startId: Int, requestId: String) {
         LogUtil.i(AppConfig.TAG, "CoreTestService: starting test group ${message.subscriptionId}")
         // A Smart Connect START supersedes prior work even if its CANCEL was delayed.
@@ -138,8 +139,10 @@ class CoreTestService : Service() {
                 onlyTcp = message.onlyTcp,
                 maxConcurrency = if (message.batchId > 0L) SMART_CONNECT_MAX_CONCURRENCY else null,
                 onEvent = { event ->
-                    if (generation == batchGeneration.get() && activeWorkers.containsKey(worker)) {
-                        handleWorkerEvent(event, message, requestId) { activeWorkers.remove(worker) }
+                    synchronized(this@CoreTestService) {
+                        if (generation == batchGeneration.get() && activeWorkers.containsKey(worker)) {
+                            handleWorkerEvent(event, message, requestId) { activeWorkers.remove(worker) }
+                        }
                     }
                 }
             )
@@ -195,6 +198,7 @@ class CoreTestService : Service() {
         }
     }
 
+    @Synchronized
     private fun handleMeasureCancel() {
         batchGeneration.incrementAndGet()
         LogUtil.i(AppConfig.TAG, "CoreTestService received cancel message, cancelling ${activeWorkers.size} active workers")
@@ -203,6 +207,7 @@ class CoreTestService : Service() {
         stopSelf()
     }
 
+    @Synchronized
     private fun cancelWorkers() {
         // Reply for each cancelled request, never for a newer UI request that has not started here.
         activeWorkers.entries.toList().forEach { (worker, requestId) ->
