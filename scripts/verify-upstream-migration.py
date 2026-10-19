@@ -16,7 +16,7 @@ def require(condition, message):
         raise SystemExit(message)
 
 require(re.search(r'applicationId = "com\.v2ray\.(mobiletina|alimtp)"', build), "Edition applicationId changed")
-for expected in ('versionName = "2.3.11"', 'versionCode = 751', 'compose = true', 'viewBinding = true', 'isMinifyEnabled = true', 'isShrinkResources = true'):
+for expected in ('versionName = "2.3.12"', 'versionCode = 752', 'compose = true', 'viewBinding = true', 'isMinifyEnabled = true', 'isShrinkResources = true'):
     require(expected in build, f"Missing build contract: {expected}")
 
 manifest = ET.parse(APP / "src/main/AndroidManifest.xml").getroot()

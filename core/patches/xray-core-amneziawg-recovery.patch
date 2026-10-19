@@ -1,31 +1,73 @@
 --- a/proxy/wireguard/client.go
 +++ b/proxy/wireguard/client.go
-@@ -231,0 +232 @@
-+	amneziaHandlers.Delete(h)
-@@ -255,0 +257,4 @@
-+        // Protected binds outlive an individual proxied request, including after resume.
-+        dialCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
-+        defer cancel()
-+
-@@ -262 +267 @@
--			conn, err := h.streamSettings.FinalMask.DialUDP(ctx, dest)
-+			conn, err := h.streamSettings.FinalMask.DialUDP(dialCtx, dest)
-@@ -268 +273 @@
--			conn, err := internet.DialSystem(ctx, dest, h.streamSettings.SocketSettings)
-+			conn, err := internet.DialSystem(dialCtx, dest, h.streamSettings.SocketSettings)
-@@ -330,2 +335,2 @@
+@@ -33,6 +33,7 @@
+ 
+ type Handler struct {
+ 	p policy.Manager
++	conf *DeviceConfig
+ 
+ 	canup *atomic.Bool
+ 	tnet  *Net
+@@ -141,6 +142,11 @@
+ 	bind.ctx = context.Background()
+ 	bind.resolveFunc = MakeResolveLocal(d, streamSettings)
+ 	bind.listenFunc = func(ctx context.Context) (net.PacketConn, error) {
++		if conf.AmneziaConfig != "" {
++			var cancel context.CancelFunc
++			ctx, cancel = mobileAmneziaDialContext(ctx)
++			defer cancel()
++		}
+ 		dest, err := net.ParseDestination("udp:" + conf.Peers[0].Endpoint)
+ 		if err != nil {
+ 			return nil, err
+@@ -194,13 +200,14 @@
+ 		for _, ip := range peer.AllowedIps {
+ 			cfg.WriteString("allowed_ip=" + ip + "\n")
+ 		}
 -		if peer.KeepAlive != "" {
 -			cfg.WriteString("persistent_keepalive_interval=" + peer.KeepAlive + "\n")
-+		if keepAlive := mobileAmneziaKeepalive(h.conf.AmneziaConfig != "", peer.KeepAlive); keepAlive != "" {
++		if keepAlive := mobileAmneziaKeepalive(conf.AmneziaConfig != "", peer.KeepAlive); keepAlive != "" {
 +			cfg.WriteString("persistent_keepalive_interval=" + keepAlive + "\n")
-@@ -342,0 +348 @@
-+	if h.conf.AmneziaConfig != "" { amneziaHandlers.Store(h, struct{}{}) }
+ 		}
+ 	}
+ 
+ 	return &Handler{
+ 		p: p,
++		conf: conf,
+ 
+ 		canup: blockup.canup,
+ 		tnet:  tnet,
+@@ -303,6 +310,7 @@
+ func (h *Handler) Close() (err error) {
+ 	h.mu.Lock()
+ 	defer h.mu.Unlock()
++	amneziaHandlers.Delete(h)
+ 	if h.dev != nil {
+ 		h.dev.Close()
+ 		h.dev = nil
+@@ -326,7 +334,13 @@
+ 		}
+ 		h.ipc = ""
+ 	}
+-	return h.dev.Up()
++	if err := h.dev.Up(); err != nil {
++		return err
++	}
++	if h.conf.AmneziaConfig != "" {
++		amneziaHandlers.Store(h, struct{}{})
++	}
++	return nil
+ }
+ 
+ func MakeResolveLocal(d dns.Client, streamSettings *internet.MemoryStreamConfig) func(host string) (net.IP, error) {
 --- /dev/null
 +++ b/proxy/wireguard/mobile_recovery.go
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,77 @@
 +package wireguard
 +
 +import (
++	"context"
++	"time"
 +	"encoding/hex"
 +	"strconv"
 +	"sync"
@@ -52,7 +94,7 @@
 +func (h *Handler) refreshAmneziaBinding() error {
 +	h.mu.Lock()
 +	defer h.mu.Unlock()
-+	if h.dev == nil || h.tun == nil || h.conf.AmneziaConfig == "" {
++	if h.dev == nil || h.conf == nil || h.conf.AmneziaConfig == "" || !h.canup.Load() {
 +		return nil
 +	}
 +	// A previously failed bind can leave the device up with no receive socket.
@@ -92,12 +134,22 @@
 +	}
 +	return configured
 +}
++
++// Preserve routing/protection values while detaching a long-lived AWG socket
++// from the first request's cancellation. Each socket reopen is still bounded.
++func mobileAmneziaDialContext(ctx context.Context) (context.Context, context.CancelFunc) {
++    return context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
++}
 --- /dev/null
 +++ b/proxy/wireguard/mobile_recovery_test.go
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,58 @@
 +package wireguard
 +
-+import "testing"
++import (
++ "testing"
++ "context"
++ "time"
++)
 +
 +func TestMobileAmneziaKeepalive(t *testing.T) {
 +	for _, tt := range []struct {
@@ -125,4 +177,27 @@
 +	if h.dev != nil {
 +		t.Fatal("refresh resurrected a closed device")
 +	}
++}
++
++func TestAmneziaCloseUnregistersHandler(t *testing.T) {
++    h := &Handler{}
++    amneziaHandlers.Store(h, struct{}{})
++    defer amneziaHandlers.Delete(h)
++    if err := h.Close(); err != nil { t.Fatal(err) }
++    if _, present := amneziaHandlers.Load(h); present { t.Fatal("closed handler remains registered") }
++    if err := RefreshAmneziaBindings(); err != nil { t.Fatal(err) }
++}
++
++func TestAmneziaDialDetachesRequestCancellation(t *testing.T) {
++    type contextKey struct{}
++    parent, cancelParent := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "protected"))
++    cancelParent()
++    ctx, cancel := mobileAmneziaDialContext(parent)
++    defer cancel()
++    if ctx.Err() != nil { t.Fatalf("request cancellation killed AWG dial: %v", ctx.Err()) }
++    if ctx.Value(contextKey{}) != "protected" { t.Fatal("routing/protection context was lost") }
++    deadline, ok := ctx.Deadline()
++    if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 15*time.Second { t.Fatal("AWG dial must have a 15-second bound") }
++    cancel()
++    if ctx.Err() != context.Canceled { t.Fatal("explicit cleanup did not cancel AWG dial") }
 +}

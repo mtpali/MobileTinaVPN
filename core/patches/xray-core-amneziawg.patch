@@ -1,22 +1,49 @@
 --- a/go.mod
 +++ b/go.mod
-@@ -5,0 +6 @@
+@@ -3,6 +3,7 @@
+ go 1.27
+ 
+ require (
 +	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
+ 	github.com/apernet/quic-go v0.61.1-0.20260806010916-184d081eef3e
+ 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344
+ 	github.com/golang/mock v1.7.0-rc.1
 --- a/infra/conf/wireguard.go
 +++ b/infra/conf/wireguard.go
-@@ -5,0 +6,3 @@
+@@ -3,6 +3,9 @@
+ import (
+ 	"encoding/base64"
+ 	"encoding/hex"
 +	"fmt"
 +
 +	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
-@@ -21 +24 @@
+ 	"strconv"
+ 	"strings"
+ 
+@@ -18,7 +21,7 @@
+ 	PublicKey    string   `json:"publicKey"`
+ 	PreSharedKey string   `json:"preSharedKey"`
+ 	Endpoint     string   `json:"endpoint"`
 -	KeepAlive    uint32   `json:"keepAlive"`
 +	KeepAlive    *uint32  `json:"keepAlive"`
-@@ -47,2 +50,2 @@
+ 	AllowedIPs   []string `json:"allowedIPs,omitempty"`
+ 
+ 	Level uint32 `json:"level"`
+@@ -44,8 +47,8 @@
+ 	}
+ 
+ 	config.Endpoint = c.Endpoint
 -	if c.KeepAlive != 0 {
 -		config.KeepAlive = strconv.FormatUint(uint64(c.KeepAlive), 10)
 +	if c.KeepAlive != nil {
 +		config.KeepAlive = strconv.FormatUint(uint64(*c.KeepAlive), 10)
-@@ -68,0 +72,149 @@
+ 	}
+ 	if c.AllowedIPs == nil {
+ 		config.AllowedIps = []string{"0.0.0.0/0", "::0/0"}
+@@ -66,6 +69,155 @@
+ 	MTU         int32                  `json:"mtu"`
+ 	Reserved    []byte                 `json:"reserved"`
+ 	DNS         []string               `json:"remoteDNS"`
 +	Amnezia     *AmneziaWGConfig       `json:"amnezia,omitempty"`
 +}
 +
@@ -166,11 +193,20 @@
 +		request.WriteString("disable_cookies=true\n")
 +	}
 +	return request.String(), nil
-@@ -125,0 +278,4 @@
+ }
+ 
+ func (c *WireGuardConfig) Build() (proto.Message, error) {
+@@ -123,6 +275,10 @@
+ 		return nil, errors.New(`"reserved" should be empty or 3 bytes`)
+ 	}
+ 	config.Reserved = c.Reserved
 +	config.AmneziaConfig, err = c.Amnezia.BuildIPC()
 +	if err != nil {
 +		return nil, err
 +	}
+ 
+ 	config.IsClient = c.IsClient
+ 	config.NoKernelTun = c.NoKernelTun
 --- /dev/null
 +++ b/infra/conf/wireguard_amnezia_test.go
 @@ -0,0 +1,65 @@
@@ -259,34 +295,68 @@
 +}
 --- a/proxy/wireguard/bind.go
 +++ b/proxy/wireguard/bind.go
-@@ -15 +15 @@
+@@ -12,7 +12,7 @@
+ 
+ 	"github.com/xtls/xray-core/common"
+ 	"github.com/xtls/xray-core/common/errors"
 -	"golang.zx2c4.com/wireguard/conn"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
+ )
+ 
+ type bind struct {
 --- a/proxy/wireguard/client.go
 +++ b/proxy/wireguard/client.go
-@@ -12 +12 @@
+@@ -10,7 +10,7 @@
+ 	"sync/atomic"
+ 	"time"
+ 
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
-@@ -30 +30 @@
+ 
+ 	"github.com/xtls/xray-core/common"
+ 	"github.com/xtls/xray-core/common/buf"
+@@ -28,7 +28,7 @@
+ 	"github.com/xtls/xray-core/features/stats"
+ 	"github.com/xtls/xray-core/transport"
+ 	"github.com/xtls/xray-core/transport/internet"
 -	"golang.zx2c4.com/wireguard/device"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/device"
-@@ -314,0 +315,6 @@
-+	if h.conf.AmneziaConfig != "" {
-+		cfg.WriteString(h.conf.AmneziaConfig)
-+		if !strings.HasSuffix(h.conf.AmneziaConfig, "\n") {
+ )
+ 
+ type Handler struct {
+@@ -179,6 +179,12 @@
+ 	bind.reserved = conf.Reserved
+ 	var cfg strings.Builder
+ 	cfg.WriteString("private_key=" + conf.SecretKey + "\n")
++	if conf.AmneziaConfig != "" {
++		cfg.WriteString(conf.AmneziaConfig)
++		if !strings.HasSuffix(conf.AmneziaConfig, "\n") {
 +			cfg.WriteByte('\n')
 +		}
 +	}
+ 	for _, peer := range conf.Peers {
+ 		cfg.WriteString("public_key=" + peer.PublicKey + "\n")
+ 		if peer.PreSharedKey != "" {
 --- a/proxy/wireguard/config.pb.go
 +++ b/proxy/wireguard/config.pb.go
-@@ -111,0 +112 @@
+@@ -109,6 +109,7 @@
+ 	IsClient      bool                   `protobuf:"varint,8,opt,name=is_client,json=isClient,proto3" json:"is_client,omitempty"`
+ 	NoKernelTun   bool                   `protobuf:"varint,9,opt,name=no_kernel_tun,json=noKernelTun,proto3" json:"no_kernel_tun,omitempty"`
+ 	DNS           []string               `protobuf:"bytes,10,rep,name=DNS,proto3" json:"DNS,omitempty"`
 +	AmneziaConfig string `protobuf:"bytes,11,opt,name=amnezia_config,json=amneziaConfig,proto3" json:"amnezia_config,omitempty"`
-@@ -208,0 +210,4 @@
+ 	unknownFields protoimpl.UnknownFields
+ 	sizeCache     protoimpl.SizeCache
+ }
+@@ -206,34 +207,13 @@
+ 	return nil
+ }
+ 
 +func (x *DeviceConfig) GetAmneziaConfig() string {
 +	if x != nil { return x.AmneziaConfig }; return ""
 +}
 +
-@@ -211,26 +216 @@
+ var File_proxy_wireguard_config_proto protoreflect.FileDescriptor
+ 
 -const file_proxy_wireguard_config_proto_rawDesc = "" +
 -	"\n" +
 -	"\x1cproxy/wireguard/config.proto\x12\x14xray.proxy.wireguard\x1a\x1acommon/protocol/user.proto\"\xad\x01\n" +
@@ -314,44 +384,105 @@
 -	" \x03(\tR\x03DNSB^\n" +
 -	"\x18com.xray.proxy.wireguardP\x01Z)github.com/xtls/xray-core/proxy/wireguard\xaa\x02\x14Xray.Proxy.WireGuardb\x06proto3"
 +const file_proxy_wireguard_config_proto_rawDesc = "\x0a\x1c\x70\x72\x6f\x78\x79\x2f\x77\x69\x72\x65\x67\x75\x61\x72\x64\x2f\x63\x6f\x6e\x66\x69\x67\x2e\x70\x72\x6f\x74\x6f\x12\x14\x78\x72\x61\x79\x2e\x70\x72\x6f\x78\x79\x2e\x77\x69\x72\x65\x67\x75\x61\x72\x64\x1a\x1a\x63\x6f\x6d\x6d\x6f\x6e\x2f\x70\x72\x6f\x74\x6f\x63\x6f\x6c\x2f\x75\x73\x65\x72\x2e\x70\x72\x6f\x74\x6f\x22\xad\x01\x0a\x0a\x50\x65\x65\x72\x43\x6f\x6e\x66\x69\x67\x12\x1d\x0a\x0a\x70\x75\x62\x6c\x69\x63\x5f\x6b\x65\x79\x18\x01\x20\x01\x28\x09\x52\x09\x70\x75\x62\x6c\x69\x63\x4b\x65\x79\x12\x24\x0a\x0e\x70\x72\x65\x5f\x73\x68\x61\x72\x65\x64\x5f\x6b\x65\x79\x18\x02\x20\x01\x28\x09\x52\x0c\x70\x72\x65\x53\x68\x61\x72\x65\x64\x4b\x65\x79\x12\x1a\x0a\x08\x65\x6e\x64\x70\x6f\x69\x6e\x74\x18\x03\x20\x01\x28\x09\x52\x08\x65\x6e\x64\x70\x6f\x69\x6e\x74\x12\x1d\x0a\x0a\x6b\x65\x65\x70\x5f\x61\x6c\x69\x76\x65\x18\x04\x20\x01\x28\x09\x52\x09\x6b\x65\x65\x70\x41\x6c\x69\x76\x65\x12\x1f\x0a\x0b\x61\x6c\x6c\x6f\x77\x65\x64\x5f\x69\x70\x73\x18\x05\x20\x03\x28\x09\x52\x0a\x61\x6c\x6c\x6f\x77\x65\x64\x49\x70\x73\x22\xdb\x02\x0a\x0c\x44\x65\x76\x69\x63\x65\x43\x6f\x6e\x66\x69\x67\x12\x1d\x0a\x0a\x73\x65\x63\x72\x65\x74\x5f\x6b\x65\x79\x18\x01\x20\x01\x28\x09\x52\x09\x73\x65\x63\x72\x65\x74\x4b\x65\x79\x12\x1a\x0a\x08\x65\x6e\x64\x70\x6f\x69\x6e\x74\x18\x02\x20\x03\x28\x09\x52\x08\x65\x6e\x64\x70\x6f\x69\x6e\x74\x12\x36\x0a\x05\x70\x65\x65\x72\x73\x18\x03\x20\x03\x28\x0b\x32\x20\x2e\x78\x72\x61\x79\x2e\x70\x72\x6f\x78\x79\x2e\x77\x69\x72\x65\x67\x75\x61\x72\x64\x2e\x50\x65\x65\x72\x43\x6f\x6e\x66\x69\x67\x52\x05\x70\x65\x65\x72\x73\x12\x30\x0a\x05\x75\x73\x65\x72\x73\x18\x05\x20\x03\x28\x0b\x32\x1a\x2e\x78\x72\x61\x79\x2e\x63\x6f\x6d\x6d\x6f\x6e\x2e\x70\x72\x6f\x74\x6f\x63\x6f\x6c\x2e\x55\x73\x65\x72\x52\x05\x75\x73\x65\x72\x73\x12\x10\x0a\x03\x6d\x74\x75\x18\x04\x20\x01\x28\x05\x52\x03\x6d\x74\x75\x12\x1a\x0a\x08\x72\x65\x73\x65\x72\x76\x65\x64\x18\x06\x20\x01\x28\x0c\x52\x08\x72\x65\x73\x65\x72\x76\x65\x64\x12\x1b\x0a\x09\x69\x73\x5f\x63\x6c\x69\x65\x6e\x74\x18\x08\x20\x01\x28\x08\x52\x08\x69\x73\x43\x6c\x69\x65\x6e\x74\x12\x22\x0a\x0d\x6e\x6f\x5f\x6b\x65\x72\x6e\x65\x6c\x5f\x74\x75\x6e\x18\x09\x20\x01\x28\x08\x52\x0b\x6e\x6f\x4b\x65\x72\x6e\x65\x6c\x54\x75\x6e\x12\x10\x0a\x03\x44\x4e\x53\x18\x0a\x20\x03\x28\x09\x52\x03\x44\x4e\x53\x12\x25\x0a\x0e\x61\x6d\x6e\x65\x7a\x69\x61\x5f\x63\x6f\x6e\x66\x69\x67\x18\x0b\x20\x01\x28\x09\x52\x0d\x61\x6d\x6e\x65\x7a\x69\x61\x43\x6f\x6e\x66\x69\x67\x42\x5e\x0a\x18\x63\x6f\x6d\x2e\x78\x72\x61\x79\x2e\x70\x72\x6f\x78\x79\x2e\x77\x69\x72\x65\x67\x75\x61\x72\x64\x50\x01\x5a\x29\x67\x69\x74\x68\x75\x62\x2e\x63\x6f\x6d\x2f\x78\x74\x6c\x73\x2f\x78\x72\x61\x79\x2d\x63\x6f\x72\x65\x2f\x70\x72\x6f\x78\x79\x2f\x77\x69\x72\x65\x67\x75\x61\x72\x64\xaa\x02\x14\x58\x72\x61\x79\x2e\x50\x72\x6f\x78\x79\x2e\x57\x69\x72\x65\x47\x75\x61\x72\x64\x62\x06\x70\x72\x6f\x74\x6f\x33"
+ 
+ var (
+ 	file_proxy_wireguard_config_proto_rawDescOnce sync.Once
 --- a/proxy/wireguard/config.proto
 +++ b/proxy/wireguard/config.proto
-@@ -29,0 +30 @@
+@@ -27,4 +27,5 @@
+   bool is_client = 8;
+   bool no_kernel_tun = 9;
+   repeated string DNS = 10;
 +  string amnezia_config = 11;
+ }
+\ No newline at end of file
 --- a/proxy/wireguard/netstack.go
 +++ b/proxy/wireguard/netstack.go
-@@ -25 +25 @@
+@@ -23,7 +23,7 @@
+ 	"github.com/xtls/xray-core/common/buf"
+ 	xnet "github.com/xtls/xray-core/common/net"
+ 	xtun "github.com/xtls/xray-core/proxy/tun"
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ 
+ 	"golang.org/x/net/dns/dnsmessage"
+ )
 --- a/proxy/wireguard/server.go
 +++ b/proxy/wireguard/server.go
-@@ -28,2 +28,2 @@
+@@ -26,8 +26,8 @@
+ 	"github.com/xtls/xray-core/transport/internet"
+ 	"github.com/xtls/xray-core/transport/internet/stat"
+ 	"golang.org/x/crypto/curve25519"
 -	"golang.zx2c4.com/wireguard/device"
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ )
+ 
+ type Server struct {
 --- a/proxy/wireguard/tun_default.go
 +++ b/proxy/wireguard/tun_default.go
-@@ -9 +9 @@
+@@ -6,7 +6,7 @@
+ 	"errors"
+ 	"net/netip"
+ 
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ )
+ 
+ func createKernelTun([]netip.Addr, []netip.Addr, int) (tdev tun.Device, tnet *Net, err error) {
 --- a/proxy/wireguard/tun_linux.go
 +++ b/proxy/wireguard/tun_linux.go
-@@ -20 +20 @@
+@@ -17,7 +17,7 @@
+ 	"github.com/vishvananda/netlink"
+ 	"github.com/xtls/xray-core/common/errors"
+ 	xnet "github.com/xtls/xray-core/common/net"
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ )
+ 
+ var tableIndex atomic.Uint32
 --- a/proxy/masque/client.go
 +++ b/proxy/masque/client.go
-@@ -13 +13 @@
+@@ -9,7 +9,7 @@
+ 	"sync"
+ 	"time"
+ 
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ 
+ 	"github.com/xtls/xray-core/common"
+ 	"github.com/xtls/xray-core/common/buf"
 --- a/proxy/masque/server.go
 +++ b/proxy/masque/server.go
-@@ -13 +13 @@
+@@ -10,7 +10,7 @@
+ 	"slices"
+ 	"sync"
+ 
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ 
+ 	"github.com/xtls/xray-core/common"
+ 	"github.com/xtls/xray-core/common/buf"
 --- a/proxy/masque/server_test.go
 +++ b/proxy/masque/server_test.go
-@@ -17 +17 @@
+@@ -18,7 +18,7 @@
+ 	"github.com/xtls/xray-core/common/protocol"
+ 	"github.com/xtls/xray-core/features/routing"
+ 	"github.com/xtls/xray-core/transport"
 -	"golang.zx2c4.com/wireguard/tun"
 +	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ )
+ 
+ type fakeTunnelConn struct {
+--- a/proxy/wireguard/netstack_test.go
++++ b/proxy/wireguard/netstack_test.go
+@@ -15,7 +15,7 @@
+ 
+ 	"github.com/xtls/xray-core/common/net"
+ 	"golang.org/x/net/dns/dnsmessage"
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ )
+ 
+ type closeHandler struct{}
