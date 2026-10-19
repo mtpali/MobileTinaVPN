@@ -68,6 +68,7 @@ PY
 
 (
     cd "$patched_core"
+    gofmt -w infra/conf/wireguard.go infra/conf/wireguard_amnezia_test.go proxy/wireguard/*.go
     GOWORK=off go mod tidy
     GOWORK=off go test ./infra/conf -run 'TestAmneziaWG' -count=1
     GOWORK=off go test ./proxy/wireguard -count=1

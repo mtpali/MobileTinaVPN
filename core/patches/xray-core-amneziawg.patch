@@ -8,6 +8,14 @@
 +	"fmt"
 +
 +	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
+@@ -21 +24 @@
+-	KeepAlive    uint32   `json:"keepAlive"`
++	KeepAlive    *uint32  `json:"keepAlive"`
+@@ -47,2 +50,2 @@
+-	if c.KeepAlive != 0 {
+-		config.KeepAlive = strconv.FormatUint(uint64(c.KeepAlive), 10)
++	if c.KeepAlive != nil {
++		config.KeepAlive = strconv.FormatUint(uint64(*c.KeepAlive), 10)
 @@ -68,0 +72,149 @@
 +	Amnezia     *AmneziaWGConfig       `json:"amnezia,omitempty"`
 +}
@@ -165,7 +173,7 @@
 +	}
 --- /dev/null
 +++ b/infra/conf/wireguard_amnezia_test.go
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,65 @@
 +package conf
 +
 +import (
@@ -222,6 +230,14 @@
 +			t.Fatalf("expected invalid config to fail: %+v", config)
 +		}
 +	}
++}
++
++func TestAmneziaWGExplicitZeroKeepalive(t *testing.T) {
++    zero := uint32(0)
++    config := &WireGuardPeerConfig{PublicKey: strings.Repeat("00", 32), Endpoint: "198.51.100.1:51820", KeepAlive: &zero}
++    peer, err := config.Build()
++    if err != nil { t.Fatal(err) }
++    if peer.KeepAlive != "0" { t.Fatalf("explicit zero was lost: %q", peer.KeepAlive) }
 +}
 --- /dev/null
 +++ b/proxy/wireguard/amnezia_config_test.go

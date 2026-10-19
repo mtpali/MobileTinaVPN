@@ -13,6 +13,8 @@ permissions:
 jobs:
   hardened-arm:
     runs-on: ubuntu-latest
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -245,6 +247,20 @@ jobs:
           zipinfo -1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u > /tmp/apk-abis
           diff -u /tmp/expected-abis /tmp/apk-abis
 
+          $ANDROID_HOME/build-tools/37.0.0/aapt2 dump badging "$APK" > /tmp/apk-badging.txt
+          grep -Fq "package: name='$EXPECTED_APP_ID'" /tmp/apk-badging.txt
+          grep -Fq "versionName='2.3.11'" /tmp/apk-badging.txt
+          grep -Fq "versionCode='4000751'" /tmp/apk-badging.txt
+          zipinfo -1 "$APK" > /tmp/apk-entries.txt
+          for abi in arm64-v8a armeabi-v7a; do
+            for native in libgojni.so libhev-socks5-tunnel.so libhevsockstun.so; do
+              grep -Fxq "lib/$abi/$native" /tmp/apk-entries.txt
+            done
+            unzip -p "$APK" "lib/$abi/libgojni.so" > "/tmp/$abi-libgojni.so"
+            grep -aFq 'github.com/amnezia-vpn/amneziawg-go/v3' "/tmp/$abi-libgojni.so"
+            grep -aFq 'RefreshAmneziaBindings' "/tmp/$abi-libgojni.so"
+          done
+
           # The bundled geo files are what the atomic first-run bootstrap repairs from.
           for asset in geosite.dat geoip.dat; do
             SIZE=$(unzip -p "$APK" "assets/$asset" | wc -c)
@@ -354,8 +370,8 @@ jobs:
           SHA=$(sha256sum "$APK" | awk '{print $1}')
           SIZE=$(stat -c '%s' "$APK")
           printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.11-armv7-armv8-hardened.sha256
-          printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\nsigning_source=%s\n' \
-            "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" "$SIGNING_SOURCE" \
+          printf 'source_head_sha=%s\nbuild_commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\nsigning_source=%s\n' \
+            "$SOURCE_HEAD_SHA" "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" "$SIGNING_SOURCE" \
             > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.11-hardened-report.txt
 
       - name: Upload hardened MobileTina APK

@@ -22,7 +22,7 @@
 +	if h.conf.AmneziaConfig != "" { amneziaHandlers.Store(h, struct{}{}) }
 --- /dev/null
 +++ b/proxy/wireguard/mobile_recovery.go
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,69 @@
 +package wireguard
 +
 +import (
@@ -91,37 +91,6 @@
 +		return "25"
 +	}
 +	return configured
-+}
-+package wireguard
-+
-+import "testing"
-+
-+func TestMobileAmneziaKeepalive(t *testing.T) {
-+	for _, tt := range []struct {
-+		awg         bool
-+		input, want string
-+	}{
-+		{true, "", "25"}, {true, "1500", "25"}, {true, "60", "25"},
-+		{true, "25", "25"}, {true, "10", "10"}, {true, "0", "0"},
-+		{false, "", ""}, {false, "1500", "1500"}, {false, "0", "0"},
-+		{true, "invalid", "invalid"},
-+	} {
-+		if got := mobileAmneziaKeepalive(tt.awg, tt.input); got != tt.want {
-+			t.Errorf("awg=%v interval=%q: got %q want %q", tt.awg, tt.input, got, tt.want)
-+		}
-+	}
-+}
-+
-+func TestRefreshClosedAmneziaHandler(t *testing.T) {
-+	h := &Handler{}
-+	amneziaHandlers.Store(h, struct{}{})
-+	defer amneziaHandlers.Delete(h)
-+	if err := RefreshAmneziaBindings(); err != nil {
-+		t.Fatal(err)
-+	}
-+	if h.dev != nil {
-+		t.Fatal("refresh resurrected a closed device")
-+	}
 +}
 --- /dev/null
 +++ b/proxy/wireguard/mobile_recovery_test.go

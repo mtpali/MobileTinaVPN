@@ -57,6 +57,8 @@
 
     <!-- Day/Night theme: inherit common values and set light-mode-specific items -->
     <style name="MobileTinaLegacyTheme" parent="MobileTinaLegacyBase">
+        <item name="fontFamily">@font/text</item>
+        <item name="android:fontFamily">@font/text</item>
         <!-- day/night-specific overrides (light/default) -->
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
