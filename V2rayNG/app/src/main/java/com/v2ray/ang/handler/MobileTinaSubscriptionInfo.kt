@@ -4,6 +4,7 @@ import android.os.SystemClock
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.dto.entities.SubscriptionItem
+import com.v2ray.ang.util.JsonUtil
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.InetSocketAddress
@@ -110,12 +111,18 @@ object MobileTinaSubscriptionInfo {
         if (httpPort > 0) {
             builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(AppConfig.LOOPBACK, httpPort)))
         }
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(item.url)
             .get()
             .header("User-Agent", item.userAgent?.takeIf { it.isNotBlank() } ?: "v2rayNG/${BuildConfig.VERSION_NAME}")
             .header("Connection", "close")
-            .build()
+        if (!item.requestHeaders.isNullOrBlank()) {
+            val headers = JsonUtil.parseString(item.requestHeaders.orEmpty())?.takeIf { it.isJsonObject }?.asJsonObject
+            headers?.entrySet()?.forEach { (name, value) ->
+                if (value.isJsonPrimitive) requestBuilder.header(name, value.asString)
+            }
+        }
+        val request = requestBuilder.build()
 
         return runCatching {
             builder.build().newCall(request).execute().use { response ->

@@ -5,7 +5,7 @@
         <item name="cornerSize">50%</item>
     </style>
 
-    <style name="MobileTinaAppTheme" parent="AppThemeDayNight.NoActionBar">
+    <style name="MobileTinaAppTheme" parent="MobileTinaLegacyTheme.NoActionBar">
         <item name="fontFamily">@font/text</item>
         <item name="android:fontFamily">@font/text</item>
     </style>

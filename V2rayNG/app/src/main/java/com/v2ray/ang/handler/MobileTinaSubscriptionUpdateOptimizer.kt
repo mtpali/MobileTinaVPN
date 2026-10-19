@@ -72,7 +72,7 @@ object MobileTinaSubscriptionUpdateOptimizer {
             return MobileTinaSubscriptionMarkerManager.update(cache)
         }
 
-        val remoteHash = remoteFingerprint(snapshot.body, item.filter)
+        val remoteHash = remoteFingerprint(snapshot.body, listOf(item.filter.orEmpty(), item.requestHeaders.orEmpty(), item.userAgent.orEmpty()).joinToString("\u0000"))
         val localHash = localFingerprint(cache.guid)
         val savedRemoteHash = MmkvManager.decodeSettingsString(REMOTE_HASH_PREFIX + cache.guid)
         val savedLocalHash = MmkvManager.decodeSettingsString(LOCAL_HASH_PREFIX + cache.guid)

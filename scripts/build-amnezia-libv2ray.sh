@@ -11,8 +11,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 android_lib="$repo_root/AndroidLibXrayLite"
 core_patch="$repo_root/core/patches/xray-core-amneziawg.patch"
 output_aar="$(realpath -m "$1")"
-core_module="github.com/autorepobot/xray-core"
-core_version="v0.0.0-20260704054728-50c452881eb9"
+core_module="github.com/xtls/xray-core"
+core_version="$(awk '$1 == "github.com/xtls/xray-core" { print $2; exit }' "$android_lib/go.mod")"
+[[ -n "$core_version" ]]
 task_dir="$(mktemp -d)"
 patched_core="$task_dir/xray-core"
 wrapper="$task_dir/AndroidLibXrayLite"
@@ -42,9 +43,8 @@ patch --batch --forward --silent -p1 -d "$patched_core" < "$core_patch"
 patch --batch --forward --silent -p1 -d "$patched_core" < "$repo_root/core/patches/xray-core-amneziawg-recovery.patch"
 cp "$repo_root/core/mobile-recovery/libv2ray_recovery.go" "$wrapper/"
 
-# The pinned Xray snapshot predates upstream's WireGuard initialization-race
-# fix (XTLS/Xray-core#6461). Keep Device.Up() under Handler.mu, matching the
-# serialized device lifecycle used by Exclave's WireGuard client.
+# The current upstream already contains XTLS/Xray-core#6461. Assert that the AWG
+# backend patch preserves its locked Device.Up() lifecycle.
 python3 - "$patched_core/proxy/wireguard/client.go" <<'PY'
 from pathlib import Path
 import sys
@@ -68,6 +68,7 @@ PY
 
 (
     cd "$patched_core"
+    GOWORK=off go mod tidy
     GOWORK=off go test ./infra/conf -run 'TestAmneziaWG' -count=1
     GOWORK=off go test ./proxy/wireguard -count=1
 )
