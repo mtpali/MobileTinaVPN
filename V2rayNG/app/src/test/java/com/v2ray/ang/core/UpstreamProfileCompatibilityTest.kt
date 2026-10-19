@@ -3,6 +3,7 @@ package com.v2ray.ang.core
 import com.google.gson.Gson
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.SubscriptionItem
+import com.v2ray.ang.ui.server.ServerUiState
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -11,7 +12,11 @@ class UpstreamProfileCompatibilityTest {
         val gson = Gson()
         val oldJson = """{"configVersion":3,"subscriptionId":"","addedTime":0,"remarks":"legacy","configType":"WIREGUARD","isAmneziaWG":true,"localAddress":"10.0.0.2/32","allowedIPs":"0.0.0.0/0","keepAlive":1500,"reserved":"0,0,0","awgJc":4,"awgH1":"1-4","awgI1":"<b 0x01020304>"}"""
         val profile = gson.fromJson(oldJson, ProfileItem::class.java)
-        val restored = gson.fromJson(gson.toJson(profile.copy(remarks = "updated", remoteDNS = "1.1.1.1")), ProfileItem::class.java)
+        val editor = ServerUiState.fromProfileItem(profile).apply {
+            remarks = "updated"
+            remoteDNS = "1.1.1.1"
+        }
+        val restored = gson.fromJson(gson.toJson(editor.toProfileItem(profile)), ProfileItem::class.java)
         assertTrue(restored.isAmneziaWG)
         assertEquals(4, restored.awgJc)
         assertEquals("1-4", restored.awgH1)

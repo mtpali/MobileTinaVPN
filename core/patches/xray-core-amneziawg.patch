@@ -475,3 +475,14 @@
  )
  
  type fakeTunnelConn struct {
+--- a/proxy/wireguard/netstack_test.go
++++ b/proxy/wireguard/netstack_test.go
+@@ -15,7 +15,7 @@
+ 
+ 	"github.com/xtls/xray-core/common/net"
+ 	"golang.org/x/net/dns/dnsmessage"
+-	"golang.zx2c4.com/wireguard/tun"
++	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+ )
+ 
+ type closeHandler struct{}
