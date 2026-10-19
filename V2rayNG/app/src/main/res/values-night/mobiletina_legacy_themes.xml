@@ -3,6 +3,8 @@
 
     <!-- Night theme: inherit the shared MobileTinaLegacyBase and only override night-specific items -->
     <style name="MobileTinaLegacyTheme" parent="MobileTinaLegacyBase">
+        <item name="fontFamily">@font/text</item>
+        <item name="android:fontFamily">@font/text</item>
         <!-- Night mode specific overrides -->
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>

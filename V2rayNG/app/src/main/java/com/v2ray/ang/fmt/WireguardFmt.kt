@@ -6,6 +6,7 @@ import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.idnHost
 import com.v2ray.ang.extension.nullIfBlank
 import com.v2ray.ang.extension.removeWhiteSpace
+import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.Utils
 import java.net.URI
 import java.net.URLDecoder
@@ -41,7 +42,7 @@ object WireguardFmt : FmtBase() {
         config.remoteDNS = queryParam["dns"] ?: AppConfig.WIREGUARD_LOCAL_REMOTE_DNS
         config.reserved = queryParam["reserved"]?.nullIfBlank()
         config.allowedIPs = queryParam["allowedips"]
-        config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it > 0 }
+        config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it >= 0 }
         config.finalMask = (queryParam["fm"] ?: queryParam["finalmask"] ?: queryParam["finalMask"])?.nullIfBlank()
 
         return config
@@ -117,7 +118,7 @@ object WireguardFmt : FmtBase() {
         config.preSharedKey = peerParams["presharedkey"]?.nullIfBlank()
         config.allowedIPs = peerParams["allowedips"]?.takeIf { it.isNotBlank() }
             ?: "0.0.0.0/0,::/0"
-        config.keepAlive = peerParams["persistentkeepalive"]?.toIntOrNull()?.takeIf { it > 0 }
+        config.keepAlive = peerParams["persistentkeepalive"]?.toIntOrNull()?.takeIf { it >= 0 }
         parseEndpoint(peerParams["endpoint"].orEmpty()).also {
             config.server = it.first
             config.serverPort = it.second
@@ -197,11 +198,13 @@ object WireguardFmt : FmtBase() {
             .distinct()
             .joinToString(",")
         config.mtu?.let { query["mtu"] = it.toString() }
+        config.remoteDNS?.takeIf { it.isNotBlank() }?.let { query["dns"] = it.removeWhiteSpace().orEmpty() }
+        config.finalMask?.takeIf { it.isNotBlank() }?.let { query["fm"] = it }
         config.preSharedKey?.let { query["presharedkey"] = it.removeWhiteSpace().orEmpty() }
         config.allowedIPs?.takeIf { it.isNotBlank() }?.let {
             query["allowedips"] = it.removeWhiteSpace().orEmpty()
         }
-        config.keepAlive?.takeIf { it > 0 }?.let { query["keepalive"] = it.toString() }
+        config.keepAlive?.takeIf { it >= 0 }?.let { query["keepalive"] = it.toString() }
         return toUri(config, config.secretKey, query)
     }
 
@@ -230,6 +233,8 @@ object WireguardFmt : FmtBase() {
             .distinct()
             .forEach { appendLine("Address = $it") }
         config.mtu?.let { appendLine("MTU = $it") }
+        config.remoteDNS?.takeIf { it.isNotBlank() }?.let { appendLine("DNS = $it") }
+        config.finalMask?.takeIf { it.isNotBlank() }?.let { appendLine("FinalMask = ${JsonUtil.parseString(it)?.toString() ?: it}") }
 
         if (config.isAmneziaWG) {
             appendInt("Jc", config.awgJc)
@@ -258,10 +263,7 @@ object WireguardFmt : FmtBase() {
             if (config.awgRandomizePacketTrailers) appendLine("RandomizePacketTrailers = true")
             if (config.awgDisableCookieReplies) appendLine("DisableCookieReplies = true")
         }
-        if (config.remoteDNS != null) {
-            dicQuery["dns"] = config.remoteDNS.removeWhiteSpace().orEmpty()
-        }
-        config.finalMask?.nullIfBlank()?.let { dicQuery["fm"] = it }
+
 
         appendLine()
         appendLine("[Peer]")
@@ -273,7 +275,7 @@ object WireguardFmt : FmtBase() {
         config.allowedIPs?.takeIf { it.isNotBlank() }?.let {
             appendLine("AllowedIPs = ${it.replace('\n', ',')}")
         }
-        config.keepAlive?.takeIf { it > 0 }?.let {
+        config.keepAlive?.takeIf { it >= 0 }?.let {
             appendLine("PersistentKeepalive = $it")
         }
         config.reserved?.takeIf { it.isNotBlank() && it != "0,0,0" }?.let {
