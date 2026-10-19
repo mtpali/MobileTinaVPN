@@ -51,8 +51,18 @@ for name, library in catalog["libraries"].items():
 
 for path in (APP / "src").rglob("*.xml"):
     ET.parse(path)
+resource_types = {}
+for path in (APP / "src/main/res/values").glob("*.xml"):
+    for item in ET.parse(path).getroot():
+        name = item.get("name")
+        if name:
+            resource_types.setdefault(name, set()).add(item.tag)
 for path in SOURCE.rglob("*.kt"):
-    require(not re.search(r"^(<<<<<<<|=======|>>>>>>>)", path.read_text(), re.M), f"Unresolved conflict: {path}")
+    text = path.read_text()
+    require(not re.search(r"^(<<<<<<<|=======|>>>>>>>)", text, re.M), f"Unresolved conflict: {path}")
+    for kind, name in re.findall(r"(?<![.\w])R\.(string|plurals)\.(\w+)", text):
+        if name in resource_types:
+            require(kind in resource_types[name], f"{path}: {name} must be declared as {kind}")
 
 for relative in ("ui/BaseActivity.kt", "ui/MainActivity.kt", "ui/SubSettingActivity.kt"):
     require((SOURCE / relative).is_file(), f"Retained product screen missing: {relative}")
