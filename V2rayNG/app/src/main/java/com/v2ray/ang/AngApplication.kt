@@ -52,7 +52,6 @@ class AngApplication : Application() {
         MmkvManager.encodeSettings(AppConfig.PREF_ROOT_MODE_ENABLE, false)
         MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, false)
         MmkvManager.encodeSettings(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)
-        MmkvManager.encodeSettings(AppConfig.PREF_IS_BOOTED, false)
 
         // Initialize WorkManager with the custom configuration
         WorkManager.initialize(this, workManagerConfiguration)

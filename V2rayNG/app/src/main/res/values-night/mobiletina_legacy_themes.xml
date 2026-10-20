@@ -5,6 +5,9 @@
     <style name="MobileTinaLegacyTheme" parent="MobileTinaLegacyBase">
         <item name="fontFamily">@font/text</item>
         <item name="android:fontFamily">@font/text</item>
+        <!-- OLED surfaces stay black at every elevation. -->
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="elevationOverlayEnabled">false</item>
         <!-- Night mode specific overrides -->
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>

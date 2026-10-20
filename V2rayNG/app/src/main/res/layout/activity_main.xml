@@ -123,8 +123,9 @@
 
                     <com.google.android.material.imageview.ShapeableImageView
                         android:id="@+id/fab_auto"
-                        android:layout_width="236dp"
-                        android:layout_height="236dp"
+                        android:layout_width="224dp"
+                        android:layout_height="224dp"
+                        android:adjustViewBounds="true"
                         android:background="@android:color/transparent"
                         android:clickable="true"
                         android:contentDescription="@string/mobiletina_manual_smart_connect"
