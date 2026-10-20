@@ -218,6 +218,7 @@ jobs:
           chmod 755 gradlew
           ./gradlew \
             :app:testPlaystoreDebugUnitTest \
+            :app:testFdroidDebugUnitTest \
             :app:compilePlaystoreDebugKotlin \
             :app:assemblePlaystoreDebug \
             :app:assembleFdroidDebug \
@@ -384,5 +385,6 @@ jobs:
             V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-hardened-report.txt
             V2rayNG/app/build/reports/tests/
             V2rayNG/app/build/test-results/
+            V2rayNG/app/build/outputs/mapping/playstoreRelease/mapping.txt
           if-no-files-found: error
           retention-days: 90
