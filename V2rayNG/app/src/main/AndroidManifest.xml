@@ -262,12 +262,7 @@
         <service
             android:name=".service.CoreTestService"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:process=":tasks">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="test" />
-        </service>
+            android:process=":tasks" />
 
         <service
             android:name=".service.SubscriptionUpdateService"

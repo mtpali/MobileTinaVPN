@@ -85,11 +85,8 @@ object MessageHelper {
             requestId?.let { intent.putExtra(EXTRA_REQUEST_ID, it) }
             when (message.key) {
                 AppConfig.MSG_MEASURE_CONFIG_START -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        ContextCompat.startForegroundService(ctx, intent)
-                    } else {
-                        ctx.startService(intent)
-                    }
+                    // CoreTestService reports progress to the UI without a test notification.
+                    ctx.startService(intent)
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_CANCEL -> {

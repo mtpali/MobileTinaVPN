@@ -16,7 +16,6 @@
     <!-- Notifications -->
     <string name="notification_channel_service">v2rayNG xidməti</string>
     <string name="notification_channel_subscription_updates">Abunəlik yenilənmələri</string>
-    <string name="notification_channel_connection_checks">Bağlantı yoxlamaları</string>
     <string name="notification_action_stop_v2ray">Dayandır</string>
     <string name="toast_permission_denied">İcazə rədd edildi</string>
     <string name="toast_permission_denied_notification">Bildiriş icazəsi rədd edildi</string>
@@ -176,11 +175,6 @@
     <string name="title_vpn_settings">VPN Tənzimləmələri</string>
     <string name="title_pref_per_app_proxy">Tətbiq üzrə proksi</string>
     <string name="summary_pref_per_app_proxy">Ümumi: seçilmiş tətbiqlər proksidən istifadə edir, seçilməyənlər birbaşa qoşulur;\nYayınma rejimi: seçilmiş tətbiqlər birbaşa qoşulur, seçilməyənlər proksidən istifadə edir.\nProksi istifadə etməli olan tətbiqlərin avtomatik seçilməsi seçimi menyudadır.</string>
-    <string name="title_pref_is_booted">Cihaz açılanda qoşul</string>
-    <string name="summary_pref_is_booted">Cihaz işə düşdükdən sonra avtomatik olaraq seçilmiş serverə qoşulun. Android fonda başladılmanı məhdudlaşdıra bilər.</string>
-    <string name="title_system_vpn_settings">Sistem VPN tənzimləmələri</string>
-    <string name="summary_system_vpn_settings">Bu cihaz dəstəkləyirsə, Həmişə açıq VPN-i konfiqurasiya etmək üçün Android VPN tənzimləmələrini açın.</string>
-    <string name="toast_system_vpn_settings_unavailable">Sistem VPN tənzimləmələri əlçatmazdır.</string>
 
 
     <string name="subscription_updater_job_tips">Tapşırıq arxa fonda icra olunacaq və gedişat məlumatı bildirişdə göstəriləcək.</string>
@@ -302,7 +296,6 @@
     <string name="title_core_loglevel">Jurnal Səviyyəsi</string>
     <string name="title_outbound_domain_resolve_method">Çıxış domeninin həll edilməsi</string>
     <string name="title_mode">Rejim</string>
-    <string name="title_mode_help">Ətraflı kömək üçün toxunun</string>
     <string name="title_language">Dil</string>
     <string name="title_ui_settings">İstifadəçi interfeysi tənzimləmələri</string>
     <string name="title_pref_ui_mode_night">İstifadəçi interfeysi rejim tənzimləmələri</string>

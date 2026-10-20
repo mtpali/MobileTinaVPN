@@ -50,6 +50,32 @@ Both Playstore and F-Droid unit suites now decrypt every social, hidden-access a
 and compare their contents with digests from the preceding working release. This checks exact
 text preservation without putting protected text in fixtures or test output.
 
+## Silent tests, settings and OLED (2026-10-20)
+
+Real Ping and Smart Connect use a regular, user-initiated test service with in-app progress.
+The dispatcher, service, manifest and notification channel were changed together so there is
+no test notification and no foreground-service notification deadline. Batch acknowledgement,
+request identity, generation cancellation and the eight-worker Smart Connect cap are retained.
+The VPN's connection notification and subscription-update service retain their existing behavior.
+
+The mode-help link, system-VPN settings shortcut and auto-connect-at-startup setting are removed
+from the settings UI, handlers, resources and persistence API. Boot/package-update handling still
+recovers pending subscription expiry work, but no longer starts a VPN. Android's separate
+Always-on VPN support is retained. Sniffing and dynamic color default to off consistently in
+the settings, core and theme readers; saved choices are respected.
+
+Dark mode uses black backgrounds and surfaces in both Compose screens and the retained View
+screens, including black window backgrounds and disabled elevation tint. Dynamic dark palettes
+also receive the OLED surfaces when explicitly enabled. Foreground/accent colors are preserved.
+The uploaded white.webp replaces only MobileTina's asset (SHA-256
+`cd00d42eed21c4790e94ce7dbd62740304dbce31c25bc8cb2ac492bd4a95d3b3`),
+with a 224dp square fitted image. Its release integrity digest and CI artwork digest were updated
+together. AliMTP's artwork and image dimensions remain unchanged.
+
+Regression coverage checks regular-service dispatch and cancellation while retaining the batch
+request identity. The migration audit rejects reintroduced settings entries or test notifications
+and checks that boot expiry recovery and disabled defaults remain present.
+
 ## Device acceptance
 
 **Not run in the editing environment:** Gradle commands could not start because its Java runtime

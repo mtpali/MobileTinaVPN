@@ -13,7 +13,6 @@ import com.tencent.mmkv.MMKVHandler
 import com.tencent.mmkv.MMKVLogLevel
 import com.tencent.mmkv.MMKVRecoverStrategic
 import com.v2ray.ang.AppConfig.DEFAULT_SUBSCRIPTION_ID
-import com.v2ray.ang.AppConfig.PREF_IS_BOOTED
 import com.v2ray.ang.AppConfig.PREF_ROUTING_RULESET
 import com.v2ray.ang.AppConfig.TAG
 import com.v2ray.ang.BuildConfig
@@ -970,24 +969,6 @@ object MmkvManager {
         return settingsStorage.decodeStringSet(key)
     }
 
-
-    /**
-     * Encodes the start on boot setting.
-     *
-     * @param startOnBoot Whether to start on boot.
-     */
-    fun encodeStartOnBoot(startOnBoot: Boolean) {
-        encodeSettings(PREF_IS_BOOTED, startOnBoot)
-    }
-
-    /**
-     * Decodes the start on boot setting.
-     *
-     * @return Whether to start on boot.
-     */
-    fun decodeStartOnBoot(): Boolean {
-        return decodeSettingsBool(PREF_IS_BOOTED, false)
-    }
 
     //endregion
 
