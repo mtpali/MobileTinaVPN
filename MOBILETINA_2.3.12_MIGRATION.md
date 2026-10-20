@@ -36,6 +36,20 @@ Playstore and F-Droid debug assembly, hardened release assembly, signature/resou
 and native AWG tests. JUnit Vintage runs the preceding release's JUnit 4 regressions alongside
 the upstream Jupiter suite.
 
+## Protected text compatibility
+
+The previous migration APK could throw `AEADBadTagException` while normalizing subscription
+names. Its brand record was encrypted with the original 2.2.6 key context, but decryption derived
+a different key from the new release's `VERSION_NAME`. That immutable record context is now
+independent of the APK version. GCM authentication and the integrity guard remain enabled.
+The working edition also normalizes the F-Droid application ID suffix for its social/brand
+records, matching its existing hidden-access vault. The personal edition keeps its shared
+vault namespace and its distinct personal records.
+
+Both Playstore and F-Droid unit suites now decrypt every social, hidden-access and brand record
+and compare their contents with digests from the preceding working release. This checks exact
+text preservation without putting protected text in fixtures or test output.
+
 ## Device acceptance
 
 **Not run in the editing environment:** Gradle commands could not start because its Java runtime
