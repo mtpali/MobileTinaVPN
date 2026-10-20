@@ -18,7 +18,6 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.v2ray.ang.R
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.helper.CustomDividerItemDecoration
-import com.v2ray.ang.util.MyContextWrapper
 import com.v2ray.ang.util.Utils
 
 
@@ -42,10 +41,11 @@ abstract class BaseActivity : AppCompatActivity() {
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         AppLocaleManager.onActivityCreated(this)
-        if (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK != android.content.res.Configuration.UI_MODE_NIGHT_YES) {
-            WindowCompat.getInsetsController(window, window.decorView).apply {
-                isAppearanceLightStatusBars = true
-            }
+        val dark = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
         }
     }
 

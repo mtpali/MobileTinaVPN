@@ -71,9 +71,9 @@ android {
         versionCode = 752
         versionName = "2.3.12"
         multiDexEnabled = true
-        // Keep only the app's supported Persian locale plus Android's mandatory
+        // Keep only the default English locale plus Android's mandatory
         // unqualified/default resources. This also strips dependency translations.
-        resourceConfigurations.add("fa")
+        resourceConfigurations.add("en")
 
         buildConfigField("boolean", "MOBILETINA_HARDENED_BUILD", hardenedReleaseBuild.toString())
         buildConfigField(

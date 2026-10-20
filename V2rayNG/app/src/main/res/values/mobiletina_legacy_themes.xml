@@ -8,7 +8,7 @@
         <item name="colorPrimaryContainer">@color/md_theme_primaryContainer</item>
         <item name="colorOnPrimaryContainer">@color/md_theme_onPrimaryContainer</item>
 
-        <!-- Secondary colors - accent color: orange -->
+        <!-- Secondary colors - accent color: blue -->
         <item name="colorSecondary">@color/md_theme_secondary</item>
         <item name="colorOnSecondary">@color/md_theme_onSecondary</item>
         <item name="colorSecondaryContainer">@color/md_theme_secondaryContainer</item>

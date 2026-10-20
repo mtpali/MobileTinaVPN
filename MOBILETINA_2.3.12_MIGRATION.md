@@ -20,7 +20,7 @@ versionName from 2.2.6 to 2.3.12. Shop and personal editions remain separate bra
 | Stop and reconnect | TUN closes before publication and slow native cleanup; new startup waits for native cleanup on IO. |
 | Force Stop / OEM Close All | Own-service snapshot reconciliation retained. |
 | GeoIP custom JSON | Compact private/cn rules normalize before either TUN or proxy-only processing; full geo databases are bundled with pinned checksums. |
-| Subscription privacy and sharing | Existing hidden drawer entry, read-only screen, ten-click action, allowed ten-second QR hold and protected strings remain. |
+| Subscription privacy and sharing | Existing hidden drawer entry, read-only screen, ten-click action, ten-click manual QR action and protected strings remain. |
 | Subscription expiry and usage | Comment markers, stop acknowledgement, retirement and usage metadata retained; HTTP request headers participate in fetch identity. |
 | Branding and artwork | Existing images checked byte-for-byte; custom shell keeps its original theme. |
 | Per-app proxy | Current Compose implementation retains the five pinned apps and persisted package selection. |
@@ -61,20 +61,50 @@ The VPN's connection notification and subscription-update service retain their e
 The mode-help link, system-VPN settings shortcut and auto-connect-at-startup setting are removed
 from the settings UI, handlers, resources and persistence API. Boot/package-update handling still
 recovers pending subscription expiry work, but no longer starts a VPN. Android's separate
-Always-on VPN support is retained. Sniffing and dynamic color default to off consistently in
-the settings, core and theme readers; saved choices are respected.
+Always-on VPN support is retained. The general sniffing preference defaults off. Dynamic color
+and the language picker, their preference keys, and unused language resources have been removed.
 
 Dark mode uses black backgrounds and surfaces in both Compose screens and the retained View
-screens, including black window backgrounds and disabled elevation tint. Dynamic dark palettes
-also receive the OLED surfaces when explicitly enabled. Foreground/accent colors are preserved.
+screens, including black window backgrounds and disabled elevation tint. Orange accents are
+replaced by blue. The shared theme policy applies Light/Dark/System both to AppCompat and Compose;
+the theme selector is the first settings row. The fixed default locale keeps the original base text.
 The uploaded white.webp replaces only MobileTina's asset (SHA-256
 `cd00d42eed21c4790e94ce7dbd62740304dbce31c25bc8cb2ac492bd4a95d3b3`),
-with a 224dp square fitted image. Its release integrity digest and CI artwork digest were updated
-together. AliMTP's artwork and image dimensions remain unchanged.
+with a 226dp square fitted image. Its release integrity digest and CI artwork digest match the
+source image. AliMTP retains its own artwork; its automatic button is 238dp. Both buttons grew 2dp.
 
 Regression coverage checks regular-service dispatch and cancellation while retaining the batch
 request identity. The migration audit rejects reintroduced settings entries or test notifications
 and checks that boot expiry recovery and disabled defaults remain present.
+
+## Direct .ir routing and subscription taps
+
+The exact `domain:ir` suffix rule already exists in the Iran routing preset. A default-enabled
+"Bypass .ir domains" switch now applies that rule before existing rules in generated and full
+custom JSON runtime configurations without replacing user rules, DNS, balancers or proxy settings.
+A genuine, unchained Freedom outbound is reused or created with a collision-safe tag. Generated
+DNS includes `.ir` among direct domains. Probe configs are excluded so Real Ping still measures
+the selected proxy. The route can be disabled from Routing settings.
+
+IP-only VPN requests need a domain for suffix matching. With general sniffing left off, bypass
+uses HTTP/TLS/QUIC detection with `routeOnly=true`, preserving the original destination IP.
+FakeDNS override entries are retained; the pinned Xray dispatcher continues to translate fake IPs
+regardless of routeOnly. Existing explicit destination-rewrite choices are respected. A hidden
+domain (for example ECH with encrypted DNS) or IP-literal request cannot be identified by a suffix
+rule; custom Lua routing scripts may take precedence. Those cases need device-specific acceptance.
+
+The manual subscription header now opens its existing protected QR dialog on ten consecutive
+clicks on the same subscription, with a two-second maximum gap. Switching subscription, changing
+Auto/Manual mode, or a stale sequence resets the count. The drawer's separate ten-second reveal,
+read-only screen and Raw-GitHub restriction remain intact.
+
+Only AliMTP restores the widget provider removed by its Playstore manifest overlay. Its widget
+label is VPN; the working edition's widget configuration is unchanged. All protected bitmap assets
+remain byte-for-byte unchanged during this UI/routing pass.
+
+Regression tests cover both UI engines' theme selection, QR tap isolation/reset and direct-route
+priority, idempotence, unchained outbounds, preserved custom data, FakeDNS entries, routing-only
+sniffing, disabled-policy fast paths and source profile identity.
 
 ## Device acceptance
 
@@ -84,7 +114,7 @@ cannot load `libjli.so`. GitHub Actions is the build/test authority for this cha
 **Not run without a device/emulator:** VPN/proxy/root cold start and duplicate start; stop during
 setup; repeated stop and immediate reconnect; sleep/wake and Wi-Fi/cellular handover racing stop;
 OEM Close All/Force Stop; existing-data upgrade; first-run permissions; hidden subscription access,
-QR/copy holds and expiry; IME, keyboard, D-pad, TalkBack and activity recreation in migrated screens.
+QR clicks/copy actions and expiry; IME, keyboard, D-pad, TalkBack and activity recreation in migrated screens.
 
 A green build does not establish these runtime outcomes. Keep the migration PRs unmerged until
 the exact artifacts and the product's device scenarios are accepted. Ephemeral CI certificates

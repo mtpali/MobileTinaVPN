@@ -55,7 +55,7 @@ internal object MobileTinaFirstLaunchDialog {
         root.addView(View(activity).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(131, 58, 180), Color.rgb(253, 29, 29), Color.rgb(252, 175, 69))
+                intArrayOf(Color.rgb(13, 71, 161), Color.rgb(25, 118, 210), Color.rgb(66, 165, 245))
             ).apply { cornerRadius = dp(activity, 3).toFloat() }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 5)).apply {
             bottomMargin = dp(activity, 18)

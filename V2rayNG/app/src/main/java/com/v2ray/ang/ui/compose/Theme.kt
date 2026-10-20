@@ -1,7 +1,6 @@
 package com.v2ray.ang.ui.compose
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -20,8 +17,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.WindowCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.handler.MmkvManager
@@ -34,10 +31,10 @@ private val LightColor = lightColorScheme(
     onPrimary = Color(0xFFFFFFFF), // White
     primaryContainer = Color(0xFFE0E0E0), // Light Gray
     onPrimaryContainer = Color(0xFF000000), // Black
-    secondary = Color(0xFFf97910), // Orange
+    secondary = Color(0xFF1976D2), // Blue
     onSecondary = Color(0xFFFFFFFF), // White
-    secondaryContainer = Color(0xFFFFE8D6), // Pale Orange
-    onSecondaryContainer = Color(0xFF2B1700), // Dark Brown
+    secondaryContainer = Color(0xFFD6E9FF), // Pale Blue
+    onSecondaryContainer = Color(0xFF001D36), // Dark Blue
     tertiary = Color(0xFF009966), // Green
     onTertiary = Color(0xFFFFFFFF), // White
     tertiaryContainer = Color(0xFFA0F2D0), // Light Green
@@ -71,10 +68,10 @@ private val DarkColor = darkColorScheme(
     onPrimary = Color(0xFF303030), // Dark Gray
     primaryContainer = Color(0xFF474747), // Gray
     onPrimaryContainer = Color(0xFFE0E0E0), // Light Gray
-    secondary = Color(0xFFf97910), // Orange
-    onSecondary = Color(0xFF4E2600), // Dark Brown
-    secondaryContainer = Color(0xFF6F3800), // Brown
-    onSecondaryContainer = Color(0xFFFFE8D6), // Pale Orange
+    secondary = Color(0xFF90CAF9), // Blue
+    onSecondary = Color(0xFF003258), // Dark Blue
+    secondaryContainer = Color(0xFF0D47A1), // Blue
+    onSecondaryContainer = Color(0xFFD6E9FF), // Pale Blue
     tertiary = Color(0xFF83D6B5), // Mint Green
     onTertiary = Color(0xFF00382E), // Dark Teal
     tertiaryContainer = Color(0xFF005143), // Teal
@@ -121,8 +118,8 @@ internal fun ColorScheme.withOledSurfaces(): ColorScheme = copy(
 // Semantic Colors
 val colorPing = Color(0xFF009966) // Green
 val colorPingRed = Color(0xFFFF0099) // Pink Red
-val colorConfigType = Color(0xFFf97910) // Orange
-val colorFabActive = Color(0xFFf97910) // Orange
+val colorConfigType = Color(0xFF1976D2) // Blue
+val colorFabActive = Color(0xFF1976D2) // Blue
 val colorFabInactiveLight = Color(0xFF9C9C9C) // Gray
 val colorFabInactiveDark = Color(0xFF646464) // Dark Gray
 val dividerColorLight = Color(0xFFE0E0E0) // Light Gray
@@ -143,37 +140,23 @@ object ThemeManager {
     )
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
-    private val _dynamicColorEnabled = MutableStateFlow(
-        MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, AppConfig.DEFAULT_DYNAMIC_COLOR)
-    )
-    val dynamicColorEnabled: StateFlow<Boolean> = _dynamicColorEnabled.asStateFlow()
-
     fun setThemeMode(mode: String) {
         MmkvManager.encodeSettings(AppConfig.PREF_UI_MODE_NIGHT, mode)
         _themeMode.value = mode
-    }
-
-    fun setDynamicColorEnabled(enabled: Boolean) {
-        MmkvManager.encodeSettings(AppConfig.PREF_DYNAMIC_COLOR, enabled)
-        _dynamicColorEnabled.value = enabled
+        AppCompatDelegate.setDefaultNightMode(ThemeModePolicy.appCompatMode(mode))
     }
 
     fun refresh() {
         _themeMode.value =
             MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT, "0") ?: "0"
-        _dynamicColorEnabled.value =
-            MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, AppConfig.DEFAULT_DYNAMIC_COLOR)
+        AppCompatDelegate.setDefaultNightMode(ThemeModePolicy.appCompatMode(_themeMode.value))
     }
 }
 
 @Composable
 fun resolveDarkTheme(): Boolean {
     val mode by ThemeManager.themeMode.collectAsState()
-    return when (mode) {
-        "1" -> false
-        "2" -> true
-        else -> isSystemInDarkTheme()
-    }
+    return ThemeModePolicy.isDark(mode, isSystemInDarkTheme())
 }
 
 val LocalDarkTheme = compositionLocalOf { false }
@@ -183,16 +166,7 @@ fun AppTheme(
     darkTheme: Boolean = resolveDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val dynamicColor by ThemeManager.dynamicColorEnabled.collectAsState()
-    val context = LocalContext.current
-    val palette = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColor
-        else -> LightColor
-    }
+    val palette = if (darkTheme) DarkColor else LightColor
     val colorScheme = if (darkTheme) palette.withOledSurfaces() else palette
     val snackbarController = rememberAppSnackbarController()
 
