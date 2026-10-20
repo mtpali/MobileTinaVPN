@@ -21,6 +21,7 @@ object AppConfig {
     const val DEFAULT_SUBSCRIPTION_ID = "__default_subscription__"
 
     /** Preferences mapped to MMKV storage. */
+    const val PREF_BYPASS_IR_DOMAINS = "pref_bypass_ir_domains"
     const val PREF_SNIFFING_ENABLED = "pref_sniffing_enabled"
     const val DEFAULT_SNIFFING_ENABLED = false
     const val PREF_ROUTE_ONLY_ENABLED = "pref_route_only_enabled"
@@ -57,11 +58,7 @@ object AppConfig {
     const val PREF_CONFIRM_REMOVE = "pref_confirm_remove"
     const val PREF_DOUBLE_COLUMN_DISPLAY = "pref_double_column_display"
     const val PREF_GROUP_ALL_DISPLAY = "pref_group_all_display"
-    const val PREF_LANGUAGE = "pref_language"
-    const val PREF_APP_LOCALE_MIGRATED = "pref_app_locale_migrated"
     const val PREF_UI_MODE_NIGHT = "pref_ui_mode_night"
-    const val PREF_DYNAMIC_COLOR = "pref_dynamic_color"
-    const val DEFAULT_DYNAMIC_COLOR = false
     const val PREF_IPV6_ENABLED = "pref_ipv6_enabled"
     const val PREF_PREFER_IPV6 = "pref_prefer_ipv6"
     const val PREF_PROXY_SHARING = "pref_proxy_sharing_enabled"

@@ -57,6 +57,7 @@ import com.v2ray.ang.ui.compose.ItemDivider
 import com.v2ray.ang.ui.compose.NavigationBarsBottomPadding
 import com.v2ray.ang.ui.compose.ReorderableListItem
 import com.v2ray.ang.ui.compose.SelectListDialog
+import com.v2ray.ang.ui.compose.SettingsSwitchItem
 import com.v2ray.ang.ui.compose.SettingsListItem
 import com.v2ray.ang.ui.compose.colorConfigType
 import com.v2ray.ang.ui.compose.verticalScrollbar
@@ -206,6 +207,7 @@ fun RoutingSettingScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showPresetDialog by remember { mutableStateOf(false) }
 
+    var bypassIran by MmkvManager.rememberMmkvBool(AppConfig.PREF_BYPASS_IR_DOMAINS, true)
     val domainStrategies = stringArrayResource(R.array.routing_domain_strategy).toList()
     val lazyListState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
@@ -263,6 +265,14 @@ fun RoutingSettingScreen(
                 .verticalScrollbar(lazyListState),
             contentPadding = NavigationBarsBottomPadding()
         ) {
+            item(key = "bypass_ir_domains") {
+                SettingsSwitchItem(
+                    title = stringResource(R.string.routing_bypass_ir_domains),
+                    summary = stringResource(R.string.routing_bypass_ir_domains_summary),
+                    checked = bypassIran,
+                    onCheckedChange = { bypassIran = it },
+                )
+            }
             item(key = "domain_strategy") {
                 SettingsListItem(
                     title = stringResource(R.string.routing_settings_domain_strategy),

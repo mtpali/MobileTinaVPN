@@ -17,9 +17,7 @@ object SettingsChangeManager {
         AppConfig.PREF_CONFIRM_REMOVE,
         AppConfig.PREF_DOUBLE_COLUMN_DISPLAY,
         AppConfig.PREF_GROUP_ALL_DISPLAY,
-        AppConfig.PREF_LANGUAGE,
         AppConfig.PREF_UI_MODE_NIGHT,
-        AppConfig.PREF_DYNAMIC_COLOR,
     )
 
     /**

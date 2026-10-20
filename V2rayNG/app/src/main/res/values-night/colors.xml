@@ -10,7 +10,7 @@
     <color name="md_theme_primaryContainer">#474747</color>
     <color name="md_theme_onPrimaryContainer">#E0E0E0</color>
 
-    <!-- Secondary colors - accent color: orange -->
+    <!-- Secondary colors - accent color: blue -->
     <color name="md_theme_secondary">#90CAF9</color>
     <color name="md_theme_onSecondary">#003258</color>
     <color name="md_theme_secondaryContainer">#0D47A1</color>

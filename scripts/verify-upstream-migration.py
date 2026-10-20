@@ -27,7 +27,7 @@ require(launcher.get(android + "theme") == "@style/MobileTinaLegacyTheme.NoActio
 require(any(a.get(android + "name") == ".ui.SubSettingActivity" for a in activities), "Hidden subscriptions screen missing")
 
 contracts = {
-    "ui/MainActivity.kt": ("smartConnectAndStart", "stopServiceReliably", "MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L", "MobileTinaFirstLaunchDialog.showOnce", "import com.v2ray.ang.ui.server.ServerWireguardActivity"),
+    "ui/MainActivity.kt": ("smartConnectAndStart", "stopServiceReliably", "SubscriptionQrClickCounter()", "installManualSubscriptionClicks", "MobileTinaFirstLaunchDialog.showOnce", "import com.v2ray.ang.ui.server.ServerWireguardActivity"),
     "core/CoreConfigManager.kt": ("GeoIpRuleResolver.normalizeCustomRouting",),
     "core/CoreOutboundBuilder.kt": ("WireguardReservedPolicy.outboundBytes", "wireguard.remoteDNS = remotes", "AmneziaWGOptionsBean"),
     "core/CoreServiceManager.kt": ("nativeCleanup.get(15, TimeUnit.SECONDS)", "refreshAmneziaBindings", "networkMonitor === monitor"),
@@ -59,7 +59,7 @@ boot = (SOURCE / "receiver/BootReceiver.kt").read_text()
 require("MobileTinaExpiryManager.recoverPending" in boot, "Boot expiry recovery must survive startup-setting removal")
 require("LauncherManager" not in boot, "Boot receiver must not start a VPN")
 config = (SOURCE / "AppConfig.kt").read_text()
-for setting in ("SNIFFING_ENABLED", "DYNAMIC_COLOR"):
+for setting in ("SNIFFING_ENABLED",):
     require(f"const val DEFAULT_{setting} = false" in config, f"{setting} must default to disabled")
     for path in SOURCE.rglob("*.kt"):
         text = path.read_text()
@@ -72,7 +72,35 @@ night_colors = {c.get("name"): c.text for c in ET.parse(APP / "src/main/res/valu
 for name in ("md_theme_background", "md_theme_surface"):
     require(night_colors[name] == "#000000", f"OLED night resource must be black: {name}")
 theme = (SOURCE / "ui/compose/Theme.kt").read_text()
-require("if (darkTheme) palette.withOledSurfaces() else palette" in theme, "OLED must also cover manually enabled dynamic dark colors")
+require("if (darkTheme) palette.withOledSurfaces() else palette" in theme, "OLED must cover dark mode")
+require(theme.count("AppCompatDelegate.setDefaultNightMode") == 2, "Stored and newly selected themes must update legacy activities")
+require("ThemeModePolicy.isDark(mode, isSystemInDarkTheme())" in theme, "Compose and Views must share the theme policy")
+for path in SOURCE.rglob("*.kt"):
+    text = path.read_text()
+    for removed in ("PREF_DYNAMIC_COLOR", "DEFAULT_DYNAMIC_COLOR", "dynamicDarkColorScheme", "dynamicLightColorScheme", "PREF_LANGUAGE", "setApplicationLanguage", "MANUAL_SUBSCRIPTION_HOLD_MS"):
+        require(removed not in text, f"Removed appearance/language/hold behavior remains in {path}: {removed}")
+settings = (SOURCE / "ui/settings/SettingsActivity.kt").read_text()
+require(settings.index("R.string.title_pref_ui_mode_night") < settings.index("R.string.title_ui_settings"), "Theme selector must be the first settings row")
+require('resourceConfigurations.add("en")' in build, "Only the original default English locale may be packaged")
+locale_config = ET.parse(APP / "src/main/res/xml/locales_config.xml").getroot()
+require([item.get(android + "name") for item in locale_config] == ["en"], "Advertise only the default locale")
+for path in (APP / "src").rglob("*.xml"):
+    require(not re.match(r"values-(?:[a-z]{2,3})(?:$|-r)", path.parent.name) or path.parent.name.startswith("values-en"), f"Additional locale source remains: {path}")
+    for removed in ("title_language", "language_select", "title_pref_dynamic_color", "summary_pref_dynamic_color"):
+        require(removed not in path.read_text(), f"Removed preference resource remains: {path}: {removed}")
+core = (SOURCE / "core/CoreConfigManager.kt").read_text()
+runtime, latency = core.split("fun getV2rayConfig4Speedtest(", 1)
+require("IranDomainBypass.applyToRuntimeConfig" in runtime, "Runtime configs must apply the direct .ir policy")
+require("IranDomainBypass.applyToRuntimeConfig" not in latency.split("private fun buildV2rayCustomConfig(", 1)[0], "Latency probes must still test the proxy")
+require("IranDomainBypass.DOMAIN_RULE !in domain" in core, "Generated DNS must include .ir in direct domains")
+require("0xFFf97910" not in theme, "The old orange Compose accent must not return")
+overlay = ET.parse(APP / "src/playstore/AndroidManifest.xml").getroot()
+widget = next(item for item in overlay.find("application").findall("receiver") if item.get(android + "name") == ".receiver.WidgetProvider")
+tools_ns = "{http://schemas.android.com/tools}"
+if 'applicationId = "com.v2ray.alimtp"' in build:
+    require(widget.get(tools_ns + "node") == "merge" and widget.get(android + "enabled") == "true", "Personal VPN widget must be available")
+else:
+    require(widget.get(tools_ns + "node") == "remove", "Widget restoration is personal-edition only")
 
 with (ROOT / "V2rayNG/gradle/libs.versions.toml").open("rb") as handle:
     catalog = tomllib.load(handle)

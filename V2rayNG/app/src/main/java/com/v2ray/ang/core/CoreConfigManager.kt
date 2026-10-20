@@ -40,10 +40,18 @@ object CoreConfigManager {
                     guid = guid,
                     errorMessage = "Failed to build config context"
                 )
-            if (configContext.isCustom) {
-                return buildV2rayCustomConfig(configContext)
+            val result = if (configContext.isCustom) {
+                buildV2rayCustomConfig(configContext)
+            } else {
+                toConfigResult(configContext, buildUnifiedConfig(configContext))
             }
-            return toConfigResult(configContext, buildUnifiedConfig(configContext))
+            return IranDomainBypass.applyToRuntimeConfig(
+                result,
+                enabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_IR_DOMAINS, true),
+                allowDestinationOverride = MmkvManager.decodeSettingsBool(
+                    AppConfig.PREF_SNIFFING_ENABLED, AppConfig.DEFAULT_SNIFFING_ENABLED
+                ),
+            )
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to get V2ray config", e)
             return ConfigResult(
@@ -620,6 +628,9 @@ object CoreConfigManager {
             }
         }
 
+        if (tag == AppConfig.TAG_DIRECT && MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_IR_DOMAINS, true)) {
+            if (IranDomainBypass.DOMAIN_RULE !in domain) domain.add(IranDomainBypass.DOMAIN_RULE)
+        }
         return domain
     }
 

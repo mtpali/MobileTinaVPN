@@ -102,6 +102,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var tabMediator: TabLayoutMediator? = null
     private val firstRunPrefs by lazy { getSharedPreferences("mobiletina_first_run", MODE_PRIVATE) }
 
+    private val manualQrClicks = SubscriptionQrClickCounter()
     private var currentMode = MODE_AUTO
     private var modeInitialized = false
     private var lastSubscriptionRefreshAt = 0L
@@ -210,6 +211,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun setMode(mode: Int, updateTab: Boolean = true) {
         val requestedMode = mode.coerceIn(MODE_AUTO, MODE_MANUAL)
         if (modeInitialized && currentMode == requestedMode) return
+        manualQrClicks.reset()
         currentMode = requestedMode
         modeInitialized = true
         binding.autoPanel.visibility = if (currentMode == MODE_AUTO) View.VISIBLE else View.GONE
@@ -430,7 +432,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     textSize = 16f
                     setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorTextPrimary))
                 }
-                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installHold = true)
+                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installClicks = true)
                 tab.customView = textView
                 tab.tag = group.id
             }.also { it.attach() }
@@ -438,7 +440,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             groups.forEachIndexed { index, group ->
                 val tab = binding.tabGroup.getTabAt(index) ?: return@forEachIndexed
                 val textView = tab.customView as? TextView ?: return@forEachIndexed
-                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installHold = false)
+                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installClicks = false)
                 tab.tag = group.id
             }
         }
@@ -458,47 +460,25 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         tab: com.google.android.material.tabs.TabLayout.Tab,
         group: com.v2ray.ang.dto.GroupMapItem,
         count: Int,
-        installHold: Boolean
+        installClicks: Boolean
     ) {
         textView.text = "${group.remarks} ($count)"
-        if (installHold) installManualSubscriptionHold(textView, tab, group.id)
+        if (installClicks) installManualSubscriptionClicks(textView, tab, group.id)
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun installManualSubscriptionHold(
+    private fun installManualSubscriptionClicks(
         header: TextView,
         tab: com.google.android.material.tabs.TabLayout.Tab,
         subscriptionId: String
     ) {
-        var pendingReveal: Runnable? = null
         header.isClickable = true
         header.isFocusable = true
-        header.setOnClickListener { tab.select() }
-        header.setOnTouchListener { view, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    pendingReveal?.let(view::removeCallbacks)
-                    val reveal = Runnable {
-                        pendingReveal = null
-                        if (
-                            currentMode == MODE_MANUAL &&
-                            !isFinishing &&
-                            !isDestroyed &&
-                            view.isAttachedToWindow
-                        ) {
-                            showManualSubscriptionQr(subscriptionId)
-                        }
-                    }
-                    pendingReveal = reveal
-                    view.postDelayed(reveal, MANUAL_SUBSCRIPTION_HOLD_MS)
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    pendingReveal?.let(view::removeCallbacks)
-                    pendingReveal = null
-                }
+        header.setOnClickListener {
+            tab.select()
+            if (currentMode == MODE_MANUAL && !isFinishing && !isDestroyed &&
+                manualQrClicks.registerClick(subscriptionId, android.os.SystemClock.elapsedRealtime())) {
+                showManualSubscriptionQr(subscriptionId)
             }
-            false
         }
     }
 
@@ -1616,7 +1596,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
         private const val DRAWER_SUBSCRIPTION_HOLD_MS = 10_000L
         private const val DRAWER_SUBSCRIPTION_VISIBLE_MS = 60_000L
-        private const val MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L
         private const val SMART_SUBSCRIPTION_REFRESH_GRACE_MS = 1_200L
         private const val SMART_FIRST_PING_TIMEOUT_MS = 6_000L
         private const val SMART_RETRY_PING_TIMEOUT_MS = 5_000L

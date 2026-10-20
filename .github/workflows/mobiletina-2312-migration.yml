@@ -41,7 +41,7 @@ jobs:
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = true' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = true' V2rayNG/app/build.gradle.kts
-          grep -q 'resourceConfigurations.add("fa")' V2rayNG/app/build.gradle.kts
+          grep -q 'resourceConfigurations.add("en")' V2rayNG/app/build.gradle.kts
           grep -q -- '-repackageclasses' V2rayNG/app/proguard-rules.pro
           grep -q -- '-allowaccessmodification' V2rayNG/app/proguard-rules.pro
           grep -q -- '-obfuscationdictionary obfuscation-dictionary.txt' V2rayNG/app/proguard-rules.pro
@@ -335,7 +335,7 @@ jobs:
             fi
           done
 
-          # Only Persian-qualified and unqualified fallback resources may remain. Dependency
+          # Only English-qualified and unqualified fallback resources may remain. Dependency
           # locales (af, ar, de, etc.) are rejected to prevent the large editable string list.
           python3 - <<'PY'
           import re
@@ -346,7 +346,7 @@ jobs:
               for token in config.split('-'):
                   if re.fullmatch(r'[a-z]{2,3}', token) and token not in {'any'}:
                       locales.add(token)
-          unexpected = sorted(locales - {'fa'})
+          unexpected = sorted(locales - {'en'})
           if unexpected:
               raise SystemExit(f'Unexpected packaged locales: {unexpected}')
           print(f'Packaged qualified locales: {sorted(locales)}')
