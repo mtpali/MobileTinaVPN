@@ -137,7 +137,9 @@ tokens are rejected. Teardown cancels the selection job and probes before existi
 TUN-first/native cleanup. Stop from the widget, Auto, the notification or explicit
 service shutdown invalidates pending work. Cross-process state updates keep the
 widget's stop icon and the Auto screen synchronized; confirmed running state remains
-separate and stale pending state is reconciled against own core services.
+separate and stale pending state is reconciled against own core services. Single-server
+Auto skips the refresh grace as before. Multi-server results still sort the Manual
+list asynchronously after handoff, without delaying core start or its watchdog.
 
 Original artwork, widget dimensions, 238dp Auto button, native inputs, fixed vault
 context, session/expiry policies and hardened signing checks are preserved. This

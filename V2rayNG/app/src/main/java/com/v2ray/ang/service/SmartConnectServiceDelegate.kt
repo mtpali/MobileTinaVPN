@@ -14,6 +14,7 @@ import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.core.SmartConnectRunner
 import com.v2ray.ang.dto.TestServiceMessage
 import com.v2ray.ang.extension.toast
+import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.helper.MessageHelper
@@ -158,16 +159,20 @@ internal class SmartConnectServiceDelegate(private val service: Service) {
     }
 
     private fun runtime(id: String) = object : SmartConnectRunner.Runtime {
+        private var subscriptionId = ""
+        private var testedMultipleServers = false
         override suspend fun servers(): List<String> = withContext(Dispatchers.IO) {
             val subscriptions = MmkvManager.decodeSubscriptions().filter { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }
             val stored = MmkvManager.decodeSettingsString(AppConfig.CACHE_SUBSCRIPTION_ID).orEmpty()
             val subscription = stored.takeIf { key -> subscriptions.any { it.guid == key } }
                 ?: subscriptions.firstOrNull()?.guid.orEmpty()
+            subscriptionId = subscription
             MmkvManager.encodeSettings(AppConfig.CACHE_SUBSCRIPTION_ID, subscription)
             if (subscription.isBlank()) MmkvManager.decodeAllServerList() else MmkvManager.decodeServerList(subscription)
         }
 
         override fun startProbe(batchId: Long, servers: List<String>) {
+            testedMultipleServers = true
             startedBatchId = 0L
             probeRequestId = "$id:$batchId"
             MessageHelper.sendMsg2TestService(service, TestServiceMessage(
@@ -201,6 +206,11 @@ internal class SmartConnectServiceDelegate(private val service: Service) {
                 action = SmartConnectServiceState.ACTION_SELECTED
                 putExtra(MessageHelper.EXTRA_REQUEST_ID, id)
             })
+            if (testedMultipleServers) scope.launch(Dispatchers.IO) {
+                val subscriptions = if (subscriptionId.isBlank()) MmkvManager.decodeSubsList() else listOf(subscriptionId)
+                subscriptions.forEach(AngConfigManager::sortByTestResultsForSub)
+                service.sendBroadcast(Intent(SmartConnectServiceState.ACTION_CHANGED).apply { `package` = service.packageName })
+            }
         }
 
         override fun isRunning() = CoreServiceManager.isRunning() && V2RayServiceManager.isRunning()

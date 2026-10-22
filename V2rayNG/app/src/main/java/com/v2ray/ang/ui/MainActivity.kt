@@ -89,6 +89,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private val expiryDataChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == SmartConnectServiceState.ACTION_CHANGED) {
+                if (SmartConnectServiceState.phase(this@MainActivity) == SmartConnectServiceState.Phase.IDLE) {
+                    mainViewModel.reloadServerListAsync()
+                }
                 syncSmartConnectServiceState()
                 return
             }
@@ -564,8 +567,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
         val attemptId = beginSmartConnectAttempt()
         smartConnectJob = lifecycleScope.launch {
-            withTimeoutOrNull(SMART_SUBSCRIPTION_REFRESH_GRACE_MS) {
-                while (subscriptionRefreshing && isActive && isSmartAttemptActive(attemptId)) delay(50L)
+            if (mainViewModel.currentServerGuids().size != 1) {
+                withTimeoutOrNull(SMART_SUBSCRIPTION_REFRESH_GRACE_MS) {
+                    while (subscriptionRefreshing && isActive && isSmartAttemptActive(attemptId)) delay(50L)
+                }
             }
             if (isSmartAttemptActive(attemptId)) requestVpnPermissionAndStart(true, attemptId)
         }
