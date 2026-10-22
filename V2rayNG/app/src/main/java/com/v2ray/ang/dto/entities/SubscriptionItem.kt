@@ -19,4 +19,5 @@ data class SubscriptionItem(
     var expireEpochSeconds: Long? = null,
     var commentExpireEpochSeconds: Long? = null,
     var requestHeaders: String? = null,
+    var usageInfo: SubscriptionUsageInfo? = null,
 )

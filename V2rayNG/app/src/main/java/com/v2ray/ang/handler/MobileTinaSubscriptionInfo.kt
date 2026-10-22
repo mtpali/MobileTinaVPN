@@ -19,7 +19,10 @@ import java.util.concurrent.TimeUnit
 object MobileTinaSubscriptionInfo {
     data class Snapshot(
         val body: String,
-        val userInfo: String?
+        val userInfo: String?,
+        val profileTitle: String? = null,
+        val supportUrl: String? = null,
+        val webPageUrl: String? = null,
     )
 
     private const val RECENT_SNAPSHOT_WINDOW_MS = 5_000L
@@ -57,7 +60,14 @@ object MobileTinaSubscriptionInfo {
             fetchSnapshot(item, 0)
         } ?: return null
 
-        applyUserInfo(guid, item, snapshot.userInfo)
+        // A transient empty body must not erase metadata from the last usable response.
+        if (snapshot.body.isBlank()) return snapshot
+        val usageInfo = SubscriptionInfoParser.parse(
+            snapshot.userInfo, snapshot.profileTitle, snapshot.supportUrl, snapshot.webPageUrl
+        )
+        if (MobileTinaSubscriptionMetadata.apply(item, usageInfo)) {
+            MmkvManager.encodeSubscription(guid, item)
+        }
         MobileTinaExpiryManager.updateDisplayExpiryFromPayload(guid, snapshot.body)
         recentSnapshotAt[guid] = SystemClock.elapsedRealtime()
         return snapshot
@@ -65,41 +75,6 @@ object MobileTinaSubscriptionInfo {
 
     private fun refreshOne(guid: String, item: SubscriptionItem) {
         captureSnapshot(guid, item)
-    }
-
-    /**
-     * Applies header metadata only when it actually changed, avoiding an unnecessary MMKV
-     * subscription write on every resume when traffic/expiry values are identical.
-     */
-    private fun applyUserInfo(guid: String, item: SubscriptionItem, raw: String?) {
-        if (raw.isNullOrBlank()) return
-
-        val fields = raw.split(';').mapNotNull { segment ->
-            val i = segment.indexOf('=')
-            if (i <= 0) return@mapNotNull null
-            val key = segment.substring(0, i).trim().lowercase()
-            val value = segment.substring(i + 1).trim().toLongOrNull() ?: return@mapNotNull null
-            key to value
-        }.toMap()
-
-        val upload = fields["upload"]?.takeIf { it >= 0L }
-        val download = fields["download"]?.takeIf { it >= 0L }
-        val total = fields["total"]?.takeIf { it > 0L }
-        val expire = fields["expire"]?.takeIf { it > 0L }
-
-        val changed = item.trafficUploadBytes != upload ||
-                item.trafficDownloadBytes != download ||
-                item.trafficTotalBytes != total ||
-                item.expireEpochSeconds != expire
-
-        item.trafficUploadBytes = upload
-        item.trafficDownloadBytes = download
-        item.trafficTotalBytes = total
-        item.expireEpochSeconds = expire
-
-        if (changed) {
-            MmkvManager.encodeSubscription(guid, item)
-        }
     }
 
     private fun fetchSnapshot(item: SubscriptionItem, httpPort: Int): Snapshot? {
@@ -131,7 +106,10 @@ object MobileTinaSubscriptionInfo {
                 } else {
                     Snapshot(
                         body = response.body?.string().orEmpty(),
-                        userInfo = response.header("subscription-userinfo")
+                        userInfo = response.header("subscription-userinfo"),
+                        profileTitle = response.header("Profile-Title"),
+                        supportUrl = response.header("Support-Url"),
+                        webPageUrl = response.header("Profile-Web-Page-Url"),
                     )
                 }
             }
