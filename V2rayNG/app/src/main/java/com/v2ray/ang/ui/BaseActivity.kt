@@ -16,9 +16,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.v2ray.ang.R
-import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.helper.CustomDividerItemDecoration
-import com.v2ray.ang.util.MyContextWrapper
 import com.v2ray.ang.util.Utils
 
 
@@ -41,10 +40,12 @@ abstract class BaseActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        if (!Utils.getDarkModeStatus(this)) {
-            WindowCompat.getInsetsController(window, window.decorView).apply {
-                isAppearanceLightStatusBars = true
-            }
+        AppLocaleManager.onActivityCreated(this)
+        val dark = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
         }
     }
 
@@ -76,7 +77,7 @@ abstract class BaseActivity : AppCompatActivity() {
      * @param newBase the original base context to wrap
      */
     override fun attachBaseContext(newBase: Context?) {
-        super.attachBaseContext(MyContextWrapper.wrap(newBase ?: return, SettingsManager.getLocale()))
+        super.attachBaseContext(newBase?.let(AppLocaleManager::localizedContext))
     }
 
     /**

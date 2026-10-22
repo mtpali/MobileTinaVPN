@@ -23,6 +23,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.MobileTinaHiddenShareManager
+import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.helper.SimpleItemTouchHelperCallback
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.QRCodeDecoder
@@ -92,7 +93,8 @@ class SubSettingActivity : BaseActivity() {
             showLoading()
 
             lifecycleScope.launch(Dispatchers.IO) {
-                AngConfigManager.updateConfigViaSubAll()
+                val result = AngConfigManager.updateConfigViaSubAll()
+                if (result.configCount > 0) SettingsChangeManager.makeSetupGroupTab()
                 delay(500L)
                 launch(Dispatchers.Main) {
                     hideLoading()

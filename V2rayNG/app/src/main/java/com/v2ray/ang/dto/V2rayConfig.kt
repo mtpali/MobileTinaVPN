@@ -69,33 +69,40 @@ data class V2rayConfig(
         var settings: OutSettingsBean? = null,
         var streamSettings: StreamSettingsBean? = null,
         val sendThrough: String? = null,
-        var mux: MuxBean? = MuxBean(false)
+        var mux: MuxBean? = MuxBean(false),
+        var targetStrategy: String? = null
     ) {
         data class OutSettingsBean(
-            var vnext: List<VnextBean>? = null,
-            var servers: List<ServersBean>? = null,
-            /*Blackhole*/
-            var response: Response? = null,
-            /*DNS*/
-            val network: String? = null,
+            /*Common */
             var address: Any? = null,
             var port: Int? = null,
-            /*Freedom*/
-            val redirect: String? = null,
-            val userLevel: Int? = null,
-            /*Loopback*/
-            val inboundTag: String? = null,
+            var level: Int? = null,
+            var email: String? = null,
+            /*HTTP/SOCKS*/
+            var user: String? = null,
+            var pass: String? = null,
+            var headers: Map<String, String>? = null,
+            /*VMess/VLESS*/
+            var id: String? = null,
+            var security: String? = null,
+            var encryption: String? = null,
+            /*VLESS*/
+            var flow: String? = null,
+            /*Trojan/Shadowsocks*/
+            var password: String? = null,
+            /*Shadowsocks*/
+            var method: String? = null,
+            /*Hysteria/Hysteria2*/
+            var version: Int? = null,
             /*Wireguard*/
             var secretKey: String? = null,
             val peers: List<WireGuardBean>? = null,
             var reserved: List<Int>? = null,
             var mtu: Int? = null,
+            var remoteDNS: List<String>? = null,
             var domainStrategy: String? = null,
             var amnezia: AmneziaWGOptionsBean? = null,
-            var obfsPassword: String? = null,
-            var version: Int? = null,
         ) {
-
             data class AmneziaWGOptionsBean(
                 var jc: Int = 0,
                 var jmin: Int = 0,
@@ -124,54 +131,17 @@ data class V2rayConfig(
                 var disableCookieReplies: Boolean = false,
             )
 
-            data class VnextBean(
-                var address: String = "",
-                var port: Int = AppConfig.DEFAULT_PORT,
-                var users: List<UsersBean>
-            ) {
-
-                data class UsersBean(
-                    var id: String = "",
-                    var alterId: Int? = null,
-                    var security: String? = null,
-                    var level: Int = AppConfig.DEFAULT_LEVEL,
-                    var encryption: String? = null,
-                    var flow: String? = null
-                )
-            }
-
-            data class ServersBean(
-                var address: String = "",
-                var method: String? = null,
-                var ota: Boolean = false,
-                var password: String? = null,
-                var port: Int = AppConfig.DEFAULT_PORT,
-                var level: Int = AppConfig.DEFAULT_LEVEL,
-                val email: String? = null,
-                var flow: String? = null,
-                val ivCheck: Boolean? = null,
-                var users: List<SocksUsersBean>? = null
-            ) {
-                data class SocksUsersBean(
-                    var user: String = "",
-                    var pass: String = "",
-                    var level: Int = AppConfig.DEFAULT_LEVEL
-                )
-            }
-
-            data class Response(var type: String)
-
             data class WireGuardBean(
                 var publicKey: String = "",
                 var preSharedKey: String? = null,
                 var endpoint: String = "",
                 var keepAlive: Int? = null,
-                var allowedIPs: List<String>? = null,
+                var allowedIPs: List<String>? = null
             )
         }
 
         data class StreamSettingsBean(
-            var network: String = AppConfig.DEFAULT_NETWORK,
+            var network: String? = AppConfig.DEFAULT_NETWORK,
             var security: String? = null,
             var tcpSettings: TcpSettingsBean? = null,
             var kcpSettings: KcpSettingsBean? = null,
@@ -371,45 +341,19 @@ data class V2rayConfig(
         )
 
         fun getServerAddress(): String? {
-            if (protocol.equals(EConfigType.VMESS.name, true)
-                || protocol.equals(EConfigType.VLESS.name, true)
-            ) {
-                return settings?.vnext?.firstOrNull()?.address ?: settings?.address as? String
-            } else if (protocol.equals(EConfigType.SHADOWSOCKS.name, true)
-                || protocol.equals(EConfigType.SOCKS.name, true)
-                || protocol.equals(EConfigType.HTTP.name, true)
-                || protocol.equals(EConfigType.TROJAN.name, true)
-            ) {
-                return settings?.servers?.firstOrNull()?.address
-            } else if (protocol.equals(EConfigType.WIREGUARD.name, true)) {
-                return settings?.peers?.firstOrNull()?.endpoint?.substringBeforeLast(":")
-            } else if (protocol.equals(EConfigType.HYSTERIA2.name, true)
-                || protocol.equals(EConfigType.HYSTERIA.name, true)
-            ) {
-                return settings?.address as? String
+            return if (protocol.equals(EConfigType.WIREGUARD.name, true)) {
+                settings?.peers?.firstOrNull()?.endpoint?.substringBeforeLast(":")
+            } else {
+                settings?.address as? String
             }
-            return null
         }
 
         fun getServerPort(): Int? {
-            if (protocol.equals(EConfigType.VMESS.name, true)
-                || protocol.equals(EConfigType.VLESS.name, true)
-            ) {
-                return settings?.vnext?.firstOrNull()?.port ?: settings?.port
-            } else if (protocol.equals(EConfigType.SHADOWSOCKS.name, true)
-                || protocol.equals(EConfigType.SOCKS.name, true)
-                || protocol.equals(EConfigType.HTTP.name, true)
-                || protocol.equals(EConfigType.TROJAN.name, true)
-            ) {
-                return settings?.servers?.firstOrNull()?.port
-            } else if (protocol.equals(EConfigType.WIREGUARD.name, true)) {
-                return settings?.peers?.firstOrNull()?.endpoint?.substringAfterLast(":")?.toInt()
-            } else if (protocol.equals(EConfigType.HYSTERIA2.name, true)
-                || protocol.equals(EConfigType.HYSTERIA.name, true)
-            ) {
-                return settings?.port
+            return if (protocol.equals(EConfigType.WIREGUARD.name, true)) {
+                settings?.peers?.firstOrNull()?.endpoint?.substringAfterLast(":")?.toIntOrNull()
+            } else {
+                settings?.port
             }
-            return null
         }
 
         fun ensureSockopt(): StreamSettingsBean.SockoptBean {
@@ -526,6 +470,7 @@ data class V2rayConfig(
         data class PingConfigObject(
             val destination: String,
             val connectivity: String? = null,
+            val httpMethod: String? = null,
             val interval: String,
             val sampling: Int,
             val timeout: String? = null
