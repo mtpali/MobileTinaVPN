@@ -309,7 +309,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return subscriptions.map { sub ->
             GroupMapItem(
                 id = sub.guid,
-                remarks = sub.subscription.remarks
+                remarks = sub.subscription.remarks,
+                usageInfo = sub.subscription.usageInfo,
             )
         }
     }

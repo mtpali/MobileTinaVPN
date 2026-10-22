@@ -27,6 +27,14 @@ trap cleanup EXIT
 command -v go >/dev/null
 command -v gomobile >/dev/null
 command -v patch >/dev/null
+build_go_version="$(go env GOVERSION)"
+python3 - "$build_go_version" <<'PY'
+import re
+import sys
+version = re.fullmatch(r'go(\d+)\.(\d+)\.(\d+)', sys.argv[1])
+if version is None or tuple(map(int, version.groups())) < (1, 27, 3):
+    raise SystemExit('Xray v26.10.21 security build requires Go 1.27.3 or newer')
+PY
 [[ -d "$android_lib" ]]
 [[ -s "$core_patch" ]]
 
@@ -43,7 +51,7 @@ patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
 patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$repo_root/core/patches/xray-core-amneziawg-recovery.patch"
 cp "$repo_root/core/mobile-recovery/libv2ray_recovery.go" "$wrapper/"
 
-# Xray v26.10.17 creates the device eagerly and raises it through locked up().
+# Xray v26.10.21 creates the device eagerly and raises it through locked up().
 # Keep setup, recovery registration and shutdown in that same lifecycle lock.
 python3 - "$patched_core/proxy/wireguard/client.go" <<'PY'
 from pathlib import Path
@@ -75,7 +83,7 @@ PY
     cd "$patched_core"
     gofmt -w infra/conf/wireguard.go infra/conf/wireguard_amnezia_test.go proxy/wireguard/*.go
     GOWORK=off go mod tidy
-    GOWORK=off go test ./infra/conf -run 'TestAmneziaWG' -count=1
+    GOWORK=off go test ./infra/conf -run 'TestAmnezia' -count=1
     GOWORK=off go test ./proxy/wireguard ./proxy/masque -count=1
 )
 

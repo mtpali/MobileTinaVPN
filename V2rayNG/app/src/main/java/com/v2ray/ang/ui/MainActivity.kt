@@ -932,7 +932,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         val used = ((item.trafficUploadBytes ?: 0L) + (item.trafficDownloadBytes ?: 0L)).coerceAtLeast(0L)
         val expire = (item.commentExpireEpochSeconds ?: item.expireEpochSeconds ?: 0L)
             .coerceAtLeast(0L)
-        if (total <= 0L && expire <= 0L) {
+        val hasUsage = item.usageInfo != null || item.trafficUploadBytes != null || item.trafficDownloadBytes != null
+        if (total <= 0L && expire <= 0L && !hasUsage) {
             binding.subscriptionCard.visibility = View.GONE
             return
         }
@@ -950,7 +951,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             binding.tvSubscriptionUsage.visibility = View.VISIBLE
         } else {
             binding.subscriptionProgress.visibility = View.GONE
-            binding.tvSubscriptionUsage.visibility = View.GONE
+            binding.tvSubscriptionUsage.text = getString(
+                R.string.mobiletina_subscription_usage_compact,
+                formatBytes(used), getString(R.string.sub_info_unlimited)
+            )
+            binding.tvSubscriptionUsage.visibility = if (hasUsage) View.VISIBLE else View.GONE
         }
 
         if (expire > 0L) {

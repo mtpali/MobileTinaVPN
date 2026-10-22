@@ -16,8 +16,16 @@ def require(condition, message):
         raise SystemExit(message)
 
 require(re.search(r'applicationId = "com\.v2ray\.(mobiletina|alimtp)"', build), "Edition applicationId changed")
-for expected in ('versionName = "2.3.12"', 'versionCode = 752', 'compose = true', 'viewBinding = true', 'isMinifyEnabled = true', 'isShrinkResources = true'):
+for expected in ('versionName = "2.3.13"', 'versionCode = 753', 'compose = true', 'viewBinding = true', 'isMinifyEnabled = true', 'isShrinkResources = true'):
     require(expected in build, f"Missing build contract: {expected}")
+
+# The target's exact native sources are part of the security update, not optional caches.
+for path, expected in {
+    "AndroidLibXrayLite": "76a6e2172210613fcb4aa32b6de55bcd9452ce43",
+    "hev-socks5-tunnel": "107a5083cb33d729a476c8282745dfc2f12e48e2",
+}.items():
+    entry = subprocess.check_output(["git", "ls-files", "--stage", path], cwd=ROOT, text=True)
+    require(entry.startswith(f"160000 {expected} 0\t"), f"Incorrect 2.3.13 native pin: {path}")
 
 manifest = ET.parse(APP / "src/main/AndroidManifest.xml").getroot()
 android = "{http://schemas.android.com/apk/res/android}"
@@ -35,7 +43,7 @@ contracts = {
     "service/CoreTestService.kt": ("SMART_CONNECT_MAX_CONCURRENCY = 8", "batchGeneration", "message.onlyTcp"),
     "service/RealPingWorkerService.kt": ("RealPingExecutionLimiter", "secondaryUrl"),
     "handler/V2RayServiceManager.kt": ("LauncherManager.startService", "reconcileRunningState"),
-    "handler/MobileTinaSubscriptionInfo.kt": ("item.requestHeaders", "subscription-userinfo"),
+    "handler/MobileTinaSubscriptionInfo.kt": ("item.requestHeaders", "subscription-userinfo", "SubscriptionInfoParser.parse", "MobileTinaSubscriptionMetadata.apply"),
 }
 for relative, required in contracts.items():
     text = (SOURCE / relative).read_text()
