@@ -107,6 +107,17 @@ widget = next(item for item in overlay.find("application").findall("receiver") i
 tools_ns = "{http://schemas.android.com/tools}"
 if 'applicationId = "com.v2ray.alimtp"' in build:
     require(widget.get(tools_ns + "node") == "merge" and widget.get(android + "enabled") == "true", "Personal VPN widget must be available")
+    provider = (SOURCE / "receiver/WidgetProvider.kt").read_text()
+    require("PendingIntent.getBroadcast(" in provider and "MainActivity" not in provider, "Widget must not open the product activity")
+    require("startSmartService(context, toggle = true)" in provider, "Widget must use background Smart Connect")
+    delegate = (SOURCE / "service/SmartConnectServiceDelegate.kt").read_text()
+    require("service.startService(Intent(service, service.javaClass)" in delegate, "Selection must hand off to the same foreground service")
+    require("intent?.getStringExtra(MessageHelper.EXTRA_REQUEST_ID) != probeRequestId" in delegate and
+            "startedBatchId == batchId" in delegate, "Smart Connect IPC must correlate both request and batch")
+    for name in ("CoreVpnService", "CoreProxyOnlyService", "CoreRootService"):
+        service = (SOURCE / f"service/{name}.kt").read_text()
+        require(service.index("NotificationManager.ensureForeground()") < service.index("smartConnect.handleCommand("), f"{name} must enter foreground before selection")
+        require("smartConnect.close()" in service, f"{name} must cancel selection on teardown")
 else:
     require(widget.get(tools_ns + "node") == "remove", "Widget restoration is personal-edition only")
 

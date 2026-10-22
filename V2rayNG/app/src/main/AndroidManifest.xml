@@ -82,6 +82,13 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+        <activity
+            android:name=".ui.WidgetPermissionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/WidgetPermissionTheme" />
         <activity android:name=".ui.SubSettingActivity" android:exported="false" android:theme="@style/MobileTinaLegacyTheme.NoActionBar" />
         <activity
             android:name=".ui.server.ServerVmessActivity"

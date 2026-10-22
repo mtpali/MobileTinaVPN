@@ -17,6 +17,7 @@ import kotlinx.coroutines.*
 class CoreProxyOnlyService : Service(), ServiceControl {
     private val setupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var setupJob: Job? = null
+    private lateinit var smartConnect: SmartConnectServiceDelegate
     @Volatile private var stopping = false
     /**
      * Initializes the service.
@@ -25,6 +26,7 @@ class CoreProxyOnlyService : Service(), ServiceControl {
         super.onCreate()
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service created")
         CoreServiceManager.serviceControl = SoftReference(this)
+        smartConnect = SmartConnectServiceDelegate(this)
     }
 
     /**
@@ -39,6 +41,7 @@ class CoreProxyOnlyService : Service(), ServiceControl {
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
 
         if (stopping) return START_NOT_STICKY
+        if (smartConnect.handleCommand(intent, setupJob?.isActive == true, ::stopService)) return START_NOT_STICKY
         if (MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING) && CoreServiceManager.isRunning()) return START_STICKY
         if (setupJob?.isActive == true) return START_STICKY
         setupJob = setupScope.launch {
@@ -52,6 +55,7 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * Destroys the service.
      */
     override fun onDestroy() {
+        smartConnect.close()
         stopping = true
         setupScope.cancel()
         CoreServiceManager.stopCoreLoop()

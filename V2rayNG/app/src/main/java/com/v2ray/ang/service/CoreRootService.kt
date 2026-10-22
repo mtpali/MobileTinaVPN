@@ -37,12 +37,14 @@ class CoreRootService : Service(), ServiceControl {
 
     private val setupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var setupJob: Job? = null
+    private lateinit var smartConnect: SmartConnectServiceDelegate
     @Volatile private var stopping = false
 
     override fun onCreate() {
         super.onCreate()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: Service created")
         CoreServiceManager.serviceControl = SoftReference(this)
+        smartConnect = SmartConnectServiceDelegate(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -50,6 +52,7 @@ class CoreRootService : Service(), ServiceControl {
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
         if (stopping) return START_NOT_STICKY
+        if (smartConnect.handleCommand(intent, setupJob?.isActive == true, ::stopService)) return START_NOT_STICKY
         if (MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING) && CoreServiceManager.isRunning()) return START_STICKY
         if (setupJob?.isActive == true) return START_STICKY
         setupJob = setupScope.launch {
@@ -65,6 +68,7 @@ class CoreRootService : Service(), ServiceControl {
     }
 
     override fun onDestroy() {
+        smartConnect.close()
         super.onDestroy()
         // Wait for any in-flight async setup to finish before tearing down. The rules are
         // installed off the main thread and can take seconds (the setup script waits for the

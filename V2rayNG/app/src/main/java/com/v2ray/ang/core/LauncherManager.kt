@@ -78,13 +78,13 @@ object LauncherManager {
     }
 
     @Throws(Exception::class)
-    private fun startContextService(context: Context) {
+    internal fun prepareServiceStart(context: Context, selectedGuid: String? = MmkvManager.getSelectServer()): Intent {
         invalidatePendingRestart()
         com.v2ray.ang.util.MobileTinaIntegrityGuard.verify(context.applicationContext)
         // Note: isRunning check is removed here to avoid loading Native libraries in the UI process.
         // The check is performed in CoreServiceManager when the service starts in the daemon process.
 
-        val guid = MmkvManager.getSelectServer()
+        val guid = selectedGuid
             ?: run {
                 LogUtil.e(AppConfig.TAG, "LauncherManager: No server selected")
                 error(context.getString(R.string.app_tile_first_use))
@@ -121,17 +121,36 @@ object LauncherManager {
             error(context.getString(R.string.toast_root_required))
         }
 
-        val intent = if (isRootMode) {
-            LogUtil.i(AppConfig.TAG, "LauncherManager: Starting Root service")
-            Intent(context.applicationContext, CoreRootService::class.java)
-        } else if (SettingsManager.isVpnMode()) {
-            LogUtil.i(AppConfig.TAG, "LauncherManager: Starting VPN service")
-            Intent(context.applicationContext, CoreVpnService::class.java)
-        } else {
-            LogUtil.i(AppConfig.TAG, "LauncherManager: Starting Proxy service")
-            Intent(context.applicationContext, CoreProxyOnlyService::class.java)
-        }
+        return coreServiceIntent(context)
+    }
 
+    internal fun coreServiceIntent(context: Context): Intent = when {
+        SettingsManager.isRootMode() -> Intent(context.applicationContext, CoreRootService::class.java)
+        SettingsManager.isVpnMode() -> Intent(context.applicationContext, CoreVpnService::class.java)
+        else -> Intent(context.applicationContext, CoreProxyOnlyService::class.java)
+    }
+
+    /** Starts the existing core service promptly; selection happens inside that foreground service. */
+    fun startSmartService(context: Context, toggle: Boolean = false): Boolean {
+        return try {
+            invalidatePendingRestart()
+            com.v2ray.ang.util.MobileTinaIntegrityGuard.verify(context.applicationContext)
+            val intent = coreServiceIntent(context).apply {
+                action = if (toggle) com.v2ray.ang.service.SmartConnectServiceState.ACTION_TOGGLE
+                    else com.v2ray.ang.service.SmartConnectServiceState.ACTION_START
+            }
+            ContextCompat.startForegroundService(context, intent)
+            true
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Unable to start Smart Connect service", e)
+            context.toast(e.message ?: e.javaClass.simpleName)
+            false
+        }
+    }
+
+    @Throws(Exception::class)
+    private fun startContextService(context: Context) {
+        val intent = prepareServiceStart(context)
         try {
             ContextCompat.startForegroundService(context, intent)
         } catch (e: SecurityException) {

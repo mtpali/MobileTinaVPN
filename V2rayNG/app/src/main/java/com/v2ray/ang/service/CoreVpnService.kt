@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class CoreVpnService : VpnService(), ServiceControl {
     private val setupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var setupJob: Job? = null
+    private lateinit var smartConnect: SmartConnectServiceDelegate
     @Volatile private var stopping = false
     private val interfaceLock = Any()
     private lateinit var mInterface: ParcelFileDescriptor
@@ -53,6 +54,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
         CoreServiceManager.serviceControl = SoftReference(this)
+        smartConnect = SmartConnectServiceDelegate(this)
     }
 
     override fun onRevoke() {
@@ -66,6 +68,7 @@ class CoreVpnService : VpnService(), ServiceControl {
 //    }
 
     override fun onDestroy() {
+        smartConnect.close()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
         // stopService() can reach this path without the dynamic stop receiver ever firing.
         // Run the complete idempotent teardown so the native core, TUN and shared running flag
@@ -80,6 +83,7 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationManager.ensureForeground()
         if (stopping) return START_NOT_STICKY
+        if (smartConnect.handleCommand(intent, setupJob?.isActive == true, ::stopService)) return START_NOT_STICKY
         if (isRunning || setupJob?.isActive == true) return START_STICKY
         // Always-on VPN restarts from OS deliver intent.action == SERVICE_INTERFACE or null intent.
         // Reset any stuck start lock left by a killed process to allow setupVpnService() to run.

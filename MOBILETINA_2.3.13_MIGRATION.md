@@ -105,28 +105,50 @@ repository secrets or ephemeral CI test signing were actually used. A new tempor
 certificate does not permit an in-place update over a different certificate. APK,
 certificate digest and the exact R8 mapping must be archived together per edition.
 
-## AliMTP VPN widget: Smart Connect toggle (2026-10-22)
+## AliMTP VPN widget: background Smart Connect (2026-10-22)
 
-The personal edition's widget now opens the retained product Auto screen with an
-explicit immutable activity PendingIntent. On a cold launch and on delivery to the
-existing singleTask activity, one widget click invokes the same `smartConnectAndStart`
-method as the Auto button: one server connects directly; multiple servers use the
-existing silent Real Ping selection, retry, cancellation generation and VPN permission
-flow. A subsequent click disconnects an active VPN or cancels a Smart Connect attempt.
-The widget does not call `startServiceFromToggle` or merely reconnect the last selection.
-It also cancels a pending manual start. A late VPN-consent result cannot restart a
-cancelled attempt as a manual connection: manual starts require `manualConnecting`.
+The personal widget uses an immutable broadcast PendingIntent. Authorized connect,
+cancel and disconnect taps do not launch MainActivity or any other activity. A missing
+VPN grant opens only a non-exported transparent consent bridge and Android's VPN
+permission dialog. Denial/cancellation does not start a connection; a second widget
+tap while the dialog is open cancels its request. The bridge is excluded from Recents.
 
-Dispatch waits for the initial notice and first-run permissions. Pending clicks survive
-activity recreation; a second click during onboarding cancels the request. Ordinary
-launches, resumes and consumed-intent restoration cannot repeat a widget toggle. Denial
-of first-run VPN consent discards the pending request. Installed widgets are re-rendered
-on package replacement; pre-update cached broadcast clicks use the same Auto entry.
+Both the Auto button and widget dispatch Smart Connect to the existing core service
+for the selected VPN/proxy/root mode. That service enters foreground immediately using
+the existing VPN notification and owns the selection coroutine independently of the
+activity. There is no extra test notification, new test foreground service, overlay
+permission, accessibility dependency, alarm workaround or background autostart.
+CoreTestService remains a regular service with the existing eight-worker limit.
 
-The existing widget appearance, daemon state updates, reliable stop path, Smart Connect
-timings, eight-worker limit, native inputs, artwork and signing guard are preserved.
-Only AliMTP changes; MobileTina's source/PR and APK remain untouched. Focused regressions
-cover direct immutable activity dispatch and pending-click/permission/recreation rules.
-Both Android distribution unit suites and the hardened ARM APK build must pass on the
-new exact source head. Physical launcher taps (cold/warm, connect/cancel/disconnect,
-consent denial and package upgrade) still require acceptance on a phone.
+The shared SmartConnectRunner preserves immediate single-server start, two Real Ping
+rounds (6 seconds, retry after 300ms, then 5 seconds), positive-result filtering,
+350ms settle and the 15-second confirmed-core watchdog after selection. Probe IPC
+checks both a fresh request UUID and batch acknowledgement before reading results;
+unacknowledged stale positive pings cannot select a server. Auto retains its 1200ms
+subscription-refresh grace and permission flow; a 33-second UI fallback additionally
+bounds a daemon launch that never reports status. The normal selected-profile,
+integrity, root-availability and runtime-SOCKS-port validation is shared with manual
+starts. The current subscription is loaded from MMKV without constructing a UI model.
+
+After selection, a request-tagged regular start command goes to the SAME foreground
+service, preserving normal sticky VPN behavior without a second foreground-service
+launch after the widget interaction allowance expires. Cancelled or replaced handoff
+tokens are rejected. Teardown cancels the selection job and probes before existing
+TUN-first/native cleanup. Stop from the widget, Auto, the notification or explicit
+service shutdown invalidates pending work. Cross-process state updates keep the
+widget's stop icon and the Auto screen synchronized; confirmed running state remains
+separate and stale pending state is reconciled against own core services.
+
+Original artwork, widget dimensions, 238dp Auto button, native inputs, fixed vault
+context, session/expiry policies and hardened signing checks are preserved. This
+change is AliMTP-only; MobileTina stays at
+`4dcaab4b49986341aeea65e3f380297954e43130`.
+
+Focused tests cover selection, failed/absent acknowledgements, retry identity,
+fast settle, cancellation, no usable profiles, confirmed startup timeout, immutable
+broadcast dispatch, activity-free start/stop and the consent-only exception. Source
+checks require foreground promotion before command dispatch and teardown cancellation
+in all three core modes. Both distribution unit suites and the hardened ARM build
+must validate the new exact source head. Physical-device acceptance remains pending
+for cold/warm launcher taps, app removal during selection, rapid cancel, consent
+allow/deny/cancel, notification stop, failure, package upgrade and real traffic.

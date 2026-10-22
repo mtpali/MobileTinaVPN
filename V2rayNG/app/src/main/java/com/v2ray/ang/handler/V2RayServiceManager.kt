@@ -71,8 +71,21 @@ object V2RayServiceManager {
         val cachedRunning = isRunning()
         if (!cachedRunning) return false
 
+        val servicePresent = coreServicePresent(context)
+
+        val running = ServiceRunningStatePolicy.resolve(cachedRunning, servicePresent)
+        if (!running) {
+            LogUtil.w(AppConfig.TAG, "Clearing stale running state: no core service is active")
+            MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
+        }
+        return running
+    }
+
+    /** null means the own-service snapshot is unavailable; preserve pending state then. */
+    @Suppress("DEPRECATION")
+    fun coreServicePresent(context: Context): Boolean? {
         val app = context.applicationContext
-        val servicePresent = runCatching {
+        return runCatching {
             val manager = app.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
                 ?: return@runCatching null
             manager.getRunningServices(Int.MAX_VALUE).any { info ->
@@ -82,13 +95,6 @@ object V2RayServiceManager {
         }.onFailure { error ->
             LogUtil.w(AppConfig.TAG, "Unable to reconcile running service state", error)
         }.getOrNull()
-
-        val running = ServiceRunningStatePolicy.resolve(cachedRunning, servicePresent)
-        if (!running) {
-            LogUtil.w(AppConfig.TAG, "Clearing stale running state: no core service is active")
-            MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
-        }
-        return running
     }
 }
 
