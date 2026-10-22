@@ -1,17 +1,18 @@
 package com.v2ray.ang
 
+import android.app.Application
 import android.content.Context
-import androidx.multidex.MultiDexApplication
 import androidx.work.Configuration
 import androidx.work.WorkManager
-import com.tencent.mmkv.MMKV
 import com.v2ray.ang.AppConfig.ANG_PACKAGE
+import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.MmkvManager
-import com.v2ray.ang.handler.MobileTinaGeoAssetManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.ui.compose.ThemeManager
+import com.v2ray.ang.handler.MobileTinaGeoAssetManager
 import com.v2ray.ang.util.MobileTinaIntegrityGuard
 
-class AngApplication : MultiDexApplication() {
+class AngApplication : Application() {
     companion object {
         lateinit var application: AngApplication
     }
@@ -21,7 +22,7 @@ class AngApplication : MultiDexApplication() {
      * @param base The base context.
      */
     override fun attachBaseContext(base: Context?) {
-        super.attachBaseContext(base)
+        super.attachBaseContext(base?.let(AppLocaleManager::localizedContext))
         application = this
     }
 
@@ -35,11 +36,10 @@ class AngApplication : MultiDexApplication() {
     override fun onCreate() {
         super.onCreate()
 
-        // Hardened final releases validate package identity, immutable artwork, branded text,
-        // and the APK signing certificate before any application state is initialized.
         MobileTinaIntegrityGuard.verify(this)
+        MmkvManager.initialize(this)
 
-        MMKV.initialize(this)
+        AppLocaleManager.initialize(this)
 
         // Prepare bundled geo assets synchronously in every Android process before CoreNativeManager
         // can initialize Xray. This removes the first-run race that could leave geosite.dat partially
@@ -51,17 +51,14 @@ class AngApplication : MultiDexApplication() {
         MmkvManager.encodeSettings(AppConfig.PREF_ROOT_MODE_ENABLE, false)
         MmkvManager.encodeSettings(AppConfig.PREF_ROOT_LAN_SHARING, false)
         MmkvManager.encodeSettings(AppConfig.PREF_DOUBLE_COLUMN_DISPLAY, false)
-        MmkvManager.encodeSettings(AppConfig.PREF_IS_BOOTED, false)
 
         // Initialize WorkManager with the custom configuration
         WorkManager.initialize(this, workManagerConfiguration)
 
         // Ensure critical preference defaults are present in MMKV early
         SettingsManager.initApp(this)
-        SettingsManager.setNightMode()
 
-        es.dmoral.toasty.Toasty.Config.getInstance()
-            .setGravity(android.view.Gravity.BOTTOM, 0, 300)
-            .apply()
+        // Initialize theme state from MMKV
+        ThemeManager.refresh()
     }
 }

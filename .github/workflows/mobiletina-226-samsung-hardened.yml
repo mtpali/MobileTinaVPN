@@ -1,9 +1,9 @@
-name: MobileTina 2.2.6 Samsung Fix Hardened APK
+name: MobileTina 2.3.12 Samsung Fix Hardened APK
 
 on:
   push:
     branches:
-      - agent/mobiletina-2.2.6-samsung-fixes
+      - agent/mobiletina-2.3.12-samsung-fixes
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.2.6"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.12"' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'MobileTinaIntegrityGuard.verify' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
           grep -q 'MobileTinaGeoAssetManager.ensureReady' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
@@ -41,16 +41,16 @@ jobs:
           cmdline-tools-version: '14742923'
           packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
 
-      - name: Install NDK 29
+      - name: Install NDK 30
         run: |
           set -euo pipefail
-          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --channel=0 --install "ndk;29.0.14206865"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --channel=0 --install "ndk;30.0.16248370"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
           python3 - <<'PY'
           from pathlib import Path
           p = Path('V2rayNG/app/build.gradle.kts')
           s = p.read_text()
-          p.write_text(s.replace('android {\n', 'android {\n    ndkVersion = "29.0.14206865"\n', 1))
+          p.write_text(s.replace('android {\n', 'android {\n    ndkVersion = "30.0.16248370"\n', 1))
           PY
 
       - name: Build libhevtun
@@ -115,6 +115,9 @@ jobs:
           CERT_SHA=$(keytool -exportcert -keystore "$KEYSTORE_PATH" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" | sha256sum | awk '{print $1}')
           test ${#CERT_SHA} -eq 64
           echo "CERT_SHA=$CERT_SHA" >> "$GITHUB_ENV"
+
+      - name: Prepare bundled GeoData
+        run: bash scripts/prepare-geo-assets.sh
 
       - name: Test and build hardened dual ARM APK
         env:
@@ -198,16 +201,16 @@ jobs:
 
           SHA=$(sha256sum "$APK" | awk '{print $1}')
           SIZE=$(stat -c '%s' "$APK")
-          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-samsung-fix-hardened.sha256
-          printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\n' "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-samsung-fix-hardened-report.txt
+          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened.sha256
+          printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\n' "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened-report.txt
 
       - name: Upload hardened fixed APK
         uses: actions/upload-artifact@v7
         with:
-          name: MobileTina-2.2.6-samsung-fix-hardened
+          name: MobileTina-2.3.12-samsung-fix-hardened
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-samsung-fix-hardened.sha256
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-samsung-fix-hardened-report.txt
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-samsung-fix-hardened-report.txt
           if-no-files-found: error
           retention-days: 90

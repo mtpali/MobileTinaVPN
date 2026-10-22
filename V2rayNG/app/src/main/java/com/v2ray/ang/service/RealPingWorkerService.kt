@@ -4,31 +4,56 @@ import android.content.Context
 import com.v2ray.ang.core.CoreConfigManager
 import com.v2ray.ang.core.CoreNativeManager
 import com.v2ray.ang.dto.RealPingEvent
+import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.extension.isComplexType
+import com.v2ray.ang.extension.isNotNullEmpty
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SpeedtestManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
+internal object RealPingExecutionLimiter {
+    private val customConfigMutex = Mutex()
+
+    suspend fun <T> run(configType: EConfigType, block: () -> T): T {
+        // Custom profiles bypass speed-test trimming and start complete Xray configs.
+        // Parallel teardown can abort the native probe process, so serialize their
+        // JNI measurements globally across batches.
+        return if (configType == EConfigType.CUSTOM) {
+            customConfigMutex.withLock { block() }
+        } else {
+            block()
+        }
+    }
+}
+
+/**
+ * Worker that runs a batch of real-ping tests independently.
+ * Each batch owns its own CoroutineScope/dispatcher and can be cancelled separately.
+ */
 class RealPingWorkerService(
     private val context: Context,
     private val guids: List<String>,
+    private val onlyTcp: Boolean = false,
     private val onEvent: (RealPingEvent) -> Unit = {},
     maxConcurrency: Int? = null
 ) {
     private val job = SupervisorJob()
-    private val concurrency = minOf(
-        SettingsManager.getRealPingConcurrency(),
-        maxConcurrency ?: Int.MAX_VALUE
-    ).coerceAtLeast(1)
-    private val dispatcher = Executors.newFixedThreadPool(concurrency).asCoroutineDispatcher()
+    private val concurrency = minOf(SettingsManager.getRealPingConcurrency(), maxConcurrency ?: Int.MAX_VALUE).coerceAtLeast(1)
+    private val dispatcher = Executors.newFixedThreadPool(if (onlyTcp) concurrency * 2 else concurrency).asCoroutineDispatcher()
     private val scope = CoroutineScope(job + dispatcher + CoroutineName("RealPingBatchWorker"))
+
     private val runningCount = AtomicInteger(0)
     private val totalCount = AtomicInteger(0)
 
@@ -38,17 +63,18 @@ class RealPingWorkerService(
             scope.launch {
                 runningCount.incrementAndGet()
                 try {
-                    onEvent(RealPingEvent.Result(guid, startRealPing(guid)))
-                } catch (e: CancellationException) {
-                    // Cancellation is not a failed ping. Propagate it so a superseded Smart
-                    // Connect attempt cannot publish an artificial -1 result into a new batch.
-                    throw e
+                    val result = if (onlyTcp) startTcping(guid) else startRealPing(guid)
+                    if (scope.isActive) {
+                        onEvent(RealPingEvent.Result(guid, result))
+                    }
                 } catch (_: Throwable) {
-                    onEvent(RealPingEvent.Result(guid, -1L))
+                    // ignore
                 } finally {
-                    val left = runningCount.decrementAndGet()
                     val count = totalCount.decrementAndGet()
-                    onEvent(RealPingEvent.Progress("$left / $count"))
+                    val left = runningCount.decrementAndGet()
+                    if (scope.isActive) {
+                        onEvent(RealPingEvent.Progress("$left / $count"))
+                    }
                 }
             }
         }
@@ -56,9 +82,11 @@ class RealPingWorkerService(
         scope.launch {
             try {
                 joinAll(*jobs.toTypedArray())
-                onEvent(RealPingEvent.Finish("0"))
+                if (isActive) {
+                    onEvent(RealPingEvent.Finish("0"))
+                }
             } catch (_: CancellationException) {
-                onEvent(RealPingEvent.Finish("-1"))
+                // If cancelled, don't send finish event to avoid confusion
             } finally {
                 close()
             }
@@ -73,29 +101,60 @@ class RealPingWorkerService(
         try {
             dispatcher.close()
         } catch (_: Throwable) {
+            // ignore
         }
     }
 
-    private fun startRealPing(guid: String): Long {
-        val config = MmkvManager.decodeServerConfig(guid) ?: return -1L
+    private suspend fun startRealPing(guid: String): Long {
+        val retFailure = -1L
 
-        // Do not reject a server before the real outbound test. TCP pre-checks can
-        // produce false negatives on mobile networks, Reality, CDN and proxy paths.
-        val configResult = CoreConfigManager.getV2rayConfig4Speedtest(context, guid)
-        if (!configResult.status) {
-            return -1L
+        val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
+        if (!config.configType.isComplexType()
+            && config.configType != EConfigType.HYSTERIA2
+            && config.configType != EConfigType.WIREGUARD
+            && config.alpn?.startsWith("h3") != true
+            && config.server.isNotNullEmpty()
+            && config.serverPort?.toIntOrNull() != null
+        ) {
+            val url = config.server.orEmpty()
+            val port = config.serverPort.orEmpty().toInt()
+            val tcpTime = SpeedtestManager.socketConnectTime(url, port, 1000)
+            if (tcpTime <= -1L) {
+                return retFailure
+            }
         }
 
-        // Some mobile networks/devices intermittently fail the primary generate_204 endpoint
-        // even though the proxy server itself is healthy. Match the connected-core delay logic:
-        // try the configured/primary endpoint first, then the secondary endpoint before marking
-        // a server dead. This prevents Smart Connect from turning red on a false-negative batch.
-        val primaryUrl = SettingsManager.getDelayTestUrl()
-        val primary = CoreNativeManager.measureOutboundDelay(configResult.content, primaryUrl)
-        if (primary >= 0L) return primary
+        val configResult = CoreConfigManager.getV2rayConfig4Speedtest(context, guid)
+        if (!configResult.status) {
+            return retFailure
+        }
+        return RealPingExecutionLimiter.run(config.configType) {
+            val primaryUrl = SettingsManager.getDelayTestUrl()
+            val primary = CoreNativeManager.measureOutboundDelay(configResult.content, primaryUrl)
+            val secondaryUrl = SettingsManager.getDelayTestUrl(true)
+            if (primary >= 0L || primaryUrl == secondaryUrl) primary
+            else CoreNativeManager.measureOutboundDelay(configResult.content, secondaryUrl)
+        }
+    }
 
-        val secondaryUrl = SettingsManager.getDelayTestUrl(true)
-        if (secondaryUrl == primaryUrl) return primary
-        return CoreNativeManager.measureOutboundDelay(configResult.content, secondaryUrl)
+    private fun startTcping(guid: String): Long {
+        val retFailure = -1L
+
+        val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
+        if (!config.configType.isComplexType()
+            && config.configType != EConfigType.HYSTERIA2
+            && config.configType != EConfigType.WIREGUARD
+            && config.alpn?.split(',')?.all { it.trim().startsWith("h3") } != true
+            && config.server.isNotNullEmpty()
+            && config.serverPort?.toIntOrNull() != null
+        ) {
+            val url = config.server.orEmpty()
+            val port = config.serverPort.orEmpty().toInt()
+            val tcpTime = SpeedtestManager.socketConnectTime(url, port, 1000)
+
+            return tcpTime
+        }
+
+        return retFailure
     }
 }

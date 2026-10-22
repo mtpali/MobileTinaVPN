@@ -6,6 +6,7 @@ import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.idnHost
 import com.v2ray.ang.extension.nullIfBlank
 import com.v2ray.ang.extension.removeWhiteSpace
+import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.Utils
 import java.net.URI
 import java.net.URLDecoder
@@ -38,9 +39,11 @@ object WireguardFmt : FmtBase() {
         config.publicKey = queryParam["publickey"].orEmpty()
         config.preSharedKey = queryParam["presharedkey"]?.nullIfBlank()
         config.mtu = Utils.parseInt(queryParam["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
+        config.remoteDNS = queryParam["dns"] ?: AppConfig.WIREGUARD_LOCAL_REMOTE_DNS
         config.reserved = queryParam["reserved"]?.nullIfBlank()
         config.allowedIPs = queryParam["allowedips"]
-        config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it > 0 }
+        config.keepAlive = queryParam["keepalive"]?.toIntOrNull()?.takeIf { it >= 0 }
+        config.finalMask = (queryParam["fm"] ?: queryParam["finalmask"] ?: queryParam["finalMask"])?.nullIfBlank()
 
         return config
     }
@@ -110,11 +113,12 @@ object WireguardFmt : FmtBase() {
             .joinToString("\n")
             .ifEmpty { AppConfig.WIREGUARD_LOCAL_ADDRESS_V4 }
         config.mtu = Utils.parseInt(interfaceParams["mtu"] ?: AppConfig.WIREGUARD_LOCAL_MTU)
+        config.remoteDNS = interfaceParams["dns"] ?: AppConfig.WIREGUARD_LOCAL_REMOTE_DNS
         config.publicKey = peerParams["publickey"].orEmpty()
         config.preSharedKey = peerParams["presharedkey"]?.nullIfBlank()
         config.allowedIPs = peerParams["allowedips"]?.takeIf { it.isNotBlank() }
             ?: "0.0.0.0/0,::/0"
-        config.keepAlive = peerParams["persistentkeepalive"]?.toIntOrNull()?.takeIf { it > 0 }
+        config.keepAlive = peerParams["persistentkeepalive"]?.toIntOrNull()?.takeIf { it >= 0 }
         parseEndpoint(peerParams["endpoint"].orEmpty()).also {
             config.server = it.first
             config.serverPort = it.second
@@ -151,6 +155,7 @@ object WireguardFmt : FmtBase() {
             config.awgDisableCookieReplies =
                 interfaceParams["disablecookiereplies"].asBoolean()
         }
+        config.finalMask = (peerParams["finalmask"] ?: peerParams["fm"] ?: interfaceParams["finalmask"] ?: interfaceParams["fm"])?.nullIfBlank()
 
         return config
     }
@@ -193,11 +198,13 @@ object WireguardFmt : FmtBase() {
             .distinct()
             .joinToString(",")
         config.mtu?.let { query["mtu"] = it.toString() }
+        config.remoteDNS?.takeIf { it.isNotBlank() }?.let { query["dns"] = it.removeWhiteSpace().orEmpty() }
+        config.finalMask?.takeIf { it.isNotBlank() }?.let { query["fm"] = it }
         config.preSharedKey?.let { query["presharedkey"] = it.removeWhiteSpace().orEmpty() }
         config.allowedIPs?.takeIf { it.isNotBlank() }?.let {
             query["allowedips"] = it.removeWhiteSpace().orEmpty()
         }
-        config.keepAlive?.takeIf { it > 0 }?.let { query["keepalive"] = it.toString() }
+        config.keepAlive?.takeIf { it >= 0 }?.let { query["keepalive"] = it.toString() }
         return toUri(config, config.secretKey, query)
     }
 
@@ -226,6 +233,8 @@ object WireguardFmt : FmtBase() {
             .distinct()
             .forEach { appendLine("Address = $it") }
         config.mtu?.let { appendLine("MTU = $it") }
+        config.remoteDNS?.takeIf { it.isNotBlank() }?.let { appendLine("DNS = $it") }
+        config.finalMask?.takeIf { it.isNotBlank() }?.let { appendLine("FinalMask = ${JsonUtil.parseString(it)?.toString() ?: it}") }
 
         if (config.isAmneziaWG) {
             appendInt("Jc", config.awgJc)
@@ -255,6 +264,7 @@ object WireguardFmt : FmtBase() {
             if (config.awgDisableCookieReplies) appendLine("DisableCookieReplies = true")
         }
 
+
         appendLine()
         appendLine("[Peer]")
         appendLine("PublicKey = ${config.publicKey.orEmpty()}")
@@ -265,7 +275,7 @@ object WireguardFmt : FmtBase() {
         config.allowedIPs?.takeIf { it.isNotBlank() }?.let {
             appendLine("AllowedIPs = ${it.replace('\n', ',')}")
         }
-        config.keepAlive?.takeIf { it > 0 }?.let {
+        config.keepAlive?.takeIf { it >= 0 }?.let {
             appendLine("PersistentKeepalive = $it")
         }
         config.reserved?.takeIf { it.isNotBlank() && it != "0,0,0" }?.let {

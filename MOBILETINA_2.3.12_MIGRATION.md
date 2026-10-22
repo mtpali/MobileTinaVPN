@@ -1,0 +1,121 @@
+# MobileTina / AliMTP upstream migration
+
+Target (requested upstream pre-release): v2rayNG **2.3.12**, upstream commit `118cf5bc7d0b290947b0827f5ad03e73018d8e5d`.
+Native wrapper: `1be1e621be15702da7b7faf16ef83f2493c5aa01`.
+Xray: **v26.10.17**, commit `92ccc939aaf4f8965f369cf0b142e005aeaa11d5`.
+
+The existing MobileTina main screen and hidden subscription screen intentionally retain their
+View-based implementations and Material themes. Editors, settings, routing, assets, scanner and
+per-app proxy use the new upstream Compose implementations. This is a compatibility migration;
+it does not replace the custom Auto/Manual product interface with the upstream launcher.
+
+Both application IDs remain unchanged. Source versionCode advances from 744 to 752 and
+versionName from 2.2.6 to 2.3.12. Shop and personal editions remain separate branches.
+
+| Capability | Migration contract |
+| --- | --- |
+| Auto/Manual, Smart Connect, progress and ping | Existing main screen and ViewModel retained; typed daemon results adapted; Smart Connect batch acknowledgement, cancellation generations and concurrency cap preserved. |
+| Standard WireGuard and AmneziaWG | Raw INI/link parsing, address policy, optional Reserved, all AWG fields and backend retained alongside remoteDNS and finalMask. |
+| Resume and network handover | AWG bind refresh retained; upstream network monitor integrated with stale-instance/session checks. |
+| Stop and reconnect | TUN closes before publication and slow native cleanup; new startup waits for native cleanup on IO. |
+| Force Stop / OEM Close All | Own-service snapshot reconciliation retained. |
+| GeoIP custom JSON | Compact private/cn rules normalize before either TUN or proxy-only processing; full geo databases are bundled with pinned checksums. |
+| Subscription privacy and sharing | Existing hidden drawer entry, read-only screen, ten-click action, ten-click manual QR action and protected strings remain. |
+| Subscription expiry and usage | Comment markers, stop acknowledgement, retirement and usage metadata retained; HTTP request headers participate in fetch identity. |
+| Branding and artwork | Existing images checked byte-for-byte; custom shell keeps its original theme. |
+| Per-app proxy | Current Compose implementation retains the five pinned apps and persisted package selection. |
+| Hardening | Certificate guard, R8, resource shrinking, protected strings and JNI descriptor checks retained. |
+| Packaging | Release output contains ARMv7 and ARM64 only, including both HEV native components. |
+
+The native patch was rebased onto the wrapper's exact Xray dependency. Upstream now owns protobuf
+field 10 for remote DNS; Amnezia uses field 11. A protobuf round-trip test checks both together.
+Xray's new eagerly-created WireGuard device and locked `up()` lifecycle are retained. AWG device options are applied before peers, and recovery registration is removed only when the handler closes. Patches carry context and apply with zero fuzz.
+
+The GitHub migration workflow runs the complete Playstore unit suite, Kotlin compilation,
+Playstore and F-Droid debug assembly, hardened release assembly, signature/resource/ABI checks,
+and native AWG tests. JUnit Vintage runs the preceding release's JUnit 4 regressions alongside
+the upstream Jupiter suite.
+
+## Protected text compatibility
+
+The previous migration APK could throw `AEADBadTagException` while normalizing subscription
+names. Its brand record was encrypted with the original 2.2.6 key context, but decryption derived
+a different key from the new release's `VERSION_NAME`. That immutable record context is now
+independent of the APK version. GCM authentication and the integrity guard remain enabled.
+The working edition also normalizes the F-Droid application ID suffix for its social/brand
+records, matching its existing hidden-access vault. The personal edition keeps its shared
+vault namespace and its distinct personal records.
+
+Both Playstore and F-Droid unit suites now decrypt every social, hidden-access and brand record
+and compare their contents with digests from the preceding working release. This checks exact
+text preservation without putting protected text in fixtures or test output.
+
+## Silent tests, settings and OLED (2026-10-20)
+
+Real Ping and Smart Connect use a regular, user-initiated test service with in-app progress.
+The dispatcher, service, manifest and notification channel were changed together so there is
+no test notification and no foreground-service notification deadline. Batch acknowledgement,
+request identity, generation cancellation and the eight-worker Smart Connect cap are retained.
+The VPN's connection notification and subscription-update service retain their existing behavior.
+
+The mode-help link, system-VPN settings shortcut and auto-connect-at-startup setting are removed
+from the settings UI, handlers, resources and persistence API. Boot/package-update handling still
+recovers pending subscription expiry work, but no longer starts a VPN. Android's separate
+Always-on VPN support is retained. The general sniffing preference defaults off. Dynamic color
+and the language picker, their preference keys, and unused language resources have been removed.
+
+Dark mode uses black backgrounds and surfaces in both Compose screens and the retained View
+screens, including black window backgrounds and disabled elevation tint. Orange accents are
+replaced by blue. The shared theme policy applies Light/Dark/System both to AppCompat and Compose;
+the theme selector is the first settings row. The fixed default locale keeps the original base text.
+The uploaded white.webp replaces only MobileTina's asset (SHA-256
+`cd00d42eed21c4790e94ce7dbd62740304dbce31c25bc8cb2ac492bd4a95d3b3`),
+with a 226dp square fitted image. Its release integrity digest and CI artwork digest match the
+source image. AliMTP retains its own artwork; its automatic button is 238dp. Both buttons grew 2dp.
+
+Regression coverage checks regular-service dispatch and cancellation while retaining the batch
+request identity. The migration audit rejects reintroduced settings entries or test notifications
+and checks that boot expiry recovery and disabled defaults remain present.
+
+## Direct .ir routing and subscription taps
+
+The exact `domain:ir` suffix rule already exists in the Iran routing preset. A default-enabled
+"Bypass .ir domains" switch now applies that rule before existing rules in generated and full
+custom JSON runtime configurations without replacing user rules, DNS, balancers or proxy settings.
+A genuine, unchained Freedom outbound is reused or created with a collision-safe tag. Generated
+DNS includes `.ir` among direct domains. Probe configs are excluded so Real Ping still measures
+the selected proxy. The route can be disabled from Routing settings.
+
+IP-only VPN requests need a domain for suffix matching. With general sniffing left off, bypass
+uses HTTP/TLS/QUIC detection with `routeOnly=true`, preserving the original destination IP.
+FakeDNS override entries are retained; the pinned Xray dispatcher continues to translate fake IPs
+regardless of routeOnly. Existing explicit destination-rewrite choices are respected. A hidden
+domain (for example ECH with encrypted DNS) or IP-literal request cannot be identified by a suffix
+rule; custom Lua routing scripts may take precedence. Those cases need device-specific acceptance.
+
+The manual subscription header now opens its existing protected QR dialog on ten consecutive
+clicks on the same subscription, with a two-second maximum gap. Switching subscription, changing
+Auto/Manual mode, or a stale sequence resets the count. The drawer's separate ten-second reveal,
+read-only screen and Raw-GitHub restriction remain intact.
+
+Only AliMTP restores the widget provider removed by its Playstore manifest overlay. Its widget
+label is VPN; the working edition's widget configuration is unchanged. All protected bitmap assets
+remain byte-for-byte unchanged during this UI/routing pass.
+
+Regression tests cover both UI engines' theme selection, QR tap isolation/reset and direct-route
+priority, idempotence, unchained outbounds, preserved custom data, FakeDNS entries, routing-only
+sniffing, disabled-policy fast paths and source profile identity.
+
+## Device acceptance
+
+**Not run in the editing environment:** Gradle commands could not start because its Java runtime
+cannot load `libjli.so`. GitHub Actions is the build/test authority for this change.
+
+**Not run without a device/emulator:** VPN/proxy/root cold start and duplicate start; stop during
+setup; repeated stop and immediate reconnect; sleep/wake and Wi-Fi/cellular handover racing stop;
+OEM Close All/Force Stop; existing-data upgrade; first-run permissions; hidden subscription access,
+QR clicks/copy actions and expiry; IME, keyboard, D-pad, TalkBack and activity recreation in migrated screens.
+
+A green build does not establish these runtime outcomes. Keep the migration PRs unmerged until
+the exact artifacts and the product's device scenarios are accepted. Ephemeral CI certificates
+remain test signing unless each edition is configured with its permanent keystore.

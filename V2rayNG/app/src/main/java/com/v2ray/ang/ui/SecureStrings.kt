@@ -65,7 +65,7 @@ internal object q {
                     ((i * 29 + slot * 17 + 0xa5) and 0xff)
                 ).toByte()
         }
-        val appId = BuildConfig.APPLICATION_ID.toByteArray(Charsets.UTF_8)
+        val appId = BuildConfig.APPLICATION_ID.removeSuffix(".fdroid").toByteArray(Charsets.UTF_8)
         val key = try {
             val mac = Mac.getInstance("HmacSHA256")
             mac.init(SecretKeySpec(seed, "HmacSHA256"))
