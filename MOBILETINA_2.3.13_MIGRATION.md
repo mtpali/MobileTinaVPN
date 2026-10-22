@@ -104,3 +104,19 @@ Permanent keystores are not supplied by this migration. The workflow records whe
 repository secrets or ephemeral CI test signing were actually used. A new temporary
 certificate does not permit an in-place update over a different certificate. APK,
 certificate digest and the exact R8 mapping must be archived together per edition.
+
+## Working-edition status artwork replacement (2026-10-22)
+
+The user supplied `mobile.zip` containing three new 1254 x 1254 WebP files.
+Only MobileTina replaces `blue.webp`, `red.webp` and `yellow.webp` with those
+exact bytes. The artwork audit and runtime integrity digests are updated together.
+The existing 226dp square, zero padding, fitCenter and adjustViewBounds display
+matches all four state images, including the existing white artwork. No tint,
+resampling, recompression, state mapping or application version change is needed.
+AliMTP and its source/artwork are unchanged by this request.
+
+| File | SHA-256 |
+| --- | --- |
+| `blue.webp` | `cd534167f656231001e6afcfdf9fa945a25421ad26fb1200fed89b9549e300a1` |
+| `red.webp` | `fe71582a07b55e25e825eb8016662433afc10cfdbc5a3b5c27565cf6602a41f3` |
+| `yellow.webp` | `579e3de49a56f29c36f50b0e3f5ebe15df6c05ddad670e100c914e03916c6a5b` |
