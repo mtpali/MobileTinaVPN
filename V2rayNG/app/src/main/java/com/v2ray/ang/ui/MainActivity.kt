@@ -109,6 +109,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var subscriptionRefreshing = false
     private var pendingSmartVpnPermission = false
     private var pendingSmartVpnAttemptId = 0L
+    private var widgetToggleRequest = WidgetToggleRequest()
     private var smartConnecting = false
     private var smartConnectionFailed = false
     private var smartCountdownSeconds = 0
@@ -138,7 +139,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             if (result.resultCode == RESULT_OK) {
                 if (smart) {
                     if (isSmartAttemptActive(attemptId)) startV2Ray(true, attemptId)
-                } else {
+                } else if (manualConnecting) {
                     startV2Ray(false)
                 }
             } else if (smart) {
@@ -155,7 +156,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
 
     private val requestFirstRunVpnPermission =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != RESULT_OK) widgetToggleRequest.cancel()
             markFirstRunPermissionCompleted()
         }
 
@@ -170,6 +172,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        widgetToggleRequest = WidgetToggleRequest(savedInstanceState?.getBoolean(STATE_WIDGET_TOGGLE_PENDING) ?: false)
+        if (savedInstanceState == null) receiveWidgetToggle(intent)
         // Defense in depth: keep an activity-level integrity gate in addition to the
         // process-level Application check so a patched startup path is not sufficient.
         MobileTinaIntegrityGuard.verify(this)
@@ -197,6 +201,23 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         MobileTinaExpiryManager.recoverPending(this)
 
         continueInitialLaunch()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        receiveWidgetToggle(intent)
+        // Android resumes this singleTask activity after onNewIntent; dispatch there so
+        // the existing permission-aware Smart Connect flow runs from a visible activity.
+    }
+
+    private fun receiveWidgetToggle(intent: Intent) {
+        if (widgetToggleRequest.receive(intent.action)) intent.action = null
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_WIDGET_TOGGLE_PENDING, widgetToggleRequest.isPending)
+        super.onSaveInstanceState(outState)
     }
 
     private fun setupModeTabs() {
@@ -548,7 +569,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     private fun smartConnectAndStart() {
         val serviceRunning = mainViewModel.reconcileRunningState()
-        if (serviceRunning || smartConnecting) {
+        if (serviceRunning || smartConnecting || manualConnecting) {
+            manualConnecting = false
             cancelSmartConnect()
             return
         }
@@ -1013,6 +1035,19 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         showExpiredSubscriptionToastIfNeeded()
         reconcileExistingMarkersAsync()
         updateSubscriptionOnResume()
+        dispatchWidgetToggle()
+    }
+
+    private fun dispatchWidgetToggle() {
+        if (isFinishing || isDestroyed ||
+            !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+        ) return
+        if (widgetToggleRequest.consume(
+                firstRunPrefs.getBoolean(FIRST_RUN_COMPLETED, false) && firstLaunchDialog == null
+            )) {
+            setMode(MODE_AUTO)
+            smartConnectAndStart()
+        }
     }
 
     private fun reconcileExistingMarkersAsync() {
@@ -1162,6 +1197,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun markFirstRunPermissionCompleted() {
         firstRunPrefs.edit().putBoolean(FIRST_RUN_COMPLETED, true).apply()
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) { }
+        dispatchWidgetToggle()
     }
 
     private fun continueInitialLaunch() {
@@ -1182,6 +1218,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         } else {
             handleFirstRunPermissions()
         }
+        dispatchWidgetToggle()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -1598,6 +1635,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val MODE_AUTO = 0
         private const val MODE_MANUAL = 1
         private const val FIRST_RUN_COMPLETED = "permissions_completed"
+        private const val STATE_WIDGET_TOGGLE_PENDING = "widget_toggle_pending"
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
         private const val DRAWER_SUBSCRIPTION_HOLD_MS = 10_000L
         private const val DRAWER_SUBSCRIPTION_VISIBLE_MS = 60_000L

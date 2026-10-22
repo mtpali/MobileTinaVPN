@@ -30,6 +30,10 @@
             android:name=".receiver.WidgetProvider"
             android:enabled="true"
             android:label="@string/app_widget_name"
-            tools:node="merge" />
+            tools:node="merge">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

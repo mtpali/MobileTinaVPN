@@ -104,3 +104,29 @@ Permanent keystores are not supplied by this migration. The workflow records whe
 repository secrets or ephemeral CI test signing were actually used. A new temporary
 certificate does not permit an in-place update over a different certificate. APK,
 certificate digest and the exact R8 mapping must be archived together per edition.
+
+## AliMTP VPN widget: Smart Connect toggle (2026-10-22)
+
+The personal edition's widget now opens the retained product Auto screen with an
+explicit immutable activity PendingIntent. On a cold launch and on delivery to the
+existing singleTask activity, one widget click invokes the same `smartConnectAndStart`
+method as the Auto button: one server connects directly; multiple servers use the
+existing silent Real Ping selection, retry, cancellation generation and VPN permission
+flow. A subsequent click disconnects an active VPN or cancels a Smart Connect attempt.
+The widget does not call `startServiceFromToggle` or merely reconnect the last selection.
+It also cancels a pending manual start. A late VPN-consent result cannot restart a
+cancelled attempt as a manual connection: manual starts require `manualConnecting`.
+
+Dispatch waits for the initial notice and first-run permissions. Pending clicks survive
+activity recreation; a second click during onboarding cancels the request. Ordinary
+launches, resumes and consumed-intent restoration cannot repeat a widget toggle. Denial
+of first-run VPN consent discards the pending request. Installed widgets are re-rendered
+on package replacement; pre-update cached broadcast clicks use the same Auto entry.
+
+The existing widget appearance, daemon state updates, reliable stop path, Smart Connect
+timings, eight-worker limit, native inputs, artwork and signing guard are preserved.
+Only AliMTP changes; MobileTina's source/PR and APK remain untouched. Focused regressions
+cover direct immutable activity dispatch and pending-click/permission/recreation rules.
+Both Android distribution unit suites and the hardened ARM APK build must pass on the
+new exact source head. Physical launcher taps (cold/warm, connect/cancel/disconnect,
+consent denial and package upgrade) still require acceptance on a phone.
