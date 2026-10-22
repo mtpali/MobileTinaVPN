@@ -83,7 +83,10 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationManager.ensureForeground()
         if (stopping) return START_NOT_STICKY
-        if (smartConnect.handleCommand(intent, setupJob?.isActive == true, ::stopService)) return START_NOT_STICKY
+        if (smartConnect.handleCommand(intent, setupJob?.isActive == true, ::stopService)) {
+            return if (CoreServiceManager.isRunning() && MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING))
+                START_STICKY else START_NOT_STICKY
+        }
         if (isRunning || setupJob?.isActive == true) return START_STICKY
         // Always-on VPN restarts from OS deliver intent.action == SERVICE_INTERFACE or null intent.
         // Reset any stuck start lock left by a killed process to allow setupVpnService() to run.

@@ -114,6 +114,7 @@ if 'applicationId = "com.v2ray.alimtp"' in build:
     require("service.startService(Intent(service, service.javaClass)" in delegate, "Selection must hand off to the same foreground service")
     require("intent?.getStringExtra(MessageHelper.EXTRA_REQUEST_ID) != probeRequestId" in delegate and
             "startedBatchId == batchId" in delegate, "Smart Connect IPC must correlate both request and batch")
+    require("if (obsolete && owner == null && !busy &&" in delegate and "stopService()" in delegate, "An obsolete handoff must close an otherwise idle foreground service")
     for name in ("CoreVpnService", "CoreProxyOnlyService", "CoreRootService"):
         service = (SOURCE / f"service/{name}.kt").read_text()
         require(service.index("NotificationManager.ensureForeground()") < service.index("smartConnect.handleCommand("), f"{name} must enter foreground before selection")

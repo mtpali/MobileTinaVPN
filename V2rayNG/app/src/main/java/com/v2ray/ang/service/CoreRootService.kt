@@ -52,7 +52,10 @@ class CoreRootService : Service(), ServiceControl {
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
         if (stopping) return START_NOT_STICKY
-        if (smartConnect.handleCommand(intent, setupJob?.isActive == true, ::stopService)) return START_NOT_STICKY
+        if (smartConnect.handleCommand(intent, setupJob?.isActive == true, ::stopService)) {
+            return if (CoreServiceManager.isRunning() && MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING))
+                START_STICKY else START_NOT_STICKY
+        }
         if (MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING) && CoreServiceManager.isRunning()) return START_STICKY
         if (setupJob?.isActive == true) return START_STICKY
         setupJob = setupScope.launch {

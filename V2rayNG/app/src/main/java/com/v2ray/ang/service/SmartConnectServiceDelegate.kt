@@ -115,7 +115,11 @@ internal class SmartConnectServiceDelegate(private val service: Service) {
             }
             SmartConnectServiceState.ACTION_SELECTED -> {
                 // A queued handoff from a cancelled/previous attempt must never start a core.
-                intent.getStringExtra(MessageHelper.EXTRA_REQUEST_ID) != owner || owner == null
+                val obsolete = intent.getStringExtra(MessageHelper.EXTRA_REQUEST_ID) != owner || owner == null
+                if (obsolete && owner == null && !busy &&
+                    !(CoreServiceManager.isRunning() && V2RayServiceManager.isRunning())
+                ) stopService()
+                obsolete
             }
             else -> {
                 cancel()
