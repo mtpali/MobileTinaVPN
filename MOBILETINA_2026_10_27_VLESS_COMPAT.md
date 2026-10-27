@@ -33,3 +33,7 @@ unchanged. App version remains 2.3.13.
 
 Phone acceptance, including the user's real endpoint, remains separate from the
 automated core round-trip and build checks. PRs remain draft and unmerged.
+
+Android packaging strips non-runtime ELF metadata. The final APK verifier compares
+all allocated code/data sections, ELF ABI flags and program headers against the
+tested AAR; both original and packaged full-file hashes are recorded separately.
