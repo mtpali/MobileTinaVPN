@@ -97,10 +97,17 @@ class PerAppProxyViewModel(application: Application) : BaseViewModel(application
         isAppListLoading = true
         launchLoading {
             try {
-                val apps = withContext(Dispatchers.IO) {
+                val (apps, selection) = withContext(Dispatchers.IO) {
                     val list = AppManagerUtil.loadNetworkAppList(applicationContext)
-                    sortApps(list)
+                    val saved = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)?.toSet()
+                    val initial = PerAppDefaults.selectionFor(list.map { it.packageName }, saved)
+                    if (saved == null) {
+                        // Persist even an empty default so deliberate later deselection survives reopening.
+                        MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY_SET, initial.toMutableSet())
+                    }
+                    sortApps(list, initial) to initial
                 }
+                _blacklist.value = selection
                 appsAll = apps
                 _displayedApps.value = applyFilter(currentQuery)
             } catch (e: CancellationException) {
@@ -128,10 +135,9 @@ class PerAppProxyViewModel(application: Application) : BaseViewModel(application
         }
     }
 
-    private fun sortApps(apps: List<AppInfo>): List<AppInfo> {
+    private fun sortApps(apps: List<AppInfo>, selectedPackages: Set<String> = _blacklist.value): List<AppInfo> {
         val collator = Collator.getInstance()
-        val selectedPackages = _blacklist.value
-        val pinned = listOf("org.telegram.messenger", "com.instagram.android", "com.whatsapp", "com.android.chrome", "com.google.android.googlequicksearchbox")
+        val pinned = PerAppDefaults.pinnedPackages
         return apps.sortedWith { p1, p2 ->
             val rank1 = pinned.indexOf(p1.packageName).let { if (it < 0) Int.MAX_VALUE else it }
             val rank2 = pinned.indexOf(p2.packageName).let { if (it < 0) Int.MAX_VALUE else it }
