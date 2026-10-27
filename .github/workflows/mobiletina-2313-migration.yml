@@ -141,8 +141,10 @@ jobs:
         id: awg-core-cache
         uses: actions/cache/restore@v6
         with:
-          path: V2rayNG/app/libs/libv2ray.aar
-          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+          path: |
+            V2rayNG/app/libs/libv2ray.aar
+            build/native-tests
+          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -155,12 +157,17 @@ jobs:
           gomobile init
           bash scripts/build-amnezia-libv2ray.sh V2rayNG/app/libs/libv2ray.aar
 
+      - name: Verify native VLESS compatibility and cached build provenance
+        run: python3 scripts/verify-vless-compat.py verify V2rayNG/app/libs/libv2ray.aar
+
       - name: Save AmneziaWG libv2ray cache
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: V2rayNG/app/libs/libv2ray.aar
-          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+          path: |
+            V2rayNG/app/libs/libv2ray.aar
+            build/native-tests
+          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
       - name: Prepare hardened APK signing certificate
         env:
@@ -267,6 +274,11 @@ jobs:
             grep -aFq 'go1.27.3' "/tmp/$abi-libgojni.so"
             XRAY_VERSION=$(awk '$1 == "github.com/xtls/xray-core" { print $2; exit }' AndroidLibXrayLite/go.mod)
             grep -aFq "$XRAY_VERSION" "/tmp/$abi-libgojni.so"
+            if grep -aFq 'vless without TLS or other encryption is prohibited' "/tmp/$abi-libgojni.so"; then
+              echo "::error::Unpatched VLESS restriction remains in $abi" >&2
+              exit 1
+            fi
+            grep -aFq 'trojan without TLS is prohibited' "/tmp/$abi-libgojni.so"
           done
 
           # The bundled geo files are what the atomic first-run bootstrap repairs from.
@@ -393,5 +405,6 @@ jobs:
             V2rayNG/app/build/reports/tests/
             V2rayNG/app/build/test-results/
             V2rayNG/app/build/outputs/mapping/playstoreRelease/mapping.txt
+            build/native-tests/
           if-no-files-found: error
           retention-days: 90

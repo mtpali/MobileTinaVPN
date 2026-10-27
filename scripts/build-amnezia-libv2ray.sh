@@ -17,6 +17,7 @@ core_version="$(awk '$1 == "github.com/xtls/xray-core" { print $2; exit }' "$and
 task_dir="$(mktemp -d)"
 patched_core="$task_dir/xray-core"
 wrapper="$task_dir/AndroidLibXrayLite"
+native_reports="$repo_root/build/native-tests"
 
 cleanup() {
     chmod -R u+w "$task_dir" 2>/dev/null || true
@@ -42,7 +43,7 @@ module_json="$(GOWORK=off go mod download -json "$core_module@$core_version")"
 core_source="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["Dir"])' <<<"$module_json")"
 [[ -d "$core_source" ]]
 
-mkdir -p "$patched_core" "$wrapper" "$(dirname "$output_aar")"
+mkdir -p "$patched_core" "$wrapper" "$(dirname "$output_aar")" "$native_reports"
 cp -a "$core_source/." "$patched_core/"
 cp -a "$android_lib/." "$wrapper/"
 chmod -R u+w "$patched_core" "$wrapper"
@@ -50,6 +51,8 @@ chmod -R u+w "$patched_core" "$wrapper"
 patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
 patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$repo_root/core/patches/xray-core-amneziawg-recovery.patch"
 cp "$repo_root/core/mobile-recovery/libv2ray_recovery.go" "$wrapper/"
+mkdir -p "$patched_core/testing/mobiletina_compat"
+cp "$repo_root"/core/vless-compat/*.go "$patched_core/testing/mobiletina_compat/"
 
 # Xray v26.10.21 creates the device eagerly and raises it through locked up().
 # Keep setup, recovery registration and shutdown in that same lifecycle lock.
@@ -81,8 +84,21 @@ PY
 
 (
     cd "$patched_core"
-    gofmt -w infra/conf/wireguard.go infra/conf/wireguard_amnezia_test.go proxy/wireguard/*.go
+    gofmt -w infra/conf/wireguard.go infra/conf/wireguard_amnezia_test.go proxy/wireguard/*.go testing/mobiletina_compat/*.go
     GOWORK=off go mod tidy
+    # First reproduce the user's failure on the pinned upstream core. A compile
+    # failure is not accepted as reproduction; the verifier checks the exact error.
+    if GOWORK=off go test -json ./testing/mobiletina_compat \
+        -run '^TestMobileTinaVlessCompatibility$/^empty-security$' -count=1 -timeout=60s \
+        > "$native_reports/before.jsonl"; then
+        echo "Expected the upstream plaintext VLESS config to be rejected" >&2
+        exit 1
+    fi
+    python3 "$repo_root/scripts/verify-vless-compat.py" baseline
+    patch --batch --forward --fuzz=0 --silent -p1 < "$repo_root/core/patches/xray-core-vless-compat.patch"
+    gofmt -w infra/conf/xray.go
+    GOWORK=off go test -json ./testing/mobiletina_compat -count=1 -timeout=90s \
+        | tee "$native_reports/after.jsonl"
     GOWORK=off go test ./infra/conf -run 'TestAmnezia' -count=1
     GOWORK=off go test ./proxy/wireguard ./proxy/masque -count=1
 )
@@ -102,3 +118,4 @@ PY
 )
 
 [[ -s "$output_aar" ]]
+python3 "$repo_root/scripts/verify-vless-compat.py" record "$output_aar"

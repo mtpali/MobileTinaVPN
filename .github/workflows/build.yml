@@ -75,8 +75,10 @@ jobs:
       id: awg-core-cache
       uses: actions/cache/restore@v6
       with:
-        path: V2rayNG/app/libs/libv2ray.aar
-        key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+        path: |
+          V2rayNG/app/libs/libv2ray.aar
+          build/native-tests
+        key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
     - name: Build libv2ray with AmneziaWG v3
       if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -93,8 +95,10 @@ jobs:
       if: steps.awg-core-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
-        path: V2rayNG/app/libs/libv2ray.aar
-        key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+        path: |
+          V2rayNG/app/libs/libv2ray.aar
+          build/native-tests
+        key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
     - name: Build ARMv7 + ARMv8 APK
       run: |
