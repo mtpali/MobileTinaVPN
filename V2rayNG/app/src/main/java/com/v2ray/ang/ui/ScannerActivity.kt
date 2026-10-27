@@ -184,6 +184,7 @@ fun ScannerScreen(
                 onBackClick = onBackClick,
                 actions = {
                     IconButton(
+                        enabled = uiState != ScannerUiState.DECODING,
                         onClick = {
                             if (isScanning) {
                                 if (torchEnabled) {
@@ -225,7 +226,7 @@ fun ScannerScreen(
                             )
                         }
                     }
-                    IconButton(onClick = onSelectPhoto) {
+                    IconButton(onClick = onSelectPhoto, enabled = uiState != ScannerUiState.DECODING) {
                         Icon(
                             painterResource(R.drawable.ic_image_24dp),
                             contentDescription = stringResource(R.string.acc_select_image)

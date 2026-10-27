@@ -187,8 +187,9 @@ object AngConfigManager {
      * @param append Whether to append the configurations.
      * @return A pair containing the number of configurations and subscriptions imported.
      */
-    fun importBatchConfig(server: String?, subid: String, append: Boolean, refreshSubscriptions: Boolean = true): Pair<Int, Int> {
-        val generation = MmkvManager.dataGeneration()
+    fun importBatchConfig(server: String?, subid: String, append: Boolean, refreshSubscriptions: Boolean = true, expectedGeneration: Long = MmkvManager.dataGeneration()): Pair<Int, Int> {
+        if (MmkvManager.dataResetInProgress()) return 0 to 0
+        val generation = expectedGeneration
         return try {
             val counts = MmkvManager.withDataGeneration(generation) {
                 var count = parseBatchConfig(Utils.decode(server), subid, append)
