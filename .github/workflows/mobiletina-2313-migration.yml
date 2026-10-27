@@ -248,6 +248,7 @@ jobs:
           APK=$(find V2rayNG/app/build/outputs/apk/playstore/release -type f -name '*armv7-armv8*.apk' -print -quit)
           test -n "$APK"
           echo "Verifying $APK"
+          python3 scripts/verify-packaged-native.py V2rayNG/app/libs/libv2ray.aar "$APK" build/native-tests/packaged-native.json
 
           $ANDROID_HOME/build-tools/37.0.0/apksigner verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
           grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' /tmp/apksigner.txt
