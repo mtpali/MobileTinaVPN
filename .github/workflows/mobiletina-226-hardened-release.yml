@@ -59,7 +59,7 @@ jobs:
           ! grep -Eq 'installSecretHold|shouldRevealAfterTap|MobileTinaHiddenAccessPolicy' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'showManualSubscriptionQr(subscriptionId)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
-          grep -q 'startsWith(a(0), ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
+          grep -q 'startsWith(deniedPrefix, ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
           grep -q 'MobileTinaFirstLaunchDialog.showOnce' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'R.id.z0 -> openDeveloperTelegram()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'tg://resolve?domain=\$username' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt

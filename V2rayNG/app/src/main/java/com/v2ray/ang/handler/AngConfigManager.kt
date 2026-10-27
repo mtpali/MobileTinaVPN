@@ -135,7 +135,7 @@ object AngConfigManager {
      */
     fun shareFullContent2Clipboard(context: Context, guid: String?): Int {
         try {
-            if (guid == null) return -1
+            if (guid == null || !ProfileActionPolicy.allowsProfile(guid)) return -1
             val result = CoreConfigManager.getV2rayConfig(context, guid)
             if (result.status) {
                 Utils.setClipboard(context, result.content)
@@ -156,6 +156,7 @@ object AngConfigManager {
      * @return The configuration string.
      */
     private fun shareConfig(guid: String): String {
+        if (!ProfileActionPolicy.allowsProfile(guid)) return ""
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ""
 
@@ -186,26 +187,20 @@ object AngConfigManager {
      * @param append Whether to append the configurations.
      * @return A pair containing the number of configurations and subscriptions imported.
      */
-    fun importBatchConfig(server: String?, subid: String, append: Boolean): Pair<Int, Int> {
+    fun importBatchConfig(server: String?, subid: String, append: Boolean, refreshSubscriptions: Boolean = true): Pair<Int, Int> {
+        val generation = MmkvManager.dataGeneration()
         return try {
-            var count = parseBatchConfig(Utils.decode(server), subid, append)
-            if (count <= 0) {
-                count = parseBatchConfig(server, subid, append)
-            }
-            if (count <= 0) {
-                count = parseCustomConfigServer(server, subid, append)
-            }
-
-            var countSub = parseBatchSubscription(server)
-            if (countSub <= 0) {
-                countSub = parseBatchSubscription(Utils.decode(server))
-            }
-            if (countSub > 0) {
-                updateConfigViaSubAll()
-            }
-
+            val counts = MmkvManager.withDataGeneration(generation) {
+                var count = parseBatchConfig(Utils.decode(server), subid, append)
+                if (count <= 0) count = parseBatchConfig(server, subid, append)
+                if (count <= 0) count = parseCustomConfigServer(server, subid, append)
+                var subscriptions = parseBatchSubscription(server)
+                if (subscriptions <= 0) subscriptions = parseBatchSubscription(Utils.decode(server))
+                count to subscriptions
+            } ?: return 0 to 0
+            if (counts.second > 0 && refreshSubscriptions) updateConfigViaSubAll()
             MobileTinaSubscriptionMarkerManager.processExistingMarkers()
-            count to countSub
+            counts
         } catch (e: ProfileStorageException) {
             LogUtil.e(AppConfig.TAG, "Failed to store imported profiles", e)
             0 to 0
@@ -460,6 +455,8 @@ object AngConfigManager {
      * @return Subscription update result.
      */
     fun updateConfigViaSub(it: SubscriptionCache): SubscriptionUpdateResult {
+        val generation = MmkvManager.dataGeneration()
+        if (MmkvManager.decodeSubscription(it.guid)?.url != it.subscription.url) return SubscriptionUpdateResult(skipCount = 1)
         try {
             // Check if disabled
             if (!it.subscription.enabled) {
@@ -483,7 +480,7 @@ object AngConfigManager {
                     return SubscriptionUpdateResult(failureCount = 1)
                 }
             }
-            LogUtil.i(AppConfig.TAG, url)
+            // Subscription URLs may contain private access tokens; never log them.
             val userAgent = it.subscription.userAgent
             val requestHeaders = it.subscription.requestHeaders
             val proxyUsername = SettingsManager.getSocksUsername()
@@ -537,28 +534,22 @@ object AngConfigManager {
                 return SubscriptionUpdateResult(failureCount = 1)
             }
 
-            val count = parseConfigViaSub(configText, it.guid, false)
-            if (count > 0) {
-                it.subscription.lastUpdated = System.currentTimeMillis()
-                // Replaced on every successful update so the box disappears if the panel stops sending the headers.
-                MobileTinaSubscriptionMetadata.apply(it.subscription, usageInfo)
-                MmkvManager.encodeSubscription(it.guid, it.subscription)
-                // Persist header metadata first so saving it cannot overwrite the new _comment expiry.
-                MobileTinaExpiryManager.syncFromSubscriptionPayload(
-                    AngApplication.application,
-                    configText,
-                    it.guid
-                )
-                MobileTinaSubscriptionMarkerManager.processExistingMarkers()
-                LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
-                return SubscriptionUpdateResult(
-                    configCount = count,
-                    successCount = 1
-                )
-            } else {
-                // Got response but no valid configs parsed
-                return SubscriptionUpdateResult(failureCount = 1)
-            }
+            val result = MmkvManager.withDataGeneration(generation) {
+                if (MmkvManager.decodeSubscription(it.guid)?.url != it.subscription.url) {
+                    SubscriptionUpdateResult(skipCount = 1)
+                } else {
+                    val count = parseConfigViaSub(configText, it.guid, false)
+                    if (count > 0) {
+                        it.subscription.lastUpdated = System.currentTimeMillis()
+                        MobileTinaSubscriptionMetadata.apply(it.subscription, usageInfo)
+                        MmkvManager.encodeSubscription(it.guid, it.subscription)
+                        MobileTinaExpiryManager.syncFromSubscriptionPayload(AngApplication.application, configText, it.guid)
+                        SubscriptionUpdateResult(configCount = count, successCount = 1)
+                    } else SubscriptionUpdateResult(failureCount = 1)
+                }
+            } ?: SubscriptionUpdateResult(skipCount = 1)
+            if (result.successCount > 0) MobileTinaSubscriptionMarkerManager.processExistingMarkers()
+            return result
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to update config via subscription", e)
             return SubscriptionUpdateResult(failureCount = 1)

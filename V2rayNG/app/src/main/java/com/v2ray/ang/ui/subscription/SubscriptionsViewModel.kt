@@ -45,6 +45,7 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
     }
 
     fun remove(subId: String): Boolean {
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subId)) return false
         val changed = subscriptions.removeAll { it.guid == subId }
         if (changed) {
             SettingsManager.removeSubscriptionWithDefault(subId)
@@ -64,6 +65,7 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
     }
 
     internal fun shareQRCode(url: String) {
+        if (com.v2ray.ang.handler.ProfileActionPolicy.restricted(url)) return
         dismissQRCode()
         qrCodeJob = viewModelScope.launch {
             val bitmap = withContext(Dispatchers.Default) { QRCodeDecoder.createQRCode(url) }

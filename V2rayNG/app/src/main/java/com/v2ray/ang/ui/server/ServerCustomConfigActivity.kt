@@ -86,6 +86,10 @@ class ServerCustomConfigActivity : BaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (editGuid.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) {
+            finish()
+            return
+        }
         val config = MmkvManager.decodeServerConfig(editGuid)
         initialRemarks = config?.remarks ?: ""
         initialContent = MmkvManager.decodeServerRaw(editGuid).orEmpty()
@@ -144,6 +148,7 @@ class ServerCustomConfigActivity : BaseComponentActivity() {
         config.description =
             AngConfigManager.generateDescription(config)
 
+        if (editGuid.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) return false
         val savedGuid = MmkvManager.encodeServerConfig(
             editGuid,
             config
@@ -176,6 +181,7 @@ class ServerCustomConfigActivity : BaseComponentActivity() {
             return false
         }
 
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) return false
         MmkvManager.removeServer(editGuid)
 
         ProfileEditorResult.run {

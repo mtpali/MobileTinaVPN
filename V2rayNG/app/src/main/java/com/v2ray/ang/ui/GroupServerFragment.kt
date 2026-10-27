@@ -5,6 +5,18 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.activityViewModels
+import androidx.appcompat.app.AlertDialog
+import androidx.lifecycle.lifecycleScope
+import android.content.Intent
+import android.widget.ImageView
+import com.v2ray.ang.handler.ProfileActionPolicy
+import com.v2ray.ang.handler.MobileTinaHiddenShareManager
+import com.v2ray.ang.handler.V2RayServiceManager
+import com.v2ray.ang.util.Utils
+import com.v2ray.ang.util.QRCodeDecoder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.v2ray.ang.R
@@ -15,7 +27,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.viewmodel.MainViewModel
 
-/** MobileTina manual server page. Editing/sharing/reordering are intentionally not exposed. */
+/** Retained manual page; actions recheck persisted access before every operation. */
 class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(), SwipeRefreshLayout.OnRefreshListener {
     private val ownerActivity: MainActivity get() = requireActivity() as MainActivity
     private val mainViewModel: MainViewModel by activityViewModels()
@@ -69,10 +81,51 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(), SwipeRef
         override fun onEdit(guid: String, position: Int) = Unit
         override fun onShare(url: String) = Unit
         override fun onRefreshData() = Unit
-        override fun onRemove(guid: String, position: Int) = Unit
-        override fun onEdit(guid: String, position: Int, profile: ProfileItem) = Unit
+        override fun onRemove(guid: String, position: Int) {
+            if (!ProfileActionPolicy.allowsProfile(guid)) return
+            AlertDialog.Builder(ownerActivity)
+                .setMessage(R.string.del_config_comfirm)
+                .setNegativeButton(R.string.mobiletina_cancel, null)
+                .setPositiveButton(R.string.mobiletina_confirm) { _, _ ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val removed = withContext(Dispatchers.IO) {
+                            if (!ProfileActionPolicy.allowsProfile(guid)) return@withContext false
+                            if (guid == MmkvManager.getSelectServer() && !V2RayServiceManager.stopAndAwait(requireContext().applicationContext)) return@withContext false
+                            if (!ProfileActionPolicy.allowsProfile(guid)) return@withContext false
+                            MmkvManager.removeServer(guid)
+                            true
+                        }
+                        if (removed) ownerActivity.refreshServerGroups() else ownerActivity.toast(R.string.toast_failure)
+                    }
+                }.show()
+        }
+        override fun onEdit(guid: String, position: Int, profile: ProfileItem) = ownerActivity.editServer(guid)
         override fun onSelectServer(guid: String) = setSelectServer(guid)
-        override fun onShare(guid: String, profile: ProfileItem, position: Int, more: Boolean) = Unit
+        override fun onShare(guid: String, profile: ProfileItem, position: Int, more: Boolean) {
+            if (!ProfileActionPolicy.allowsProfile(guid)) return
+            AlertDialog.Builder(ownerActivity).setItems(arrayOf(
+                getString(R.string.mobiletina_server_qr), getString(R.string.mobiletina_copy_server), getString(R.string.mobiletina_share_server)
+            )) { _, choice ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val content = withContext(Dispatchers.IO) { MobileTinaHiddenShareManager.exportConfig(guid) } ?: return@launch
+                    if (!ProfileActionPolicy.allowsProfile(guid)) return@launch
+                    when (choice) {
+                        0 -> {
+                            val bitmap = withContext(Dispatchers.Default) { QRCodeDecoder.createQRCode(content) }
+                            if (bitmap == null) { ownerActivity.toast(R.string.toast_failure); return@launch }
+                            if (!ProfileActionPolicy.allowsProfile(guid)) return@launch
+                            val image = ImageView(ownerActivity).apply { setImageBitmap(bitmap); adjustViewBounds = true }
+                            AlertDialog.Builder(ownerActivity).setView(image).setNegativeButton(R.string.mobiletina_close, null).show()
+                        }
+                        1 -> Utils.setClipboard(ownerActivity, content)
+                        2 -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, content)
+                        }, getString(R.string.mobiletina_share_server)))
+                    }
+                }
+            }.show()
+        }
     }
 
     override fun onRefresh() {

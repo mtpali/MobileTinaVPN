@@ -1,18 +1,31 @@
 package com.v2ray.ang.handler
 
 import android.content.Context
-import com.v2ray.ang.AppConfig
+import com.v2ray.ang.core.MobileTinaSessionLimiter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 object MobileTinaResetManager {
-    fun reset(context: Context, cancelPendingExpiry: Boolean = true) {
-        if (cancelPendingExpiry) MobileTinaExpiryManager.cancel(context)
-        V2RayServiceManager.stopVService(context)
-        MmkvManager.decodeSubscriptions().map { it.guid }.forEach(MmkvManager::removeSubscription)
-        MmkvManager.removeServerViaSubid(AppConfig.DEFAULT_SUBSCRIPTION_ID)
-        MmkvManager.removeAllServer()
-        MmkvManager.encodeSubsList(mutableListOf())
-        MmkvManager.setSelectServer("")
-        MmkvManager.encodeSettings(AppConfig.CACHE_SUBSCRIPTION_ID, "")
-        MobileTinaSubscriptionMarkerManager.clearExpiredState()
-    }
+    private val mutex = Mutex()
+
+    suspend fun reset(context: Context, cancelPendingExpiry: Boolean = true): Boolean =
+        withContext(NonCancellable + Dispatchers.IO) {
+            mutex.withLock {
+                val app = context.applicationContext
+                MmkvManager.encodeSettings("DATA_RESET_UNTIL", android.os.SystemClock.elapsedRealtime() + 120_000L)
+                try {
+                    if (!V2RayServiceManager.stopAndAwait(app)) return@withLock false
+                    if (cancelPendingExpiry) MobileTinaExpiryManager.cancel(app)
+                    MobileTinaSessionLimiter.cancel(app)
+                    MmkvManager.decodeSubsList().forEach { SubscriptionUpdater.cancelOne(app, it) }
+                    // Reconcile marker work before taking the storage lock (opposite ordering can deadlock).
+                    MobileTinaSubscriptionMarkerManager.clearExpiredState()
+                    MmkvManager.clearProfilesAndSubscriptions()
+                    true
+                } finally { MmkvManager.encodeSettings("DATA_RESET_UNTIL", 0L) }
+            }
+        }
 }

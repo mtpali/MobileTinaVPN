@@ -30,6 +30,7 @@ object LauncherManager {
 
 
     fun startServiceFromToggle(context: Context): Boolean {
+        if (MmkvManager.dataResetInProgress()) return false
         if (MmkvManager.getSelectServer().isNullOrEmpty()) {
             context.toast(R.string.app_tile_first_use)
             return false
@@ -45,6 +46,7 @@ object LauncherManager {
     }
 
     fun startService(context: Context, guid: String? = null) {
+        if (MmkvManager.dataResetInProgress()) return
         LogUtil.i(AppConfig.TAG, "LauncherManager: startService from ${context::class.java.simpleName}")
 
         if (guid != null) {
@@ -132,6 +134,7 @@ object LauncherManager {
 
     /** Starts the existing core service promptly; selection happens inside that foreground service. */
     fun startSmartService(context: Context, toggle: Boolean = false): Boolean {
+        if (MmkvManager.dataResetInProgress()) return false
         return try {
             invalidatePendingRestart()
             com.v2ray.ang.util.MobileTinaIntegrityGuard.verify(context.applicationContext)
@@ -150,6 +153,7 @@ object LauncherManager {
 
     @Throws(Exception::class)
     private fun startContextService(context: Context) {
+        if (MmkvManager.dataResetInProgress()) return
         val intent = prepareServiceStart(context)
         try {
             ContextCompat.startForegroundService(context, intent)

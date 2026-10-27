@@ -35,7 +35,7 @@ require(launcher.get(android + "theme") == "@style/MobileTinaLegacyTheme.NoActio
 require(any(a.get(android + "name") == ".ui.SubSettingActivity" for a in activities), "Hidden subscriptions screen missing")
 
 contracts = {
-    "ui/MainActivity.kt": ("smartConnectAndStart", "stopServiceReliably", "SubscriptionQrClickCounter()", "installManualSubscriptionClicks", "MobileTinaFirstLaunchDialog.showOnce", "import com.v2ray.ang.ui.server.ServerWireguardActivity"),
+    "ui/MainActivity.kt": ("smartConnectAndStart", "stopServiceReliably", "SubscriptionHeaderHold(header, this", "installManualSubscriptionClicks", "MobileTinaFirstLaunchDialog.showOnce", "import com.v2ray.ang.ui.server.ServerWireguardActivity"),
     "core/CoreConfigManager.kt": ("GeoIpRuleResolver.normalizeCustomRouting",),
     "core/CoreOutboundBuilder.kt": ("WireguardReservedPolicy.outboundBytes", "wireguard.remoteDNS = remotes", "AmneziaWGOptionsBean"),
     "core/CoreServiceManager.kt": ("nativeCleanup.get(15, TimeUnit.SECONDS)", "refreshAmneziaBindings", "networkMonitor === monitor"),

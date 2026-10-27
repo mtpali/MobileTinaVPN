@@ -80,11 +80,13 @@ class SubSettingActivity : BaseComponentActivity() {
             onAddClick = { startActivity(Intent(this, SubEditActivity::class.java)) },
             onSubUpdate = { viewModel.updateSubscriptions() },
             onEditSub = { subId ->
-                startActivity(Intent(this, SubEditActivity::class.java).putExtra("subId", subId))
+                if (com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subId))
+                    startActivity(Intent(this, SubEditActivity::class.java).putExtra("subId", subId))
             },
             onRemoveSub = { subId -> removeSub(subId) },
             onShareQRCode = viewModel::shareQRCode,
             onShareClipboard = { url ->
+                if (com.v2ray.ang.handler.ProfileActionPolicy.restricted(url)) return@SubSettingScreen
                 Utils.setClipboard(this, url)
                 toast(getString(R.string.toast_success))
             }
@@ -97,6 +99,7 @@ class SubSettingActivity : BaseComponentActivity() {
     }
 
     private fun removeSub(subId: String) {
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subId)) return
         viewModel.remove(subId)
     }
 }
@@ -174,7 +177,7 @@ fun SubSettingScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                if (subCache.subscription.url.isNotEmpty()) {
+                                if (com.v2ray.ang.handler.ProfileActionPolicy.allows(subCache.subscription) && subCache.subscription.url.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = subCache.subscription.url,
@@ -197,7 +200,7 @@ fun SubSettingScreen(
                                 modifier = Modifier.padding(start = 8.dp)
                             ) {
                                 Row {
-                                    if (subCache.subscription.url.isNotEmpty()) {
+                                    if (com.v2ray.ang.handler.ProfileActionPolicy.allows(subCache.subscription) && subCache.subscription.url.isNotEmpty()) {
                                         IconButton(onClick = {
                                             shareTarget = Pair(subCache.guid, subCache.subscription.url)
                                         }) {

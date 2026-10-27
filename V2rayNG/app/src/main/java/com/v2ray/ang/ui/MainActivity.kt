@@ -74,6 +74,7 @@ import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.MobileTinaImportNormalizer
 import com.v2ray.ang.util.MobileTinaIntegrityGuard
 import com.v2ray.ang.util.QRCodeDecoder
+import com.v2ray.ang.util.readBytesLimited
 import com.v2ray.ang.util.Utils
 import com.v2ray.ang.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -95,7 +96,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 syncSmartConnectServiceState()
                 return
             }
-            if (intent?.action != MobileTinaExpiryManager.ACTION_DATA_CHANGED) return
+            if (resetting || intent?.action != MobileTinaExpiryManager.ACTION_DATA_CHANGED) return
             normalizeSubscriptionNames()
             setupGroupTab()
             ensureSelectedServerForCurrentSubscription()
@@ -111,7 +112,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var tabMediator: TabLayoutMediator? = null
     private val firstRunPrefs by lazy { getSharedPreferences("mobiletina_first_run", MODE_PRIVATE) }
 
-    private val manualQrClicks = SubscriptionQrClickCounter()
+    private val subscriptionHolds = mutableListOf<SubscriptionHeaderHold>()
+    private var importJob: kotlinx.coroutines.Job? = null
+    private var resetting = false
     private var currentMode = MODE_AUTO
     private var modeInitialized = false
     private var lastSubscriptionRefreshAt = 0L
@@ -175,6 +178,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             if (SettingsChangeManager.consumeRestartService() && mainViewModel.isRunning.value == true) restartV2Ray()
             if (SettingsChangeManager.consumeSetupGroupTab()) setupGroupTab()
             setupGroupTab()
+            mainViewModel.reloadServerListAsync()
             refreshSelectedServerUi()
         }
 
@@ -221,7 +225,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun setMode(mode: Int, updateTab: Boolean = true) {
         val requestedMode = mode.coerceIn(MODE_AUTO, MODE_MANUAL)
         if (modeInitialized && currentMode == requestedMode) return
-        manualQrClicks.reset()
+        subscriptionHolds.forEach { it.cancel() }
         currentMode = requestedMode
         modeInitialized = true
         binding.autoPanel.visibility = if (currentMode == MODE_AUTO) View.VISIBLE else View.GONE
@@ -434,6 +438,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.tabGroup.visibility = View.VISIBLE
 
         if (structureChanged || tabMediator == null) {
+            subscriptionHolds.forEach { it.dispose() }
+            subscriptionHolds.clear()
             tabMediator?.detach()
             tabMediator = TabLayoutMediator(binding.tabGroup, binding.viewPager) { tab, position ->
                 val group = groupPagerAdapter.groups[position]
@@ -484,12 +490,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     ) {
         header.isClickable = true
         header.isFocusable = true
-        header.setOnClickListener {
-            tab.select()
-            if (currentMode == MODE_MANUAL && !isFinishing && !isDestroyed &&
-                manualQrClicks.registerClick(subscriptionId, android.os.SystemClock.elapsedRealtime())) {
-                showManualSubscriptionQr(subscriptionId)
-            }
+        header.setOnClickListener { tab.select() }
+        val hold = SubscriptionHeaderHold(header, this, valid = {
+            currentMode == MODE_MANUAL && !resetting && !isFinishing && !isDestroyed &&
+                mainViewModel.subscriptionId == subscriptionId &&
+                com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId)
+        }, onHold = { showManualSubscriptionQr(subscriptionId) })
+        subscriptionHolds.add(hold)
+        header.setOnTouchListener { view, event ->
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) tab.select()
+            hold.onTouch(view, event)
         }
     }
 
@@ -497,8 +507,12 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         if (currentMode != MODE_MANUAL || manualSubscriptionDialog?.isShowing == true) return
         val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
         val link = subscription.url.trim()
-        if (!r.b(link)) return
-        val bitmap = QRCodeDecoder.createQRCode(link) ?: return
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allows(subscription) || !r.b(link)) return
+        lifecycleScope.launch {
+        val bitmap = withContext(Dispatchers.Default) { QRCodeDecoder.createQRCode(link) } ?: return@launch
+        if (isFinishing || isDestroyed || currentMode != MODE_MANUAL ||
+            mainViewModel.subscriptionId != subscriptionId ||
+            !com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId)) return@launch
 
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -510,7 +524,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             })
             addView(Button(this@MainActivity).apply {
                 text = r.a(5)
-                setOnClickListener { Utils.setClipboard(this@MainActivity, link) }
+                setOnClickListener {
+                    if (com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId))
+                        Utils.setClipboard(this@MainActivity, link)
+                }
             })
         }
 
@@ -526,6 +543,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 dialog.show()
             }
     }
+    }
 
     private fun ensureSelectedServerForCurrentSubscription() {
         val subId = mainViewModel.subscriptionId
@@ -539,6 +557,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun handleManualFabAction() {
+        if (resetting) return
         if (isServiceRunningConfirmed() || manualConnecting || SmartConnectServiceState.isPending(this)) {
             manualConnecting = false
             stopServiceReliably()
@@ -558,6 +577,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun smartConnectAndStart() {
+        if (resetting) return
         val serviceRunning = mainViewModel.reconcileRunningState()
         if (serviceRunning || smartConnecting || manualConnecting || SmartConnectServiceState.isPending(this)) {
             manualConnecting = false
@@ -988,7 +1008,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun refreshSubscriptionsSilently() {
-        if (subscriptionRefreshing) return
+        if (resetting || subscriptionRefreshing) return
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
@@ -1019,7 +1039,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     fun importConfigViaSub(): Boolean {
-        if (subscriptionRefreshing) return false
+        if (resetting || subscriptionRefreshing) return false
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
@@ -1051,6 +1071,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         MmkvManager.decodeSubscriptions().forEach { cache ->
             if (cache.guid == AppConfig.DEFAULT_SUBSCRIPTION_ID) return@forEach
             if (cache.subscription.remarks != DEFAULT_SUBSCRIPTION_NAME) {
+                com.v2ray.ang.handler.ProfileActionPolicy.seal(cache.subscription)
                 cache.subscription.remarks = DEFAULT_SUBSCRIPTION_NAME
                 MmkvManager.encodeSubscription(cache.guid, cache.subscription)
             }
@@ -1200,6 +1221,36 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         else -> super.onOptionsItemSelected(item)
     }
 
+    fun refreshServerGroups() {
+        setupGroupTab()
+        mainViewModel.reloadServerListAsync()
+        refreshSelectedServerUi()
+    }
+
+    fun editServer(guid: String) {
+        if (resetting || !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) return
+        val profile = MmkvManager.decodeServerConfig(guid) ?: return
+        val editor = when (profile.configType) {
+            EConfigType.VMESS -> ServerVmessActivity::class.java
+            EConfigType.VLESS -> ServerVlessActivity::class.java
+            EConfigType.SHADOWSOCKS -> ServerShadowsocksActivity::class.java
+            EConfigType.SOCKS -> ServerSocksActivity::class.java
+            EConfigType.HTTP -> ServerHttpActivity::class.java
+            EConfigType.TROJAN -> ServerTrojanActivity::class.java
+            EConfigType.WIREGUARD -> ServerWireguardActivity::class.java
+            EConfigType.HYSTERIA2 -> ServerHysteria2Activity::class.java
+            EConfigType.CUSTOM -> com.v2ray.ang.ui.server.ServerCustomConfigActivity::class.java
+            EConfigType.POLICYGROUP -> com.v2ray.ang.ui.server.ServerGroupActivity::class.java
+            EConfigType.PROXYCHAIN -> com.v2ray.ang.ui.server.ServerProxyChainActivity::class.java
+            else -> return
+        }
+        requestActivityLauncher.launch(Intent(this, editor).apply {
+            putExtra("guid", guid)
+            putExtra("subscriptionId", profile.subscriptionId)
+            putExtra("isRunning", mainViewModel.isRunning.value == true)
+        })
+    }
+
     private fun importManually(createConfigType: Int) {
         val intent = when (createConfigType) {
             EConfigType.POLICYGROUP.value -> Intent(this, ServerGroupActivity::class.java)
@@ -1256,75 +1307,70 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun readContentFromUri(uri: Uri) {
-        try {
-            contentResolver.openInputStream(uri).use { input ->
-                importBatchConfig(input?.bufferedReader()?.readText())
-            }
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to read config file", e)
-            toastError("خطا")
+        lifecycleScope.launch {
+            try {
+                val content = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri).use { input ->
+                        val bytes = input?.readBytesLimited(8 * 1024 * 1024) ?: return@use null
+                        bytes.toString(Charsets.UTF_8)
+                    }
+                }
+                importBatchConfig(content)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (_: Exception) { toastError(R.string.toast_failure) }
         }
     }
 
     private fun importBatchConfig(raw: String?) {
+        if (raw.isNullOrBlank() || resetting || importJob?.isActive == true) return
+        val current = mainViewModel.subscriptionId
+        val targetId = current.takeIf { MmkvManager.decodeSubscription(it)?.url.isNullOrBlank() &&
+            com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(it) } ?: AppConfig.DEFAULT_SUBSCRIPTION_ID
         binding.progressBar.visibility = View.VISIBLE
-        lifecycleScope.launch(Dispatchers.IO) {
+        importJob = lifecycleScope.launch {
             try {
-                val normalized = MobileTinaImportNormalizer.normalize(raw)
-                val (count, countSub) = AngConfigManager.importBatchConfig(normalized, mainViewModel.subscriptionId, true)
-                if (countSub > 0) MobileTinaSubscriptionInfo.refreshAll()
-                withContext(Dispatchers.Main) {
+                val result = withContext(Dispatchers.IO) {
+                    val normalized = MobileTinaImportNormalizer.normalize(raw)
+                    val counts = AngConfigManager.importBatchConfig(normalized, targetId, true, refreshSubscriptions = false)
                     normalizeSubscriptionNames()
-                    showExpiredSubscriptionToastIfNeeded()
-                    when {
-                        count > 0 -> {
-                            val targetSubscriptionId = ensureImportedConfigsHaveVisibleGroup()
-                            targetSubscriptionId?.let { subscriptionId ->
-                                MobileTinaExpiryManager.scheduleFromImportedText(
-                                    this@MainActivity,
-                                    normalized,
-                                    subscriptionId
-                                )
-                            }
-                            toast(getString(R.string.title_import_config_count, count))
-                            setupGroupTab()
-                            mainViewModel.reloadServerList()
-                            ensureSelectedServerForCurrentSubscription()
-                        }
-                        countSub > 0 -> {
-                            setupGroupTab()
-                            if (hasInternetConnection()) refreshSubscriptionsSilently()
-                        }
-                        else -> toastError("خطا")
-                    }
-                    binding.progressBar.visibility = View.INVISIBLE
-                    ensureSelectedServerForCurrentSubscription()
-                    refreshSelectedServerUi()
+                    val group = if (counts.first > 0) ensureImportedConfigsHaveVisibleGroup(targetId) else null
+                    group?.let { MobileTinaExpiryManager.scheduleFromImportedText(this@MainActivity, normalized, it) }
+                    counts to group
                 }
-            } catch (e: Exception) {
-                Log.e(AppConfig.TAG, "Failed to import batch config", e)
-                withContext(Dispatchers.Main) {
-                    toastError("خطا")
-                    binding.progressBar.visibility = View.INVISIBLE
+                if (resetting) return@launch
+                result.second?.let { mainViewModel.subscriptionIdChanged(it) }
+                setupGroupTab()
+                mainViewModel.reloadServerListAsync()
+                ensureSelectedServerForCurrentSubscription()
+                showExpiredSubscriptionToastIfNeeded()
+                when {
+                    result.first.first > 0 -> toast(getString(R.string.title_import_config_count, result.first.first))
+                    result.first.second > 0 -> if (hasInternetConnection()) refreshSubscriptionsSilently()
+                    else -> toastError(R.string.toast_failure)
                 }
+                refreshSelectedServerUi()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (_: Exception) { toastError(R.string.toast_failure)
+            } finally {
+                if (!subscriptionRefreshing && !resetting) binding.progressBar.visibility = View.INVISIBLE
             }
         }
     }
 
-    private fun ensureImportedConfigsHaveVisibleGroup(): String? {
+    private fun ensureImportedConfigsHaveVisibleGroup(importedInto: String): String? {
         val defaultServers = MmkvManager.decodeServerList(AppConfig.DEFAULT_SUBSCRIPTION_ID)
         if (defaultServers.isEmpty()) {
-            return mainViewModel.subscriptionId.takeIf { subscriptionId ->
+            return importedInto.takeIf { subscriptionId ->
                 subscriptionId.isNotBlank() &&
                         subscriptionId != AppConfig.DEFAULT_SUBSCRIPTION_ID &&
                         MmkvManager.decodeSubscription(subscriptionId) != null
             }
         }
 
-        val currentId = mainViewModel.subscriptionId
+        val currentId = importedInto
             .takeIf { it.isNotBlank() && it != AppConfig.DEFAULT_SUBSCRIPTION_ID }
         val existingId = MmkvManager.decodeSubscriptions()
-            .firstOrNull { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }
+            .firstOrNull { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID && it.subscription.url.isBlank() && com.v2ray.ang.handler.ProfileActionPolicy.allows(it.subscription) }
             ?.guid
         val targetId = currentId ?: existingId ?: Utils.getUuid().also { newId ->
             MmkvManager.encodeSubscription(
@@ -1342,7 +1388,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
         MmkvManager.encodeServerList(merged, targetId)
         MmkvManager.encodeServerList(mutableListOf(), AppConfig.DEFAULT_SUBSCRIPTION_ID)
-        mainViewModel.subscriptionIdChanged(targetId)
         if (MmkvManager.getSelectServer().isNullOrBlank()) {
             merged.firstOrNull()?.let(MmkvManager::setSelectServer)
         }
@@ -1473,12 +1518,29 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             .setTitle(R.string.mobiletina_reset_title)
             .setMessage(R.string.mobiletina_reset_message)
             .setPositiveButton(R.string.mobiletina_reset_confirm) { _, _ ->
-                MobileTinaResetManager.reset(this)
+                if (resetting) return@setPositiveButton
+                resetting = true
                 clearSmartConnectState()
-                setupGroupTab()
-                mainViewModel.reloadServerList()
-                refreshSelectedServerUi()
-                toast(R.string.mobiletina_reset_done)
+                importJob?.cancel()
+                markerRecoveryJob?.cancel()
+                subscriptionHolds.forEach { it.cancel() }
+                binding.progressBar.visibility = View.VISIBLE
+                lifecycleScope.launch {
+                    try {
+                        val success = MobileTinaResetManager.reset(applicationContext)
+                        if (success) {
+                            mainViewModel.subscriptionIdChanged("")
+                            setupGroupTab()
+                            mainViewModel.reloadServerListAsync()
+                            mainViewModel.reconcileRunningState()
+                            refreshSelectedServerUi()
+                            toast(R.string.mobiletina_reset_done)
+                        } else toastError(R.string.toast_failure)
+                    } finally {
+                        resetting = false
+                        binding.progressBar.visibility = View.INVISIBLE
+                    }
+                }
             }
             .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
@@ -1493,6 +1555,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     override fun onDestroy() {
+        importJob?.cancel()
+        subscriptionHolds.forEach { it.dispose() }
+        subscriptionHolds.clear()
         smartConnectJob?.cancel()
         smartStartWatchdogJob?.cancel()
         smartStopWatchdogJob?.cancel()

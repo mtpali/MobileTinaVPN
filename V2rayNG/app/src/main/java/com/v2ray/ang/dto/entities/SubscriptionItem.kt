@@ -20,4 +20,5 @@ data class SubscriptionItem(
     var commentExpireEpochSeconds: Long? = null,
     var requestHeaders: String? = null,
     var usageInfo: SubscriptionUsageInfo? = null,
+    var actionRestricted: Boolean = false,
 )

@@ -64,6 +64,10 @@ class ServerGroupActivity : BaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (editGuid.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) {
+            finish()
+            return
+        }
 
         val config = MmkvManager.decodeServerConfig(editGuid)
         populateSubscriptionSpinner()
@@ -151,6 +155,7 @@ class ServerGroupActivity : BaseComponentActivity() {
             append(config.policyGroupFilter)
         }
 
+        if (editGuid.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) return false
         val savedGuid = MmkvManager.encodeServerConfig(
             editGuid,
             config
@@ -178,6 +183,7 @@ class ServerGroupActivity : BaseComponentActivity() {
             return false
         }
 
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) return false
         MmkvManager.removeServer(editGuid)
 
         ProfileEditorResult.run {
