@@ -201,8 +201,7 @@ object MobileTinaSubscriptionMarkerManager {
         return expired
     }
 
-    @Synchronized
-    fun clearExpiredState() {
+    fun clearExpiredState() = synchronized(toastLock) {
         MmkvManager.encodeSettings(PREF_SUBSCRIPTION_EXPIRED, false)
         MmkvManager.encodeSettings(PREF_EXPIRED_TOAST_PENDING, false)
     }
@@ -213,6 +212,17 @@ object MobileTinaSubscriptionMarkerManager {
         result: SubscriptionUpdateResult
     ): SubscriptionUpdateResult {
         if (markers.isEmpty()) return result
+        val generation = MmkvManager.dataGeneration()
+        return MmkvManager.withDataGeneration(generation) {
+            retireSubscriptionGroupLocked(cache, markers, result)
+        } ?: SubscriptionUpdateResult(skipCount = 1)
+    }
+
+    private fun retireSubscriptionGroupLocked(
+        cache: SubscriptionCache,
+        markers: List<StoredMarker>,
+        result: SubscriptionUpdateResult
+    ): SubscriptionUpdateResult {
 
         val selectedWasInRemovedSubscription = MmkvManager.getSelectServer()
             ?.let(MmkvManager::decodeServerConfig)

@@ -44,7 +44,7 @@ object MmkvManager {
 
     // Cross-process fence: a network response fetched before a reset cannot resurrect data.
     internal fun <T> withDataGeneration(generation: Long, block: () -> T): T? = withProfileIndexLock {
-        if (dataGeneration() != generation) null else block()
+        if (dataGeneration() != generation || dataResetInProgress()) null else block()
     }
 
     internal fun clearProfilesAndSubscriptions() = withProfileIndexLock {
