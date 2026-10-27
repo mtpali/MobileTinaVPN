@@ -7,7 +7,6 @@ import android.view.ViewGroup
 import androidx.fragment.app.activityViewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
-import android.content.Intent
 import android.widget.ImageView
 import com.v2ray.ang.handler.ProfileActionPolicy
 import com.v2ray.ang.handler.MobileTinaHiddenShareManager
@@ -104,7 +103,7 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(), SwipeRef
         override fun onShare(guid: String, profile: ProfileItem, position: Int, more: Boolean) {
             if (!ProfileActionPolicy.allowsProfile(guid)) return
             AlertDialog.Builder(ownerActivity).setItems(arrayOf(
-                getString(R.string.mobiletina_server_qr), getString(R.string.mobiletina_copy_server), getString(R.string.mobiletina_share_server)
+                getString(R.string.mobiletina_server_qr), getString(R.string.mobiletina_copy_server)
             )) { _, choice ->
                 viewLifecycleOwner.lifecycleScope.launch {
                     val content = withContext(Dispatchers.IO) { MobileTinaHiddenShareManager.exportConfig(guid) } ?: return@launch
@@ -118,10 +117,6 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>(), SwipeRef
                             AlertDialog.Builder(ownerActivity).setView(image).setNegativeButton(R.string.mobiletina_close, null).show()
                         }
                         1 -> Utils.setClipboard(ownerActivity, content)
-                        2 -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, content)
-                        }, getString(R.string.mobiletina_share_server)))
                     }
                 }
             }.show()

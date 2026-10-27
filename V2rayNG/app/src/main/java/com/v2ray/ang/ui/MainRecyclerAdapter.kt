@@ -49,9 +49,9 @@ class MainRecyclerAdapter(
         holder.itemMainBinding.serverActions.setOnClickListener(if (!allowed) null else View.OnClickListener { anchor ->
             if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) return@OnClickListener
             androidx.appcompat.widget.PopupMenu(context, anchor).apply {
-                menu.add(0, 1, 0, R.string.acc_edit)
+                menu.add(0, 1, 0, R.string.mobiletina_server_edit)
                 menu.add(0, 2, 1, R.string.mobiletina_share_server)
-                menu.add(0, 3, 2, R.string.acc_delete)
+                menu.add(0, 3, 2, R.string.mobiletina_server_delete)
                 setOnMenuItemClickListener { action ->
                     if (com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) {
                         when (action.itemId) {

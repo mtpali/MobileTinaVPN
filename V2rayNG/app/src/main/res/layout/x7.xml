@@ -3,21 +3,21 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#111315"
+    android:background="@color/mobiletina_about_background"
     android:layoutDirection="rtl"
     android:textDirection="rtl"
     android:orientation="vertical">
 
-    <androidx.appcompat.widget.Toolbar
+    <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/a0"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="#111315"
+        android:background="@color/mobiletina_about_background"
         android:layoutDirection="ltr"
         app:navigationIcon="@drawable/ic_mobiletina_back_24dp"
-        app:navigationIconTint="#FFFFFF"
+        app:navigationIconTint="@color/mobiletina_about_text"
         app:title="@string/mobiletina_store_about_title"
-        app:titleTextColor="#FFFFFF" />
+        app:titleTextColor="@color/mobiletina_about_text" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -42,7 +42,7 @@
                 android:paddingTop="8dp"
                 android:text="@string/mobiletina_store_page_title"
                 android:textDirection="rtl"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/mobiletina_about_text"
                 android:textSize="25sp"
                 android:textStyle="bold" />
 
@@ -54,7 +54,7 @@
                 android:paddingTop="8dp"
                 android:paddingBottom="22dp"
                 android:textDirection="rtl"
-                android:textColor="#B8BCC2"
+                android:textColor="@color/mobiletina_about_muted"
                 android:textSize="14sp" />
 
             <com.google.android.material.card.MaterialCardView
@@ -64,10 +64,10 @@
                 android:layout_marginBottom="12dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="#171A1E"
+                app:cardBackgroundColor="@color/mobiletina_about_card"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="#333840"
+                app:strokeColor="@color/mobiletina_about_stroke"
                 app:strokeWidth="1dp">
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -88,7 +88,7 @@
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
                         android:textDirection="rtl"
-                        android:textColor="#FFFFFF"
+                        android:textColor="@color/mobiletina_about_text"
                         android:textSize="15sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -100,10 +100,10 @@
                 android:layout_marginBottom="12dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="#171A1E"
+                app:cardBackgroundColor="@color/mobiletina_about_card"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="#333840"
+                app:strokeColor="@color/mobiletina_about_stroke"
                 app:strokeWidth="1dp">
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -124,7 +124,7 @@
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
                         android:textDirection="rtl"
-                        android:textColor="#FFFFFF"
+                        android:textColor="@color/mobiletina_about_text"
                         android:textSize="15sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -136,10 +136,10 @@
                 android:layout_marginBottom="12dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="#171A1E"
+                app:cardBackgroundColor="@color/mobiletina_about_card"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="#333840"
+                app:strokeColor="@color/mobiletina_about_stroke"
                 app:strokeWidth="1dp">
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -160,7 +160,7 @@
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
                         android:textDirection="rtl"
-                        android:textColor="#FFFFFF"
+                        android:textColor="@color/mobiletina_about_text"
                         android:textSize="15sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -172,10 +172,10 @@
                 android:layout_marginBottom="24dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="#171A1E"
+                app:cardBackgroundColor="@color/mobiletina_about_card"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="#333840"
+                app:strokeColor="@color/mobiletina_about_stroke"
                 app:strokeWidth="1dp">
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -196,7 +196,7 @@
                         android:paddingStart="18dp"
                         android:paddingEnd="16dp"
                         android:textDirection="rtl"
-                        android:textColor="#FFFFFF"
+                        android:textColor="@color/mobiletina_about_text"
                         android:textSize="15sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -208,7 +208,7 @@
                 android:paddingBottom="14dp"
                 android:text="@string/mobiletina_store_address_section"
                 android:textDirection="rtl"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/mobiletina_about_text"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -216,10 +216,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="#171A1E"
+                app:cardBackgroundColor="@color/mobiletina_about_card"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="#333840"
+                app:strokeColor="@color/mobiletina_about_stroke"
                 app:strokeWidth="1dp">
                 <TextView
                     android:layout_width="match_parent"
@@ -228,17 +228,17 @@
                     android:padding="18dp"
                     android:text="@string/mobiletina_store_address_branch_1"
                     android:textDirection="rtl"
-                    android:textColor="#D9DDE2"
+                    android:textColor="@color/mobiletina_about_body"
                     android:textSize="14sp" />
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardBackgroundColor="#171A1E"
+                app:cardBackgroundColor="@color/mobiletina_about_card"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="#333840"
+                app:strokeColor="@color/mobiletina_about_stroke"
                 app:strokeWidth="1dp">
                 <TextView
                     android:layout_width="match_parent"
@@ -247,7 +247,7 @@
                     android:padding="18dp"
                     android:text="@string/mobiletina_store_address_branch_2"
                     android:textDirection="rtl"
-                    android:textColor="#D9DDE2"
+                    android:textColor="@color/mobiletina_about_body"
                     android:textSize="14sp" />
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>

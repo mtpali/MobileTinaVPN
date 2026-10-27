@@ -12,8 +12,8 @@ b93250c6c425ba0722f8307d135eb530f5d54ddafb8260e06f3c2a247cef1c54  V2rayNG/app/sr
 87ec504cdc3c7ac3287e32140f3a5649df8d2162e7312e752a8748cc50831c2e  V2rayNG/app/src/main/res/drawable-nodpi/stop.webp
 cd00d42eed21c4790e94ce7dbd62740304dbce31c25bc8cb2ac492bd4a95d3b3  V2rayNG/app/src/main/res/drawable-nodpi/white.webp
 2139988a7e22839298f67991c66bf4dffe0e7e39bf276af339de7f7aca3edd67  V2rayNG/app/src/main/res/drawable-nodpi/yellow.webp
-1109076e611de82121448502e62eabeadec836f730eac1bf95c3ad5e81112d25  V2rayNG/app/src/main/res/mipmap-nodpi/icon.webp
-1109076e611de82121448502e62eabeadec836f730eac1bf95c3ad5e81112d25  V2rayNG/app/src/main/res/mipmap-nodpi/ic_launcher_foreground.webp
+c5bc5516122b2941c1461faae63d57262934e121c9d6f1b1c33d4cc0c7be2c9f  V2rayNG/app/src/main/res/mipmap-nodpi/icon.webp
+c5bc5516122b2941c1461faae63d57262934e121c9d6f1b1c33d4cc0c7be2c9f  V2rayNG/app/src/main/res/mipmap-nodpi/ic_launcher_foreground.webp
 EOF
 
 if find V2rayNG/app/src/main/res -type f \( \
