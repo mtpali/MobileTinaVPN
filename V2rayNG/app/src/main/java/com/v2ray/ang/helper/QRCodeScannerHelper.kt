@@ -18,13 +18,10 @@ class QRCodeScannerHelper(private val activity: ComponentActivity) {
 
     private val scanLauncher: ActivityResultLauncher<Intent> =
         activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                val scanResult = result.data?.getStringExtra("SCAN_RESULT")
-                scanCallback?.invoke(scanResult)
-            } else {
-                scanCallback?.invoke(null)
-            }
+            val callback = scanCallback
             scanCallback = null
+            val text = if (result.resultCode == Activity.RESULT_OK) result.data?.getStringExtra("SCAN_RESULT") else null
+            callback?.invoke(text)
         }
 
     /**

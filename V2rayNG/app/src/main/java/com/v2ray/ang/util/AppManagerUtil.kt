@@ -17,7 +17,7 @@ object AppManagerUtil {
     suspend fun loadNetworkAppList(context: Context): ArrayList<AppInfo> =
         withContext(Dispatchers.IO) {
             val packageManager = context.packageManager
-            val packages = packageManager.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+            val packages = packageManager.getInstalledPackages(0)
             val apps = ArrayList<AppInfo>()
 
             for (pkg in packages) {
@@ -26,7 +26,7 @@ object AppManagerUtil {
                 val appName = applicationInfo.loadLabel(packageManager).toString()
                 val isSystemApp = applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM > 0
 
-                val appInfo = AppInfo(appName, pkg.packageName, isSystemApp, 0)
+                val appInfo = AppInfo(appName, pkg.packageName, isSystemApp, 0, pkg.lastUpdateTime)
                 apps.add(appInfo)
             }
 

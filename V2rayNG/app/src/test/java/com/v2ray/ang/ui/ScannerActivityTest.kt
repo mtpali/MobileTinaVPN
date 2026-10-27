@@ -45,4 +45,24 @@ class ScannerActivityTest {
 
         assertEquals(payload, result.text)
     }
+    @Test
+    fun cameraBufferMayOmitLastRowPaddingAndUsePixelStride() {
+        val data = byteArrayOf(1, 99, 2, 99, 3, 99, 99, 99, 4, 99, 5, 99, 6)
+        val source = createYPlaneLuminanceSource(ByteBuffer.wrap(data), 3, 2, 8, 2)
+        org.junit.jupiter.api.Assertions.assertArrayEquals(byteArrayOf(1,2,3,4,5,6), source.matrix)
+    }
+    @Test
+    fun cameraBufferPositionIsRespectedWithoutMutatingIt() {
+        val buffer = ByteBuffer.wrap(byteArrayOf(99, 1, 2, 0, 3, 4)).apply { position(1) }
+        val source = createYPlaneLuminanceSource(buffer, 2, 2, 3)
+        org.junit.jupiter.api.Assertions.assertArrayEquals(byteArrayOf(1,2,3,4), source.matrix)
+        assertEquals(1, buffer.position())
+    }
+    @Test
+    fun malformedCameraStrideIsRejectedBeforeIndexing() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) {
+            createYPlaneLuminanceSource(ByteBuffer.wrap(byteArrayOf(1,2)), 2, 2, 4)
+        }
+    }
+
 }

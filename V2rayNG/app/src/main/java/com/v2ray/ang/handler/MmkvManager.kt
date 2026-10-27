@@ -35,6 +35,35 @@ internal class ProfileStorageException(message: String) : IllegalStateException(
 
 object MmkvManager {
 
+    internal fun dataResetInProgress(): Boolean {
+        val remaining = decodeSettingsLong("DATA_RESET_UNTIL", 0L) - android.os.SystemClock.elapsedRealtime()
+        return remaining in 1L..120_000L
+    }
+
+    internal fun dataGeneration(): Long = decodeSettingsLong("DATA_WRITE_GENERATION", 0L)
+
+    // Cross-process fence: a network response fetched before a reset cannot resurrect data.
+    internal fun <T> withDataGeneration(generation: Long, block: () -> T): T? = withProfileIndexLock {
+        if (dataGeneration() != generation) null else block()
+    }
+
+    internal fun clearProfilesAndSubscriptions() = withProfileIndexLock {
+        encodeSettings("DATA_WRITE_GENERATION", dataGeneration() + 1L)
+        profileFullStorage.clearAll()
+        serverRawStorage.clearAll()
+        serverAffStorage.clearAll()
+        subStorage.clearAll()
+        val keys = mainStorage.allKeys().orEmpty().filter {
+            it == KEY_SUB_IDS || it == KEY_ANG_CONFIGS || it == KEY_SELECTED_SERVER || it.startsWith(KEY_SUB_SERVER_PREFIX)
+        }
+        mainStorage.removeValuesForKeys(keys.toTypedArray())
+        encodeSettings(com.v2ray.ang.AppConfig.CACHE_SUBSCRIPTION_ID, "")
+        val hashes = settingsStorage.allKeys().orEmpty().filter {
+            it.startsWith("MOBILETINA_SUB_REMOTE_HASH_V1_") || it.startsWith("MOBILETINA_SUB_LOCAL_HASH_V1_")
+        }
+        settingsStorage.removeValuesForKeys(hashes.toTypedArray())
+    }
+
     //region private
 
     private const val ID_MAIN = "MAIN"
@@ -419,6 +448,7 @@ object MmkvManager {
         }
         profileFullStorage.remove(guid)
         serverAffStorage.remove(guid)
+        serverRawStorage.remove(guid)
     }
 
     /**
@@ -692,6 +722,7 @@ object MmkvManager {
      */
     fun encodeSubscription(guid: String, subItem: SubscriptionItem) {
         val key = guid.ifBlank { Utils.getUuid() }
+        ProfileActionPolicy.seal(subItem)
         subStorage.encode(key, JsonUtil.toJson(subItem))
 
         val subsList = decodeSubsList()

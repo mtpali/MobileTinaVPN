@@ -163,16 +163,22 @@ class MainRepository(
     override fun encodeServerList(guids: List<String>, groupId: String) =
         MmkvManager.encodeServerList(ArrayList(guids), groupId)
 
-    override fun removeServer(guid: String) = MmkvManager.removeServer(guid)
+    override fun removeServer(guid: String) {
+        if (com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) MmkvManager.removeServer(guid)
+    }
 
-    override fun removeAllServer(): Int = MmkvManager.removeAllServer()
+    override fun removeAllServer(): Int {
+        val allowed = MmkvManager.decodeAllServerList().filter { com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(it) }
+        allowed.groupBy { MmkvManager.decodeServerConfig(it)?.subscriptionId.orEmpty() }.forEach { (sub, guids) -> MmkvManager.removeServers(guids, sub) }
+        return allowed.size
+    }
 
     override fun removeInvalidServerByGuid(guid: String): Int =
-        MmkvManager.removeInvalidServer(guid)
+        if (com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) MmkvManager.removeInvalidServer(guid) else 0
 
     override fun removeInvalidServersInGroup(groupId: String): Int =
         if (groupId.isEmpty()) {
-            MmkvManager.removeInvalidServer("")
+            MmkvManager.decodeAllServerList().sumOf(::removeInvalidServerByGuid)
         } else {
             getServerGuidList(groupId).sumOf(::removeInvalidServerByGuid)
         }

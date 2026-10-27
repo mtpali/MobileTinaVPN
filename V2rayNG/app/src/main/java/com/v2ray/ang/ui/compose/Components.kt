@@ -47,6 +47,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import coil3.request.CachePolicy
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -164,9 +166,13 @@ fun AppListItem(
     icon: Any?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    iconVersion: Long = 0L,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val pixels = (40 * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+    val iconFactory = remember(context.applicationContext, pixels) { AppIconFetcher.Factory(context.applicationContext, pixels) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -174,14 +180,17 @@ fun AppListItem(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val model = remember(icon, packageName) {
+        val model = remember(icon, packageName, iconVersion, pixels, configuration.uiMode) {
             if (icon != null) {
                 icon
             } else {
                 val data = "appicon:$packageName"
                 ImageRequest.Builder(context)
                     .data(data)
-                    .fetcherFactory(AppIconFetcher.Factory(context))
+                    .fetcherFactory(iconFactory)
+                    .size(pixels)
+                    .memoryCacheKey("$data:$iconVersion:$pixels:${configuration.uiMode}")
+                    .diskCachePolicy(CachePolicy.DISABLED)
                     .build()
             }
         }
@@ -191,6 +200,7 @@ fun AppListItem(
             contentDescription = null,
             modifier = Modifier.size(40.dp),
             contentScale = ContentScale.Fit,
+            placeholder = painterResource(R.drawable.ic_image_24dp),
             error = painterResource(R.drawable.ic_image_24dp),
             fallback = painterResource(R.drawable.ic_image_24dp)
         )

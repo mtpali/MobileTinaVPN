@@ -53,6 +53,7 @@ object MobileTinaSubscriptionInfo {
      * immediately so MainActivity.refreshAll() can skip its otherwise duplicate request.
      */
     fun captureSnapshot(guid: String, item: SubscriptionItem): Snapshot? {
+        val generation = MmkvManager.dataGeneration()
         val proxyPort = SettingsManager.getHttpPort()
         val snapshot = if (proxyPort > 0) {
             fetchSnapshot(item, proxyPort) ?: fetchSnapshot(item, 0)
@@ -65,12 +66,15 @@ object MobileTinaSubscriptionInfo {
         val usageInfo = SubscriptionInfoParser.parse(
             snapshot.userInfo, snapshot.profileTitle, snapshot.supportUrl, snapshot.webPageUrl
         )
-        if (MobileTinaSubscriptionMetadata.apply(item, usageInfo)) {
-            MmkvManager.encodeSubscription(guid, item)
+        return MmkvManager.withDataGeneration(generation) {
+            if (MmkvManager.decodeSubscription(guid)?.url != item.url) return@withDataGeneration null
+            if (MobileTinaSubscriptionMetadata.apply(item, usageInfo)) {
+                MmkvManager.encodeSubscription(guid, item)
+            }
+            MobileTinaExpiryManager.updateDisplayExpiryFromPayload(guid, snapshot.body)
+            recentSnapshotAt[guid] = SystemClock.elapsedRealtime()
+            snapshot
         }
-        MobileTinaExpiryManager.updateDisplayExpiryFromPayload(guid, snapshot.body)
-        recentSnapshotAt[guid] = SystemClock.elapsedRealtime()
-        return snapshot
     }
 
     private fun refreshOne(guid: String, item: SubscriptionItem) {

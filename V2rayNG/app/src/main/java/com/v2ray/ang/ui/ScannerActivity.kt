@@ -55,6 +55,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.CircularProgressIndicator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
@@ -74,11 +82,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import android.util.Size as TargetSize
 
-private val qrReader = MultiFormatReader()
-
 class ScannerActivity : HelperBaseComponentActivity() {
 
     private val uiState = mutableStateOf(ScannerUiState.IDLE)
+    private val resultDelivered = AtomicBoolean(false)
+    private var galleryJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,6 +116,8 @@ class ScannerActivity : HelperBaseComponentActivity() {
     }
 
     private fun finished(text: String) {
+        if (isFinishing || isDestroyed || !resultDelivered.compareAndSet(false, true)) return
+        uiState.value = ScannerUiState.IDLE
         val intent = Intent()
         intent.putExtra("SCAN_RESULT", text)
         setResult(RESULT_OK, intent)
@@ -115,21 +125,32 @@ class ScannerActivity : HelperBaseComponentActivity() {
     }
 
     private fun showFileChooser() {
+        if (galleryJob?.isActive == true || resultDelivered.get()) return
+        stopScan()
         launchFileChooser("image/*") { uri ->
-            if (uri == null) return@launchFileChooser
-            try {
-                val inputStream = contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-                val text = QRCodeDecoder.syncDecodeQRCode(bitmap)
-                if (text.isNullOrEmpty()) {
+            if (uri == null) { startScan(); return@launchFileChooser }
+            galleryJob = lifecycleScope.launch {
+                uiState.value = ScannerUiState.DECODING
+                try {
+                    val text = withContext(Dispatchers.IO) {
+                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+                        require(bounds.outWidth > 0 && bounds.outHeight > 0)
+                        var sample = 1
+                        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 1600) sample *= 2
+                        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                        val bitmap = contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, options) }
+                        try { QRCodeDecoder.syncDecodeQRCode(bitmap) } finally { bitmap?.recycle() }
+                    }
+                    if (text.isNullOrBlank()) {
+                        toast(R.string.toast_decoding_failed)
+                        startScan()
+                    } else finished(text)
+                } catch (e: CancellationException) { throw e
+                } catch (_: Exception) {
                     toast(R.string.toast_decoding_failed)
-                } else {
-                    finished(text)
+                    startScan()
                 }
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "Failed to decode QR code from file", e)
-                toast(R.string.toast_decoding_failed)
             }
         }
     }
@@ -137,6 +158,7 @@ class ScannerActivity : HelperBaseComponentActivity() {
 
 enum class ScannerUiState {
     IDLE,
+    DECODING,
     ACTIVE
 }
 
@@ -220,6 +242,7 @@ fun ScannerScreen(
         ) {
             when (uiState) {
                 ScannerUiState.IDLE -> ScannerIdlePlaceholder(onStartClick = onStartScan)
+                ScannerUiState.DECODING -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 ScannerUiState.ACTIVE -> {
                     CameraXPreview(
                         onScanResult = onScanResult,
@@ -337,11 +360,26 @@ fun CameraXPreview(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val foundResult = remember { AtomicBoolean(false) }
+    val resultCallback by rememberUpdatedState(onScanResult)
+    val cameraReadyCallback by rememberUpdatedState(onCameraReady)
     var surfaceRequest by remember { mutableStateOf<SurfaceRequest?>(null) }
 
     DisposableEffect(lifecycleOwner) {
         val analysisExecutor = Executors.newSingleThreadExecutor()
+        val mainExecutor = ContextCompat.getMainExecutor(context)
+        val disposed = AtomicBoolean(false)
+        val resultDispatcher = ScanResultDispatcher(
+            dispatch = { task -> mainExecutor.execute { task() } },
+            active = { lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
+            onResult = { resultCallback(it) },
+        )
+        val qrReader = MultiFormatReader().apply {
+            setHints(mapOf(
+                DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+                DecodeHintType.TRY_HARDER to true,
+                DecodeHintType.CHARACTER_SET to "UTF-8"
+            ))
+        }
         var cameraProvider: ProcessCameraProvider? = null
         var camera: Camera? = null
 
@@ -360,7 +398,10 @@ fun CameraXPreview(
             .build()
             .apply {
                 setAnalyzer(analysisExecutor) { imageProxy ->
-                    processImageProxy(imageProxy, foundResult, onScanResult)
+                    resultDispatcher.analyze(
+                        decode = { processImageProxy(imageProxy, qrReader) },
+                        close = { imageProxy.close() },
+                    )
                 }
             }
 
@@ -370,9 +411,9 @@ fun CameraXPreview(
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener(
             {
+                if (disposed.get()) return@addListener
                 try {
                     cameraProvider = cameraProviderFuture.get()
-                    cameraProvider?.unbindAll()
                     camera = cameraProvider?.bindToLifecycle(
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
@@ -380,18 +421,21 @@ fun CameraXPreview(
                         imageAnalysis
                     )
                     camera?.let {
-                        onCameraReady(it.cameraControl, it.cameraInfo)
+                        cameraReadyCallback(it.cameraControl, it.cameraInfo)
                     }
                 } catch (e: Exception) {
                     LogUtil.e(AppConfig.TAG, "CameraX bind failed", e)
                 }
             },
-            ContextCompat.getMainExecutor(context)
+            mainExecutor
         )
 
         onDispose {
-            cameraProvider?.unbindAll()
-            analysisExecutor.shutdownNow()
+            disposed.set(true)
+            resultDispatcher.dispose()
+            imageAnalysis.clearAnalyzer()
+            cameraProvider?.unbind(preview, imageAnalysis)
+            analysisExecutor.shutdown()
         }
     }
 
@@ -406,40 +450,21 @@ fun CameraXPreview(
     }
 }
 
-private fun processImageProxy(
-    imageProxy: ImageProxy,
-    foundResult: AtomicBoolean,
-    onResult: (String) -> Unit
-) {
-    if (foundResult.get()) {
-        imageProxy.close()
-        return
-    }
-    try {
-        val width = imageProxy.width
-        val height = imageProxy.height
+private fun processImageProxy(imageProxy: ImageProxy, qrReader: MultiFormatReader): String? {
+    return try {
         val yPlane = imageProxy.planes[0]
         val source = createYPlaneLuminanceSource(
             buffer = yPlane.buffer,
-            width = width,
-            height = height,
+            width = imageProxy.width,
+            height = imageProxy.height,
             rowStride = yPlane.rowStride,
+            pixelStride = yPlane.pixelStride,
         )
-        val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
-        val hints = mapOf(
-            DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
-            DecodeHintType.TRY_HARDER to true,
-            DecodeHintType.CHARACTER_SET to "UTF-8"
-        )
-        val result = qrReader.decode(binaryBitmap, hints)
-        val text = result.text
-        if (!text.isNullOrEmpty() && foundResult.compareAndSet(false, true)) {
-            onResult(text)
-        }
+        qrReader.decodeWithState(BinaryBitmap(HybridBinarizer(source))).text
     } catch (_: Exception) {
-        // do nothing
+        null
     } finally {
-        imageProxy.close()
+        qrReader.reset()
     }
 }
 
@@ -448,20 +473,23 @@ internal fun createYPlaneLuminanceSource(
     width: Int,
     height: Int,
     rowStride: Int,
+    pixelStride: Int = 1,
 ): PlanarYUVLuminanceSource {
-    val bufferCopy = buffer.duplicate()
-    val bytes = ByteArray(bufferCopy.remaining())
-    bufferCopy.get(bytes)
-    // Camera HALs may pad each Y row. ZXing advances rows by dataWidth, so the
-    // reported row stride must be used instead of the visible image width.
-    return PlanarYUVLuminanceSource(
-        bytes,
-        rowStride,
-        height,
-        0,
-        0,
-        width,
-        height,
-        false,
-    )
+    require(width in 1..4096 && height in 1..4096 && pixelStride > 0 && rowStride > 0)
+    val source = buffer.duplicate()
+    val rowBytes = (width - 1L) * pixelStride + 1L
+    val required = (height - 1L) * rowStride + rowBytes
+    require(rowBytes <= rowStride && required <= source.remaining())
+    val start = source.position()
+    val pixels = ByteArray(width * height)
+    for (y in 0 until height) {
+        val row = start + y * rowStride
+        if (pixelStride == 1) {
+            source.position(row)
+            source.get(pixels, y * width, width)
+        } else {
+            for (x in 0 until width) pixels[y * width + x] = source.get(row + x * pixelStride)
+        }
+    }
+    return PlanarYUVLuminanceSource(pixels, width, height, 0, 0, width, height, false)
 }

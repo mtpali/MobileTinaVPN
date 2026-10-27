@@ -270,6 +270,7 @@ fun PerAppProxyScreen(
                     AppListItem(
                         appName = app.appName,
                         packageName = app.packageName,
+                        iconVersion = app.iconVersion,
                         icon = null,
                         checked = checked,
                         onCheckedChange = { onToggleApp(app.packageName) }

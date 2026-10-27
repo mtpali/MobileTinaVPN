@@ -72,6 +72,10 @@ class ServerProxyChainActivity : BaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (editGuid.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) {
+            finish()
+            return
+        }
 
         allRemarks = SettingsManager.getProfileRemarks(
             excludeConfigTypes = setOf(EConfigType.CUSTOM, EConfigType.POLICYGROUP, EConfigType.PROXYCHAIN)
@@ -150,6 +154,7 @@ class ServerProxyChainActivity : BaseComponentActivity() {
             config.subscriptionId = subscriptionId.orEmpty()
         }
 
+        if (editGuid.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) return false
         val savedGuid = MmkvManager.encodeServerConfig(
             editGuid,
             config
@@ -177,6 +182,7 @@ class ServerProxyChainActivity : BaseComponentActivity() {
             return false
         }
 
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(editGuid)) return false
         MmkvManager.removeServer(editGuid)
 
         ProfileEditorResult.run {

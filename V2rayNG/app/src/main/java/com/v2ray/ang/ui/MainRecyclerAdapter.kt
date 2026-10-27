@@ -16,7 +16,7 @@ import com.v2ray.ang.helper.ItemTouchHelperAdapter
 import com.v2ray.ang.helper.ItemTouchHelperViewHolder
 import com.v2ray.ang.viewmodel.MainViewModel
 
-/** MobileTina manual list: one-tap selection, server name and Real Delay only. */
+/** Manual list with guarded per-server actions and one-tap selection. */
 class MainRecyclerAdapter(
     private val mainViewModel: MainViewModel,
     private val adapterListener: MainAdapterListener?
@@ -44,6 +44,27 @@ class MainRecyclerAdapter(
         val item = data[position]
         val guid = item.guid
         holder.itemMainBinding.tvName.text = item.profile.remarks
+        val allowed = com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)
+        holder.itemMainBinding.serverActions.visibility = if (allowed) View.VISIBLE else View.GONE
+        holder.itemMainBinding.serverActions.setOnClickListener(if (!allowed) null else View.OnClickListener { anchor ->
+            if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) return@OnClickListener
+            androidx.appcompat.widget.PopupMenu(context, anchor).apply {
+                menu.add(0, 1, 0, R.string.acc_edit)
+                menu.add(0, 2, 1, R.string.mobiletina_share_server)
+                menu.add(0, 3, 2, R.string.acc_delete)
+                setOnMenuItemClickListener { action ->
+                    if (com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) {
+                        when (action.itemId) {
+                            1 -> adapterListener?.onEdit(guid, holder.bindingAdapterPosition, item.profile)
+                            2 -> adapterListener?.onShare(guid, item.profile, holder.bindingAdapterPosition, false)
+                            3 -> adapterListener?.onRemove(guid, holder.bindingAdapterPosition)
+                        }
+                    }
+                    true
+                }
+                show()
+            }
+        })
 
         val delay = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
         holder.itemMainBinding.tvTestResult.text = when {

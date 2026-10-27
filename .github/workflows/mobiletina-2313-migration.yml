@@ -66,11 +66,11 @@ jobs:
           grep -q 'reloadServerListAsync()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           ! grep -q 'android.enableR8.fullMode=false' V2rayNG/gradle.properties
           ! grep -Eq 'installSecretHold|shouldRevealAfterTap|MobileTinaHiddenAccessPolicy' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
-          grep -q 'SubscriptionQrClickCounter()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
-          grep -q 'if (clicks < 10) return false' V2rayNG/app/src/main/java/com/v2ray/ang/ui/SubscriptionQrClickCounter.kt
+          grep -q 'SubscriptionHeaderHold(header, this' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
+          grep -q 'view.postDelayed(action, 2_000L)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/SubscriptionHeaderHold.kt
           ! grep -q 'MANUAL_SUBSCRIPTION_HOLD_MS' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'showManualSubscriptionQr(subscriptionId)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
-          grep -q 'startsWith(a(0), ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
+          grep -q 'startsWith(deniedPrefix, ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
           grep -q 'MobileTinaFirstLaunchDialog.showOnce' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'continueInitialLaunch()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           if [ "$EDITION" = "AliMTP" ]; then

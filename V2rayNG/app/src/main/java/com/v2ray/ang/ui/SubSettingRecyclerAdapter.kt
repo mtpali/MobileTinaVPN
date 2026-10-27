@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.findViewTreeLifecycleOwner
 import com.v2ray.ang.contracts.BaseAdapterListener
 import com.v2ray.ang.databinding.ItemRecyclerSubSettingBinding
 import com.v2ray.ang.helper.ItemTouchHelperAdapter
@@ -28,17 +29,28 @@ class SubSettingRecyclerAdapter(
         val subId = subscriptions[position].guid
         val subItem = subscriptions[position].subscription
         holder.itemSubSettingBinding.tvName.text = subItem.remarks
-        holder.itemSubSettingBinding.tvUrl.text = subItem.url
+        val allowed = com.v2ray.ang.handler.ProfileActionPolicy.allows(subItem)
+        holder.itemSubSettingBinding.tvUrl.text = if (allowed) subItem.url else ""
+        holder.itemSubSettingBinding.layoutShare.setOnClickListener(null)
+        holder.itemSubSettingBinding.layoutEdit.visibility = View.VISIBLE
+        holder.itemSubSettingBinding.layoutRemove.visibility = View.VISIBLE
         holder.itemSubSettingBinding.chkEnable.isChecked = subItem.enabled
         holder.itemSubSettingBinding.tvLastUpdated.text = Utils.formatTimestamp(subItem.lastUpdated)
         holder.itemView.setBackgroundColor(Color.TRANSPARENT)
-        holder.resetSecretTaps()
+        holder.hold?.dispose()
+        holder.hold = null
 
-        holder.itemSubSettingBinding.infoContainer.setOnClickListener(if (secretMode) {
-            View.OnClickListener {
-                if (holder.recordSecretTap(subId)) onSecretTap(subId)
+        holder.itemSubSettingBinding.infoContainer.setOnClickListener(null)
+        holder.itemSubSettingBinding.infoContainer.setOnTouchListener(null)
+        if (secretMode && com.v2ray.ang.handler.ProfileActionPolicy.allows(subItem)) {
+            (holder.itemView.findViewTreeLifecycleOwner() ?: holder.itemView.context as? androidx.lifecycle.LifecycleOwner)?.let { owner ->
+                holder.hold = SubscriptionHeaderHold(holder.itemSubSettingBinding.infoContainer, owner,
+                    valid = { com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subId) },
+                    onHold = { onSecretTap(subId) })
+                holder.itemSubSettingBinding.infoContainer.isClickable = true
+                holder.itemSubSettingBinding.infoContainer.setOnTouchListener(holder.hold)
             }
-        } else null)
+        }
 
         holder.itemSubSettingBinding.layoutEdit.setOnClickListener {
             adapterListener?.onEdit(subId, position)
@@ -54,7 +66,7 @@ class SubSettingRecyclerAdapter(
             viewModel.update(subId, subItem)
         }
 
-        if (secretMode) {
+        if (secretMode || !com.v2ray.ang.handler.ProfileActionPolicy.allows(subItem)) {
             holder.itemSubSettingBinding.layoutUrl.visibility = View.GONE
             holder.itemSubSettingBinding.layoutShare.visibility = View.GONE
             holder.itemSubSettingBinding.layoutEdit.visibility = View.GONE
@@ -88,37 +100,14 @@ class SubSettingRecyclerAdapter(
     }
 
     override fun onViewRecycled(holder: MainViewHolder) {
-        holder.resetSecretTaps()
+        holder.hold?.dispose()
+        holder.hold = null
         super.onViewRecycled(holder)
     }
 
     class MainViewHolder(val itemSubSettingBinding: ItemRecyclerSubSettingBinding) :
         BaseViewHolder(itemSubSettingBinding.root), ItemTouchHelperViewHolder {
-        private var secretSubscriptionId: String? = null
-        private var secretTapCount = 0
-        private var secretTapStartedAt = 0L
-
-        fun resetSecretTaps() {
-            secretSubscriptionId = null
-            secretTapCount = 0
-            secretTapStartedAt = 0L
-        }
-
-        fun recordSecretTap(subscriptionId: String): Boolean {
-            val now = SystemClock.elapsedRealtime()
-            if (secretSubscriptionId != subscriptionId ||
-                secretTapStartedAt == 0L ||
-                now - secretTapStartedAt > SECRET_TAP_WINDOW_MS
-            ) {
-                secretSubscriptionId = subscriptionId
-                secretTapCount = 0
-                secretTapStartedAt = now
-            }
-            secretTapCount++
-            if (secretTapCount < SECRET_TAP_COUNT) return false
-            resetSecretTaps()
-            return true
-        }
+        internal var hold: SubscriptionHeaderHold? = null
     }
 
     open class BaseViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -144,8 +133,4 @@ class SubSettingRecyclerAdapter(
     override fun onItemDismiss(position: Int) {
     }
 
-    private companion object {
-        const val SECRET_TAP_COUNT = 10
-        const val SECRET_TAP_WINDOW_MS = 5_000L
-    }
 }

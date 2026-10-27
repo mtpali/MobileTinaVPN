@@ -53,6 +53,7 @@ class SubEditActivity : BaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (editSubId.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(editSubId)) { finish(); return }
 
         suggestions = SettingsManager.getProfileRemarks(
             excludeConfigTypes = setOf(
@@ -77,6 +78,7 @@ class SubEditActivity : BaseComponentActivity() {
     }
 
     private fun saveServer(subItem: SubscriptionItem): Boolean {
+        if (editSubId.isNotBlank() && !com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(editSubId)) return false
         if (TextUtils.isEmpty(subItem.remarks)) {
             return false
         }
@@ -102,6 +104,7 @@ class SubEditActivity : BaseComponentActivity() {
     }
 
     private fun deleteServer(): Boolean {
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(editSubId)) return false
         if (editSubId.isNotEmpty()) {
             lifecycleScope.launch(Dispatchers.IO) {
                 SettingsManager.removeSubscriptionWithDefault(editSubId)
