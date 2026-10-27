@@ -138,9 +138,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var firstLaunchDialog: Dialog? = null
     private var manualSubscriptionDialog: AlertDialog? = null
     private val internetDialogHandler = Handler(Looper.getMainLooper())
-    private val drawerSecretHandler = Handler(Looper.getMainLooper())
-    private var drawerRevealRunnable: Runnable? = null
-    private var drawerHideRunnable: Runnable? = null
 
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -290,12 +287,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.navView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         binding.navView.textDirection = View.TEXT_DIRECTION_LTR
         binding.navView.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        binding.navView.menu.findItem(R.id.mobiletina_subscriptions)?.apply {
-            title = r.a(4)
-            isVisible = false
-        }
         binding.navView.post { forceLtrTree(binding.navView) }
-        installHiddenSubscriptionsEntry()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -322,52 +314,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                 forceLtrTree(view.getChildAt(index))
             }
         }
-    }
-
-    private fun installHiddenSubscriptionsEntry() {
-        val logo = binding.navView.getHeaderView(0)
-            .findViewById<ImageView>(R.id.mobiletina_nav_logo)
-        logo.setOnTouchListener { view, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    cancelDrawerReveal(view)
-                    val reveal = Runnable {
-                        drawerRevealRunnable = null
-                        if (!isFinishing && !isDestroyed && view.isAttachedToWindow) {
-                            revealSubscriptionsEntry()
-                        }
-                    }
-                    drawerRevealRunnable = reveal
-                    view.postDelayed(reveal, DRAWER_SUBSCRIPTION_HOLD_MS)
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> cancelDrawerReveal(view)
-            }
-            true
-        }
-    }
-
-    private fun cancelDrawerReveal(view: View? = null) {
-        drawerRevealRunnable?.let { runnable ->
-            (view ?: binding.navView.getHeaderView(0)
-                .findViewById<ImageView>(R.id.mobiletina_nav_logo)).removeCallbacks(runnable)
-        }
-        drawerRevealRunnable = null
-    }
-
-    private fun revealSubscriptionsEntry() {
-        val item = binding.navView.menu.findItem(R.id.mobiletina_subscriptions) ?: return
-        item.isVisible = true
-        binding.navView.post { forceLtrTree(binding.navView) }
-        toast(r.a(1))
-
-        drawerHideRunnable?.let(drawerSecretHandler::removeCallbacks)
-        val hide = Runnable {
-            drawerHideRunnable = null
-            item.isVisible = false
-        }
-        drawerHideRunnable = hide
-        drawerSecretHandler.postDelayed(hide, DRAWER_SUBSCRIPTION_VISIBLE_MS)
     }
 
     private fun setupActions() {
@@ -1502,10 +1448,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             R.id.routing_setting -> requestActivityLauncher.launch(Intent(this, RoutingSettingActivity::class.java))
             R.id.user_asset_setting -> requestActivityLauncher.launch(Intent(this, UserAssetActivity::class.java))
             R.id.settings -> requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java))
-            R.id.mobiletina_subscriptions -> startActivity(
-                Intent(this, SubSettingActivity::class.java)
-                    .putExtra(SubSettingActivity.EXTRA_HIDDEN_MODE, true)
-            )
             R.id.promotion -> Utils.openUri(this, "${Utils.decode(AppConfig.APP_PROMOTION_URL)}?t=${System.currentTimeMillis()}")
             R.id.logcat -> startActivity(Intent(this, LogcatActivity::class.java))
             R.id.check_for_update -> startActivity(Intent(this, CheckUpdateActivity::class.java))
@@ -1579,10 +1521,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             unregisterReceiver(expiryDataChangedReceiver)
             expiryReceiverRegistered = false
         }
-        cancelDrawerReveal()
-        drawerSecretHandler.removeCallbacksAndMessages(null)
-        drawerRevealRunnable = null
-        drawerHideRunnable = null
         internetDialogHandler.removeCallbacksAndMessages(null)
         internetDialog?.dismiss()
         internetDialog = null
@@ -1599,8 +1537,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val MODE_MANUAL = 1
         private const val FIRST_RUN_COMPLETED = "permissions_completed"
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
-        private const val DRAWER_SUBSCRIPTION_HOLD_MS = 10_000L
-        private const val DRAWER_SUBSCRIPTION_VISIBLE_MS = 60_000L
         private const val SMART_SUBSCRIPTION_REFRESH_GRACE_MS = 1_200L
         private const val SMART_SERVICE_CONFIRM_TIMEOUT_MS = 33_000L
         private val SMART_STOP_RETRY_DELAYS_MS = longArrayOf(300L, 900L, 1_800L)
