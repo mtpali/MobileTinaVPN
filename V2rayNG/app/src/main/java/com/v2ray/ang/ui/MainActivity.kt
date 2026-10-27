@@ -494,43 +494,51 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun showManualSubscriptionQr(subscriptionId: String) {
         if (currentMode != MODE_MANUAL || manualSubscriptionDialog?.isShowing == true) return
         val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
-        val link = subscription.url.trim()
-        if (!com.v2ray.ang.handler.ProfileActionPolicy.allows(subscription) || !r.b(link)) return
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allows(subscription)) return
         lifecycleScope.launch {
-        val bitmap = withContext(Dispatchers.Default) { QRCodeDecoder.createQRCode(link) } ?: return@launch
-        if (isFinishing || isDestroyed || currentMode != MODE_MANUAL ||
-            mainViewModel.subscriptionId != subscriptionId ||
-            !com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId)) return@launch
-
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 12, 40, 12)
-            addView(ImageView(this@MainActivity).apply {
-                setImageBitmap(bitmap)
-                adjustViewBounds = true
-                layoutParams = LinearLayout.LayoutParams(-1, 520)
-            })
-            addView(Button(this@MainActivity).apply {
-                text = r.a(5)
-                setOnClickListener {
-                    if (com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId))
-                        Utils.setClipboard(this@MainActivity, link)
+            val link = withContext(Dispatchers.IO) {
+                subscription.url.trim().ifBlank {
+                    val guid = MmkvManager.decodeServerList(subscriptionId).singleOrNull() ?: return@withContext null
+                    com.v2ray.ang.handler.MobileTinaHiddenShareManager.exportConfig(guid)
                 }
-            })
-        }
+            } ?: return@launch
+            if (!r.b(link)) return@launch
+            val bitmap = withContext(Dispatchers.Default) { QRCodeDecoder.createQRCode(link) } ?: return@launch
+            if (isFinishing || isDestroyed || currentMode != MODE_MANUAL ||
+                mainViewModel.subscriptionId != subscriptionId ||
+                !com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId)) return@launch
 
-        manualSubscriptionDialog = AlertDialog.Builder(this)
-            .setTitle(subscription.remarks.ifBlank { r.a(4) })
-            .setView(container)
-            .setNegativeButton(r.a(6), null)
-            .create()
-            .also { dialog ->
-                dialog.setOnDismissListener {
-                    if (manualSubscriptionDialog === dialog) manualSubscriptionDialog = null
-                }
-                dialog.show()
+            val container = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(40, 12, 40, 12)
+                addView(ImageView(this@MainActivity).apply {
+                    setImageBitmap(bitmap)
+                    adjustViewBounds = true
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    val height = minOf(resources.displayMetrics.widthPixels * 3 / 4, resources.displayMetrics.heightPixels / 2)
+                    layoutParams = LinearLayout.LayoutParams(-1, height)
+                })
+                addView(Button(this@MainActivity).apply {
+                    text = r.a(5)
+                    setOnClickListener {
+                        if (com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId))
+                            Utils.setClipboard(this@MainActivity, link)
+                    }
+                })
             }
-    }
+
+            manualSubscriptionDialog = AlertDialog.Builder(this@MainActivity)
+                .setTitle(subscription.remarks.ifBlank { r.a(4) })
+                .setView(container)
+                .setNegativeButton(r.a(6), null)
+                .create()
+                .also { dialog ->
+                    dialog.setOnDismissListener {
+                        if (manualSubscriptionDialog === dialog) manualSubscriptionDialog = null
+                    }
+                    dialog.show()
+                }
+        }
     }
 
     private fun ensureSelectedServerForCurrentSubscription() {
@@ -1399,6 +1407,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     private fun importBatchConfig(raw: String?) {
         if (raw.isNullOrBlank() || resetting || importJob?.isActive == true) return
+        val generation = MmkvManager.dataGeneration()
         val current = mainViewModel.subscriptionId
         val targetId = current.takeIf { MmkvManager.decodeSubscription(it)?.url.isNullOrBlank() &&
             com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(it) } ?: AppConfig.DEFAULT_SUBSCRIPTION_ID
@@ -1407,10 +1416,13 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             try {
                 val result = withContext(Dispatchers.IO) {
                     val normalized = MobileTinaImportNormalizer.normalize(raw)
-                    val counts = AngConfigManager.importBatchConfig(normalized, targetId, true, refreshSubscriptions = false)
-                    normalizeSubscriptionNames()
-                    val group = if (counts.first > 0) ensureImportedConfigsHaveVisibleGroup(targetId) else null
-                    group?.let { MobileTinaExpiryManager.scheduleFromImportedText(this@MainActivity, normalized, it) }
+                    val counts = AngConfigManager.importBatchConfig(normalized, targetId, true, refreshSubscriptions = false, expectedGeneration = generation)
+                    val group = MmkvManager.withDataGeneration(generation) {
+                        normalizeSubscriptionNames()
+                        val id = if (counts.first > 0) ensureImportedConfigsHaveVisibleGroup(targetId) else null
+                        id?.let { MobileTinaExpiryManager.scheduleFromImportedText(this@MainActivity, normalized, it) }
+                        id
+                    }
                     counts to group
                 }
                 if (resetting) return@launch

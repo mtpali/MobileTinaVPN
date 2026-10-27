@@ -42,12 +42,14 @@ object MobileTinaSubscriptionMarkerManager {
     fun isSubscriptionExpiredCached(): Boolean =
         MmkvManager.decodeSettingsBool(PREF_SUBSCRIPTION_EXPIRED, false)
 
-    @Synchronized
-    fun consumeExpiredToastPending(): Boolean {
-        if (!isSubscriptionExpiredCached()) return false
-        if (!MmkvManager.decodeSettingsBool(PREF_EXPIRED_TOAST_PENDING, false)) return false
+    private val toastLock = Any()
+
+    // UI reads cached flags only. Never wait on the monitor held by a network refresh.
+    fun consumeExpiredToastPending(): Boolean = synchronized(toastLock) {
+        if (!isSubscriptionExpiredCached()) return@synchronized false
+        if (!MmkvManager.decodeSettingsBool(PREF_EXPIRED_TOAST_PENDING, false)) return@synchronized false
         MmkvManager.encodeSettings(PREF_EXPIRED_TOAST_PENDING, false)
-        return true
+        true
     }
 
     /**

@@ -199,7 +199,7 @@ fun SubSettingScreen(
                                 horizontalAlignment = Alignment.End,
                                 modifier = Modifier.padding(start = 8.dp)
                             ) {
-                                Row {
+                                if (com.v2ray.ang.handler.ProfileActionPolicy.allows(subCache.subscription)) Row {
                                     if (com.v2ray.ang.handler.ProfileActionPolicy.allows(subCache.subscription) && subCache.subscription.url.isNotEmpty()) {
                                         IconButton(onClick = {
                                             shareTarget = Pair(subCache.guid, subCache.subscription.url)

@@ -25,6 +25,9 @@ object MobileTinaResetManager {
                     MobileTinaSubscriptionMarkerManager.clearExpiredState()
                     MmkvManager.clearProfilesAndSubscriptions()
                     true
+                } catch (e: Exception) {
+                    com.v2ray.ang.util.LogUtil.e(com.v2ray.ang.AppConfig.TAG, "VPN reset failed", e)
+                    false
                 } finally { MmkvManager.encodeSettings("DATA_RESET_UNTIL", 0L) }
             }
         }
