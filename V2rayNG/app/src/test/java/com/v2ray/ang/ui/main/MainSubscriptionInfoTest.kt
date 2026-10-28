@@ -74,4 +74,65 @@ class MainSubscriptionInfoTest {
         assertNull(model.expireMillis)
         assertFalse(model.expired)
     }
+    @Test
+    fun expiryLabelChangesAtTheExactTimestampWhileQuotaRemains() {
+        val expiry = now / 1000 + 10
+        val info = SubscriptionUsageInfo(total = 1000, download = 10, expire = expiry)
+        val before = buildSubscriptionInfoUiModel(info, expiry * 1000 - 1)
+        assertEquals(SubscriptionValidityLabel.REMAINING, before.validityLabel)
+        assertEquals(1L, before.remainingDays)
+        assertEquals(1L, before.nextRefreshDelayMillis)
+        for (time in listOf(expiry * 1000, expiry * 1000 + 1)) {
+            val model = buildSubscriptionInfoUiModel(info, time)
+            assertEquals(SubscriptionValidityLabel.EXPIRED, model.validityLabel)
+            assertTrue(model.expired)
+            assertEquals(0L, model.remainingDays)
+            assertNull(model.nextRefreshDelayMillis)
+        }
+    }
+
+    @Test
+    fun exhaustedQuotaRemainsUntilTimeEndsThenExpiryHasPriority() {
+        val info = SubscriptionUsageInfo(total = 1000, download = 1000, expire = now / 1000 + 60)
+        val before = buildSubscriptionInfoUiModel(info, now)
+        assertEquals(SubscriptionValidityLabel.TRAFFIC_EXHAUSTED, before.validityLabel)
+        assertEquals(60_000L, before.nextRefreshDelayMillis)
+        assertEquals(SubscriptionValidityLabel.EXPIRED, buildSubscriptionInfoUiModel(info, now + 60_000L).validityLabel)
+        assertEquals(SubscriptionValidityLabel.TRAFFIC_EXHAUSTED,
+            buildSubscriptionInfoUiModel(info.copy(expire = 0L), now).validityLabel)
+    }
+
+    @Test
+    fun unknownOrUnlimitedExpiryDoesNotScheduleOrDisplayAnEndedSubscription() {
+        for (expiry in listOf(0L, -1L)) {
+            val model = buildSubscriptionInfoUiModel(SubscriptionUsageInfo(expire = expiry), now)
+            assertEquals(SubscriptionValidityLabel.HIDDEN, model.validityLabel)
+            assertFalse(model.expired)
+            assertNull(model.remainingDays)
+            assertNull(model.nextRefreshDelayMillis)
+        }
+    }
+
+    @Test
+    fun daysAndNextRefreshFollowTheExactDayBoundaryWithoutPolling() {
+        val expiry = now / 1000 + 86_400
+        val info = SubscriptionUsageInfo(expire = expiry)
+        val dayPlusOne = buildSubscriptionInfoUiModel(info, now - 1)
+        assertEquals(2L, dayPlusOne.remainingDays)
+        assertEquals(1L, dayPlusOne.nextRefreshDelayMillis)
+        val exactDay = buildSubscriptionInfoUiModel(info, now)
+        assertEquals(1L, exactDay.remainingDays)
+        assertEquals(86_400_000L, exactDay.nextRefreshDelayMillis)
+        assertEquals(SubscriptionValidityLabel.EXPIRED, buildSubscriptionInfoUiModel(info, now + 86_400_000L).validityLabel)
+    }
+
+    @Test
+    fun veryLargeExpiryCannotOverflowIntoAnExpiredSubscription() {
+        val model = buildSubscriptionInfoUiModel(SubscriptionUsageInfo(expire = Long.MAX_VALUE), now)
+        assertFalse(model.expired)
+        assertTrue(model.expireMillis!! > now)
+        assertTrue(model.remainingDays!! > 0L)
+        assertTrue(model.nextRefreshDelayMillis!! in 1L..86_400_000L)
+    }
+
 }
