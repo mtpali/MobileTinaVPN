@@ -68,8 +68,8 @@ android {
         applicationId = "com.v2ray.mobiletina"
         minSdk = 24
         targetSdk = 37
-        versionCode = 753
-        versionName = "2.3.13"
+        versionCode = 754
+        versionName = "2.3.14"
         multiDexEnabled = true
         // Keep only the default English locale plus Android's mandatory
         // unqualified/default resources. This also strips dependency translations.

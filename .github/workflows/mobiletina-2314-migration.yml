@@ -1,4 +1,4 @@
-name: MobileTina and AliMTP 2.3.13 Migration
+name: MobileTina and AliMTP 2.3.14 Migration
 
 on:
   pull_request:
@@ -38,8 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -Eq 'applicationId = "com.v2ray.(mobiletina|alimtp)"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.3.13"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionCode = 753' V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.14"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionCode = 754' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = true' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = true' V2rayNG/app/build.gradle.kts
@@ -262,8 +262,8 @@ jobs:
 
           $ANDROID_HOME/build-tools/37.0.0/aapt2 dump badging "$APK" > /tmp/apk-badging.txt
           grep -Fq "package: name='$EXPECTED_APP_ID'" /tmp/apk-badging.txt
-          grep -Fq "versionName='2.3.13'" /tmp/apk-badging.txt
-          grep -Fq "versionCode='4000753'" /tmp/apk-badging.txt
+          grep -Fq "versionName='2.3.14'" /tmp/apk-badging.txt
+          grep -Fq "versionCode='4000754'" /tmp/apk-badging.txt
           zipinfo -1 "$APK" > /tmp/apk-entries.txt
           for abi in arm64-v8a armeabi-v7a; do
             for native in libgojni.so libhev-socks5-tunnel.so libhevsockstun.so; do
@@ -390,19 +390,19 @@ jobs:
 
           SHA=$(sha256sum "$APK" | awk '{print $1}')
           SIZE=$(stat -c '%s' "$APK")
-          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.13-armv7-armv8-hardened.sha256
+          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.14-armv7-armv8-hardened.sha256
           printf 'source_head_sha=%s\nbuild_commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\nsigning_source=%s\n' \
             "$SOURCE_HEAD_SHA" "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" "$SIGNING_SOURCE" \
-            > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.13-hardened-report.txt
+            > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.14-hardened-report.txt
 
       - name: Upload hardened MobileTina APK
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.EDITION }}-2.3.13-armv7-armv8-migration
+          name: ${{ env.EDITION }}-2.3.14-armv7-armv8-migration
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.13-armv7-armv8-hardened.sha256
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.13-hardened-report.txt
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.14-armv7-armv8-hardened.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.14-hardened-report.txt
             V2rayNG/app/build/reports/tests/
             V2rayNG/app/build/test-results/
             V2rayNG/app/build/outputs/mapping/playstoreRelease/mapping.txt
