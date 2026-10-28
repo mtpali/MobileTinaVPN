@@ -213,6 +213,8 @@
                                 android:layout_marginTop="13dp"
                                 android:max="100"
                                 app:trackCornerRadius="4dp"
+                                app:indicatorTrackGapSize="0dp"
+                                app:trackStopIndicatorSize="0dp"
                                 android:progress="0"
                                 app:indicatorColor="@color/mobiletina_subscription_progress_indicator"
                                 app:trackColor="@color/mobiletina_subscription_progress_track" />
@@ -279,9 +281,11 @@
                     android:background="@color/divider_color_light" />
 
                 <FrameLayout
+                    android:id="@+id/manual_dock"
                     android:layout_width="match_parent"
                     android:layout_height="154dp"
                     android:background="@color/mobiletina_manual_dock_bg"
+                    android:contentDescription="@string/mobiletina_tap_for_ping"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
@@ -308,7 +312,7 @@
                         android:layout_width="145dp"
                         android:layout_height="52dp"
                         android:layout_gravity="top|center_horizontal"
-                        android:layout_marginTop="72dp"
+                        android:layout_marginTop="64dp"
                         android:background="@android:color/transparent"
                         android:clickable="true"
                         android:contentDescription="@string/mobiletina_manual_smart_connect"
@@ -325,7 +329,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="24dp"
                         android:layout_gravity="top|center_horizontal"
-                        android:layout_marginTop="128dp"
+                        android:layout_marginTop="120dp"
                         android:gravity="center"
                         android:orientation="horizontal"
                         android:visibility="invisible">
