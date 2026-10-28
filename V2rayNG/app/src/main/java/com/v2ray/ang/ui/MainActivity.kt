@@ -1489,11 +1489,12 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun openDeveloperTelegram() {
-        val username = q.a(10).removePrefix("@")
+        val channelUrl = q.a(3)
+        val username = Uri.parse(channelUrl).lastPathSegment.orEmpty()
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=$username")))
         } catch (_: ActivityNotFoundException) {
-            Utils.openUri(this, q.a(3))
+            Utils.openUri(this, channelUrl)
         }
     }
 
