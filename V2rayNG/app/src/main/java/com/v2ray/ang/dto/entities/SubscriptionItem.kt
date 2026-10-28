@@ -18,4 +18,7 @@ data class SubscriptionItem(
     var trafficTotalBytes: Long? = null,
     var expireEpochSeconds: Long? = null,
     var commentExpireEpochSeconds: Long? = null,
+    var requestHeaders: String? = null,
+    var usageInfo: SubscriptionUsageInfo? = null,
+    var actionRestricted: Boolean = false,
 )

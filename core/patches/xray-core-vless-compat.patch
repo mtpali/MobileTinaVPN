@@ -1,0 +1,20 @@
+--- a/infra/conf/xray.go
++++ b/infra/conf/xray.go
+@@ -251,14 +251,9 @@
+ 		return nil
+ 	}
+ 
+-	if vlessCfg, ok := rawConfig.(*VLessOutboundConfig); ok {
+-		if vlessCfg.Encryption != "" && vlessCfg.Encryption != "none" {
+-			return nil
+-		}
+-		if requiresTransportSecurity(vlessCfg.Address) {
+-			return errors.New("vless without TLS or other encryption is prohibited unless the server address is a private IP or domain")
+-		}
+-	}
++	// MobileTina/AliMTP: accept explicitly configured plaintext VLESS, as PattNG
++	// does. VLESS Build still validates encryption/flow; TLS/REALITY are untouched.
++	// Keep the separate Trojan transport-security policy below.
+ 
+ 	if tjCfg, ok := rawConfig.(*TrojanClientConfig); ok {
+ 		if requiresTransportSecurity(tjCfg.Servers[0].Address) {

@@ -39,7 +39,7 @@ class SubscriptionsViewModel : ViewModel() {
         if (fromPosition in subscriptions.indices && toPosition in subscriptions.indices) {
             val item = subscriptions.removeAt(fromPosition)
             subscriptions.add(toPosition, item)
-            SettingsManager.swapSubscriptions(fromPosition, toPosition)
+            MmkvManager.encodeSubsList(subscriptions.map { it.guid }.toMutableList())
             SettingsChangeManager.makeSetupGroupTab()
         }
     }

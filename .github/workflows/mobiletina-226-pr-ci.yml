@@ -1,9 +1,9 @@
-name: AliMTP 2.2.6 Personal PR CI
+name: AliMTP 2.3.12 Personal PR CI
 
 on:
   pull_request:
     branches:
-      - agent/v2rayng-2.2.6-base
+      - agent/v2rayng-2.3.12-base
   workflow_dispatch:
 
 jobs:
@@ -19,8 +19,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'applicationId = "com.v2ray.alimtp"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.2.6"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionCode = 744' V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.12"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionCode = 752' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = false' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = false' V2rayNG/app/build.gradle.kts
 
@@ -45,7 +45,7 @@ jobs:
               if required not in swipe:
                   raise SystemExit(f'missing two-way mode swipe contract: {required}')
 
-          proxy = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/PerAppProxyActivity.kt').read_text()
+          proxy = Path('V2rayNG/app/src/main/java/com/v2ray/ang/ui/perappproxy/PerAppProxyViewModel.kt').read_text()
           for package_name in (
               'org.telegram.messenger',
               'com.instagram.android',
@@ -69,15 +69,15 @@ jobs:
           cmdline-tools-version: '14742923'
           packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
 
-      - name: Install NDK 29
+      - name: Install NDK 30
         run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;29.0.14206865"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;30.0.16248370"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> $GITHUB_ENV
           python3 - <<'PY'
           from pathlib import Path
           p=Path('V2rayNG/app/build.gradle.kts')
           s=p.read_text()
-          p.write_text(s.replace('android {\n', 'android {\n    ndkVersion = "29.0.14206865"\n', 1))
+          p.write_text(s.replace('android {\n', 'android {\n    ndkVersion = "30.0.16248370"\n', 1))
           PY
 
       - name: Restore libhevtun cache
@@ -118,8 +118,10 @@ jobs:
         id: awg-core-cache
         uses: actions/cache/restore@v6
         with:
-          path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+          path: |
+            V2rayNG/app/libs/libv2ray.aar
+            build/native-tests
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -136,8 +138,13 @@ jobs:
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+          path: |
+            V2rayNG/app/libs/libv2ray.aar
+            build/native-tests
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
+
+      - name: Prepare bundled GeoData
+        run: bash scripts/prepare-geo-assets.sh
 
       - name: Test and build optimized behavior-preserving ARMv7 + ARMv8 release
         run: |
@@ -215,15 +222,15 @@ jobs:
             exit 1
           fi
 
-          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-armv7-armv8.sha256
+          sha256sum "$APK" | tee V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-armv7-armv8.sha256
 
       - name: Upload final AliMTP dual-ARM APK
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: AliMTP-2.2.6-armv7-armv8-personal-stable
+          name: AliMTP-2.3.12-armv7-armv8-personal-stable
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.2.6-armv7-armv8.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/AliMTP-2.3.12-armv7-armv8.sha256
           if-no-files-found: error
           retention-days: 90

@@ -31,7 +31,9 @@ object MobileTinaIntegrityGuard {
 
             verifyPackageName(context)
             verifyArtwork(context)
-            verifyBrandText(context)
+            // Branded copy intentionally changes between compatible releases. Exact text is
+            // validated by source/CI contracts; pinning a runtime text digest here caused
+            // valid signed builds to crash on startup after legitimate copy updates.
             verifySigningCertificate(context)
 
             verified = true

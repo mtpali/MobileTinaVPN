@@ -41,12 +41,24 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.tabs.TabLayoutMediator
+import com.v2ray.ang.ui.server.ProfileEditorResult
+import com.v2ray.ang.ui.server.ServerVmessActivity
+import com.v2ray.ang.ui.server.ServerVlessActivity
+import com.v2ray.ang.ui.server.ServerShadowsocksActivity
+import com.v2ray.ang.ui.server.ServerSocksActivity
+import com.v2ray.ang.ui.server.ServerHttpActivity
+import com.v2ray.ang.ui.server.ServerTrojanActivity
+import com.v2ray.ang.ui.server.ServerWireguardActivity
+import com.v2ray.ang.ui.server.ServerHysteria2Activity
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.core.LauncherManager
+import com.v2ray.ang.service.SmartConnectServiceState
 import com.v2ray.ang.core.MobileTinaSessionLimiter
 import com.v2ray.ang.databinding.ActivityMainBinding
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.dto.entities.SubscriptionItem
+import com.v2ray.ang.dto.entities.SubscriptionUsageInfo
 import com.v2ray.ang.enums.PermissionType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
@@ -63,6 +75,7 @@ import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.MobileTinaImportNormalizer
 import com.v2ray.ang.util.MobileTinaIntegrityGuard
 import com.v2ray.ang.util.QRCodeDecoder
+import com.v2ray.ang.util.readBytesLimited
 import com.v2ray.ang.util.Utils
 import com.v2ray.ang.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -71,13 +84,21 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.math.ceil
+import com.v2ray.ang.ui.main.SubscriptionValidityLabel
+import com.v2ray.ang.ui.main.buildSubscriptionInfoUiModel
 
 class MainActivity : HelperBaseActivity(), com.google.android.material.navigation.NavigationView.OnNavigationItemSelectedListener {
     private val binding by lazy { ActivityMainBinding.inflate(layoutInflater) }
     private val expiryDataChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != MobileTinaExpiryManager.ACTION_DATA_CHANGED) return
+            if (intent?.action == SmartConnectServiceState.ACTION_CHANGED) {
+                if (SmartConnectServiceState.phase(this@MainActivity) == SmartConnectServiceState.Phase.IDLE) {
+                    mainViewModel.reloadServerListAsync()
+                }
+                syncSmartConnectServiceState()
+                return
+            }
+            if (resetting || intent?.action != MobileTinaExpiryManager.ACTION_DATA_CHANGED) return
             normalizeSubscriptionNames()
             setupGroupTab()
             ensureSelectedServerForCurrentSubscription()
@@ -93,12 +114,16 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var tabMediator: TabLayoutMediator? = null
     private val firstRunPrefs by lazy { getSharedPreferences("mobiletina_first_run", MODE_PRIVATE) }
 
+    private val subscriptionHolds = mutableListOf<SubscriptionHeaderHold>()
+    private var importJob: kotlinx.coroutines.Job? = null
+    private var resetting = false
     private var currentMode = MODE_AUTO
     private var modeInitialized = false
     private var lastSubscriptionRefreshAt = 0L
     private var subscriptionRefreshing = false
     private var pendingSmartVpnPermission = false
     private var pendingSmartVpnAttemptId = 0L
+    private var awaitingSmartServiceStart = false
     private var smartConnecting = false
     private var smartConnectionFailed = false
     private var smartCountdownSeconds = 0
@@ -115,9 +140,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private var firstLaunchDialog: Dialog? = null
     private var manualSubscriptionDialog: AlertDialog? = null
     private val internetDialogHandler = Handler(Looper.getMainLooper())
-    private val drawerSecretHandler = Handler(Looper.getMainLooper())
-    private var drawerRevealRunnable: Runnable? = null
-    private var drawerHideRunnable: Runnable? = null
 
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -128,7 +150,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             if (result.resultCode == RESULT_OK) {
                 if (smart) {
                     if (isSmartAttemptActive(attemptId)) startV2Ray(true, attemptId)
-                } else {
+                } else if (manualConnecting) {
                     startV2Ray(false)
                 }
             } else if (smart) {
@@ -150,10 +172,12 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
 
     private val requestActivityLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK && result.data?.getBooleanExtra(ProfileEditorResult.EXTRA_RESTART_SERVICE, false) == true) restartV2Ray()
             if (SettingsChangeManager.consumeRestartService() && mainViewModel.isRunning.value == true) restartV2Ray()
             if (SettingsChangeManager.consumeSetupGroupTab()) setupGroupTab()
             setupGroupTab()
+            mainViewModel.reloadServerListAsync()
             refreshSelectedServerUi()
         }
 
@@ -179,7 +203,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         ContextCompat.registerReceiver(
             this,
             expiryDataChangedReceiver,
-            IntentFilter(MobileTinaExpiryManager.ACTION_DATA_CHANGED),
+            IntentFilter(MobileTinaExpiryManager.ACTION_DATA_CHANGED).apply { addAction(SmartConnectServiceState.ACTION_CHANGED) },
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         expiryReceiverRegistered = true
@@ -200,6 +224,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     private fun setMode(mode: Int, updateTab: Boolean = true) {
         val requestedMode = mode.coerceIn(MODE_AUTO, MODE_MANUAL)
         if (modeInitialized && currentMode == requestedMode) return
+        subscriptionHolds.forEach { it.cancel() }
         currentMode = requestedMode
         modeInitialized = true
         binding.autoPanel.visibility = if (currentMode == MODE_AUTO) View.VISIBLE else View.GONE
@@ -264,12 +289,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.navView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         binding.navView.textDirection = View.TEXT_DIRECTION_LTR
         binding.navView.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        binding.navView.menu.findItem(R.id.mobiletina_subscriptions)?.apply {
-            title = r.a(4)
-            isVisible = false
-        }
         binding.navView.post { forceLtrTree(binding.navView) }
-        installHiddenSubscriptionsEntry()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -298,52 +318,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
     }
 
-    private fun installHiddenSubscriptionsEntry() {
-        val logo = binding.navView.getHeaderView(0)
-            .findViewById<ImageView>(R.id.mobiletina_nav_logo)
-        logo.setOnTouchListener { view, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    cancelDrawerReveal(view)
-                    val reveal = Runnable {
-                        drawerRevealRunnable = null
-                        if (!isFinishing && !isDestroyed && view.isAttachedToWindow) {
-                            revealSubscriptionsEntry()
-                        }
-                    }
-                    drawerRevealRunnable = reveal
-                    view.postDelayed(reveal, DRAWER_SUBSCRIPTION_HOLD_MS)
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> cancelDrawerReveal(view)
-            }
-            true
-        }
-    }
-
-    private fun cancelDrawerReveal(view: View? = null) {
-        drawerRevealRunnable?.let { runnable ->
-            (view ?: binding.navView.getHeaderView(0)
-                .findViewById<ImageView>(R.id.mobiletina_nav_logo)).removeCallbacks(runnable)
-        }
-        drawerRevealRunnable = null
-    }
-
-    private fun revealSubscriptionsEntry() {
-        val item = binding.navView.menu.findItem(R.id.mobiletina_subscriptions) ?: return
-        item.isVisible = true
-        binding.navView.post { forceLtrTree(binding.navView) }
-        toast(r.a(1))
-
-        drawerHideRunnable?.let(drawerSecretHandler::removeCallbacks)
-        val hide = Runnable {
-            drawerHideRunnable = null
-            item.isVisible = false
-        }
-        drawerHideRunnable = hide
-        drawerSecretHandler.postDelayed(hide, DRAWER_SUBSCRIPTION_VISIBLE_MS)
-    }
-
     private fun setupActions() {
         binding.fabAuto.setOnClickListener {
             binding.fabAuto.animate().cancel()
@@ -356,6 +330,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.fab.setOnClickListener { handleManualFabAction() }
         binding.tvAutoPing.setOnClickListener { handlePingClick() }
         binding.manualSelectedRow.setOnClickListener { handlePingClick() }
+        binding.manualDock.setOnClickListener {
+            if (currentMode == MODE_MANUAL && mainViewModel.isRunning.value == true) handlePingClick()
+        }
     }
 
     private fun setupViewModel() {
@@ -376,6 +353,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         mainViewModel.isRunning.observe(this) { isRunning ->
             if (isRunning == true) {
                 manualConnecting = false
+                awaitingSmartServiceStart = false
                 smartConnectJob?.cancel()
                 smartConnectJob = null
                 smartStartWatchdogJob?.cancel()
@@ -411,6 +389,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.tabGroup.visibility = View.VISIBLE
 
         if (structureChanged || tabMediator == null) {
+            subscriptionHolds.forEach { it.dispose() }
+            subscriptionHolds.clear()
             tabMediator?.detach()
             tabMediator = TabLayoutMediator(binding.tabGroup, binding.viewPager) { tab, position ->
                 val group = groupPagerAdapter.groups[position]
@@ -420,7 +400,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
                     textSize = 16f
                     setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorTextPrimary))
                 }
-                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installHold = true)
+                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installClicks = true)
                 tab.customView = textView
                 tab.tag = group.id
             }.also { it.attach() }
@@ -428,7 +408,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             groups.forEachIndexed { index, group ->
                 val tab = binding.tabGroup.getTabAt(index) ?: return@forEachIndexed
                 val textView = tab.customView as? TextView ?: return@forEachIndexed
-                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installHold = false)
+                bindGroupTab(textView, tab, group, counts[group.id] ?: 0, installClicks = false)
                 tab.tag = group.id
             }
         }
@@ -448,82 +428,80 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         tab: com.google.android.material.tabs.TabLayout.Tab,
         group: com.v2ray.ang.dto.GroupMapItem,
         count: Int,
-        installHold: Boolean
+        installClicks: Boolean
     ) {
         textView.text = "${group.remarks} ($count)"
-        if (installHold) installManualSubscriptionHold(textView, tab, group.id)
+        if (installClicks) installManualSubscriptionClicks(textView, tab, group.id)
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun installManualSubscriptionHold(
+    private fun installManualSubscriptionClicks(
         header: TextView,
         tab: com.google.android.material.tabs.TabLayout.Tab,
         subscriptionId: String
     ) {
-        var pendingReveal: Runnable? = null
         header.isClickable = true
         header.isFocusable = true
         header.setOnClickListener { tab.select() }
+        val hold = SubscriptionHeaderHold(header, this, valid = {
+            currentMode == MODE_MANUAL && !resetting && !isFinishing && !isDestroyed &&
+                mainViewModel.subscriptionId == subscriptionId &&
+                com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId)
+        }, onHold = { showManualSubscriptionQr(subscriptionId) })
+        subscriptionHolds.add(hold)
         header.setOnTouchListener { view, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    pendingReveal?.let(view::removeCallbacks)
-                    val reveal = Runnable {
-                        pendingReveal = null
-                        if (
-                            currentMode == MODE_MANUAL &&
-                            !isFinishing &&
-                            !isDestroyed &&
-                            view.isAttachedToWindow
-                        ) {
-                            showManualSubscriptionQr(subscriptionId)
-                        }
-                    }
-                    pendingReveal = reveal
-                    view.postDelayed(reveal, MANUAL_SUBSCRIPTION_HOLD_MS)
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    pendingReveal?.let(view::removeCallbacks)
-                    pendingReveal = null
-                }
-            }
-            false
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) tab.select()
+            hold.onTouch(view, event)
         }
     }
 
     private fun showManualSubscriptionQr(subscriptionId: String) {
         if (currentMode != MODE_MANUAL || manualSubscriptionDialog?.isShowing == true) return
         val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
-        val link = subscription.url.trim()
-        if (!r.b(link)) return
-        val bitmap = QRCodeDecoder.createQRCode(link) ?: return
-
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 12, 40, 12)
-            addView(ImageView(this@MainActivity).apply {
-                setImageBitmap(bitmap)
-                adjustViewBounds = true
-                layoutParams = LinearLayout.LayoutParams(-1, 520)
-            })
-            addView(Button(this@MainActivity).apply {
-                text = r.a(5)
-                setOnClickListener { Utils.setClipboard(this@MainActivity, link) }
-            })
-        }
-
-        manualSubscriptionDialog = AlertDialog.Builder(this)
-            .setTitle(subscription.remarks.ifBlank { r.a(4) })
-            .setView(container)
-            .setNegativeButton(r.a(6), null)
-            .create()
-            .also { dialog ->
-                dialog.setOnDismissListener {
-                    if (manualSubscriptionDialog === dialog) manualSubscriptionDialog = null
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allows(subscription)) return
+        lifecycleScope.launch {
+            val link = withContext(Dispatchers.IO) {
+                subscription.url.trim().ifBlank {
+                    val guid = MmkvManager.decodeServerList(subscriptionId).singleOrNull() ?: return@withContext null
+                    com.v2ray.ang.handler.MobileTinaHiddenShareManager.exportConfig(guid)
                 }
-                dialog.show()
+            } ?: return@launch
+            if (!r.b(link)) return@launch
+            val bitmap = withContext(Dispatchers.Default) { QRCodeDecoder.createQRCode(link) } ?: return@launch
+            if (isFinishing || isDestroyed || currentMode != MODE_MANUAL ||
+                mainViewModel.subscriptionId != subscriptionId ||
+                !com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId)) return@launch
+
+            val container = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(40, 12, 40, 12)
+                addView(ImageView(this@MainActivity).apply {
+                    setImageBitmap(bitmap)
+                    adjustViewBounds = true
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    val height = minOf(resources.displayMetrics.widthPixels * 3 / 4, resources.displayMetrics.heightPixels / 2)
+                    layoutParams = LinearLayout.LayoutParams(-1, height)
+                })
+                addView(Button(this@MainActivity).apply {
+                    text = r.a(5)
+                    setOnClickListener {
+                        if (com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId))
+                            Utils.setClipboard(this@MainActivity, link)
+                    }
+                })
             }
+
+            manualSubscriptionDialog = AlertDialog.Builder(this@MainActivity)
+                .setTitle(subscription.remarks.ifBlank { r.a(4) })
+                .setView(container)
+                .setNegativeButton(r.a(6), null)
+                .create()
+                .also { dialog ->
+                    dialog.setOnDismissListener {
+                        if (manualSubscriptionDialog === dialog) manualSubscriptionDialog = null
+                    }
+                    dialog.show()
+                }
+        }
     }
 
     private fun ensureSelectedServerForCurrentSubscription() {
@@ -538,7 +516,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun handleManualFabAction() {
-        if (isServiceRunningConfirmed() || manualConnecting) {
+        if (resetting) return
+        if (isServiceRunningConfirmed() || manualConnecting || SmartConnectServiceState.isPending(this)) {
             manualConnecting = false
             stopServiceReliably()
             refreshSelectedServerUi()
@@ -557,142 +536,24 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun smartConnectAndStart() {
+        if (resetting) return
         val serviceRunning = mainViewModel.reconcileRunningState()
-        if (serviceRunning || smartConnecting) {
+        if (serviceRunning || smartConnecting || manualConnecting || SmartConnectServiceState.isPending(this)) {
+            manualConnecting = false
             cancelSmartConnect()
             return
         }
 
         val attemptId = beginSmartConnectAttempt()
-        ensureSelectedServerForCurrentSubscription()
-        val immediateServer = mainViewModel.currentServerGuids().singleOrNull()
-        if (immediateServer != null) {
-            MmkvManager.setSelectServer(immediateServer)
-            refreshSelectedServerUi()
-            requestVpnPermissionAndStart(true, attemptId)
-            return
-        }
-
         smartConnectJob = lifecycleScope.launch {
-            val refreshGrace = SMART_SUBSCRIPTION_REFRESH_GRACE_MS
-            if (refreshGrace > 0L) {
-                withTimeoutOrNull(refreshGrace) {
+            if (mainViewModel.currentServerGuids().size != 1) {
+                withTimeoutOrNull(SMART_SUBSCRIPTION_REFRESH_GRACE_MS) {
                     while (subscriptionRefreshing && isActive && isSmartAttemptActive(attemptId)) delay(50L)
                 }
             }
-            if (!isSmartAttemptActive(attemptId)) return@launch
-
-            val groups = mainViewModel.getSubscriptions(this@MainActivity)
-            if (mainViewModel.subscriptionId.isBlank()) {
-                val first = groups.firstOrNull()
-                if (first != null) mainViewModel.subscriptionIdChanged(first.id)
-            } else {
-                mainViewModel.reloadServerList()
-            }
-            ensureSelectedServerForCurrentSubscription()
-            if (!isSmartAttemptActive(attemptId)) return@launch
-
-            val serverGuids = mainViewModel.currentServerGuids()
-            if (serverGuids.isEmpty()) {
-                markSmartConnectFailed(attemptId)
-                toast(R.string.title_file_chooser)
-                return@launch
-            }
-
-            if (serverGuids.size == 1) {
-                MmkvManager.setSelectServer(serverGuids.first())
-                refreshSelectedServerUi()
-                requestVpnPermissionAndStart(true, attemptId)
-                return@launch
-            }
-
-            val firstBatchId = attemptId * SMART_BATCH_ID_MULTIPLIER
-            awaitSmartPingBatch(attemptId, firstBatchId, serverGuids, SMART_FIRST_PING_TIMEOUT_MS)
-            if (!isSmartAttemptActive(attemptId)) return@launch
-
-            var best = findBestServer(serverGuids)
-            if (best == null) {
-                // Some devices need one service warm-up cycle. Retry inside the same click instead
-                // of showing a false red failure and requiring the user to press FAB again.
-                mainViewModel.cancelRealPing()
-                delay(SMART_RETRY_DELAY_MS)
-                if (!isSmartAttemptActive(attemptId)) return@launch
-                awaitSmartPingBatch(
-                    attemptId,
-                    firstBatchId + 1L,
-                    serverGuids,
-                    SMART_RETRY_PING_TIMEOUT_MS
-                )
-                if (!isSmartAttemptActive(attemptId)) return@launch
-                best = findBestServer(serverGuids)
-            }
-
-            if (!isSmartAttemptActive(attemptId)) return@launch
-            if (best == null) {
-                markSmartConnectFailed(attemptId)
-                toast(R.string.mobiletina_no_working_server)
-                return@launch
-            }
-
-            MmkvManager.setSelectServer(best.first)
-            refreshSelectedServerUi()
-            requestVpnPermissionAndStart(true, attemptId)
-
-            // Sorting the manual list is useful, but it must not delay the actual VPN start.
-            withContext(Dispatchers.IO) { mainViewModel.sortByTestResults() }
-            if (attemptId == smartAttemptId) mainViewModel.reloadServerList()
+            if (isSmartAttemptActive(attemptId)) requestVpnPermissionAndStart(true, attemptId)
         }
     }
-
-    private suspend fun awaitSmartPingBatch(
-        attemptId: Long,
-        batchId: Long,
-        serverGuids: List<String>,
-        timeoutMs: Long
-    ): Boolean {
-        val unresolvedGuids = serverGuids.toMutableSet()
-        mainViewModel.testAllRealPingForSmart(batchId)
-        return withTimeoutOrNull(timeoutMs) {
-            while (isActive && isSmartAttemptActive(attemptId) &&
-                mainViewModel.realPingStartedBatchId != batchId
-            ) {
-                delay(SMART_BATCH_START_POLL_MS)
-            }
-            if (!isSmartAttemptActive(attemptId) || mainViewModel.realPingStartedBatchId != batchId) {
-                return@withTimeoutOrNull false
-            }
-
-            var firstPositiveAt = 0L
-            while (isActive && isSmartAttemptActive(attemptId)) {
-                val resultState = withContext(Dispatchers.IO) {
-                    unresolvedGuids.removeAll { guid ->
-                        (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) != 0L
-                    }
-                    val hasPositive = serverGuids.any { guid ->
-                        (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) > 0L
-                    }
-                    unresolvedGuids.isEmpty() to hasPositive
-                }
-                if (resultState.second && firstPositiveAt == 0L) {
-                    firstPositiveAt = SystemClock.elapsedRealtime()
-                }
-                if (resultState.first ||
-                    (firstPositiveAt > 0L &&
-                        SystemClock.elapsedRealtime() - firstPositiveAt >= SMART_FAST_SETTLE_MS)
-                ) return@withTimeoutOrNull true
-                delay(SMART_PING_RESULT_POLL_MS)
-            }
-            false
-        } ?: false
-    }
-
-    private suspend fun findBestServer(serverGuids: List<String>): Pair<String, Long>? =
-        withContext(Dispatchers.IO) {
-            serverGuids.mapNotNull { guid ->
-                val ping = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
-                if (ping > 0L) guid to ping else null
-            }.minByOrNull { it.second }
-        }
 
     private fun beginSmartConnectAttempt(): Long {
         smartAttemptId += 1L
@@ -718,6 +579,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun invalidateSmartConnectAttempt() {
+        awaitingSmartServiceStart = false
         smartAttemptId += 1L
         smartConnectJob?.cancel()
         smartConnectJob = null
@@ -770,13 +632,32 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     private fun startV2Ray(isSmartConnect: Boolean = false, attemptId: Long = 0L) {
         if (isSmartConnect && !isSmartAttemptActive(attemptId)) return
-        if (MmkvManager.getSelectServer().isNullOrEmpty()) {
-            if (isSmartConnect) {
+        if (isSmartConnect) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN &&
+                MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)
+            ) checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) { }
+            awaitingSmartServiceStart = true
+            if (!LauncherManager.startSmartService(this)) {
+                awaitingSmartServiceStart = false
                 markSmartConnectFailed(attemptId)
-            } else {
-                manualConnecting = false
-                refreshSelectedServerUi()
+                return
             }
+            smartStartWatchdogJob?.cancel()
+            smartStartWatchdogJob = lifecycleScope.launch {
+                // The daemon owns the 15-second core-start timeout AFTER selection. This
+                // additional bound catches a service launch that never reaches the daemon.
+                delay(SMART_SERVICE_CONFIRM_TIMEOUT_MS)
+                if (isSmartAttemptActive(attemptId) && !isServiceRunningConfirmed()) {
+                    awaitingSmartServiceStart = false
+                    stopServiceReliably()
+                    markSmartConnectFailed(attemptId)
+                }
+            }
+            return
+        }
+        if (MmkvManager.getSelectServer().isNullOrEmpty()) {
+            manualConnecting = false
+            refreshSelectedServerUi()
             toast(R.string.title_file_chooser)
             return
         }
@@ -786,25 +667,11 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) { }
         }
         V2RayServiceManager.startVService(this)
-        if (isSmartConnect) {
-            smartStartWatchdogJob?.cancel()
-            smartStartWatchdogJob = lifecycleScope.launch {
-                delay(SMART_START_CONFIRM_TIMEOUT_MS)
-                if (!isSmartAttemptActive(attemptId) || mainViewModel.isRunning.value == true) return@launch
-                val coreRunning = withContext(Dispatchers.IO) {
-                    runCatching { V2RayServiceManager.isRunning() }.getOrDefault(false)
-                }
-                if (!coreRunning && isSmartAttemptActive(attemptId)) {
-                    markSmartConnectFailed(attemptId)
-                }
-            }
-        } else {
-            lifecycleScope.launch {
-                delay(6_000L)
-                if (manualConnecting && mainViewModel.isRunning.value != true) {
-                    manualConnecting = false
-                    refreshSelectedServerUi()
-                }
+        lifecycleScope.launch {
+            delay(6_000L)
+            if (manualConnecting && mainViewModel.isRunning.value != true) {
+                manualConnecting = false
+                refreshSelectedServerUi()
             }
         }
     }
@@ -856,6 +723,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             else -> pingLabel(ping)
         }
         binding.manualSelectedRow.visibility = if (profile != null) View.VISIBLE else View.INVISIBLE
+        binding.manualDock.isClickable = running && !smartConnecting
+        binding.manualDock.isFocusable = running && !smartConnecting
 
         val autoArtwork: Int
         val status: String
@@ -932,18 +801,29 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         else -> getString(R.string.mobiletina_ping_unknown)
     }
 
+    private var subscriptionCardRefreshJob: kotlinx.coroutines.Job? = null
+    private var subscriptionCardActive = false
+
     private fun refreshSubscriptionCard() {
+        subscriptionCardRefreshJob?.cancel()
+        subscriptionCardRefreshJob = null
         val item = MmkvManager.decodeSubscription(mainViewModel.subscriptionId)
         if (item == null) {
             binding.subscriptionCard.visibility = View.GONE
             return
         }
 
-        val total = (item.trafficTotalBytes ?: 0L).coerceAtLeast(0L)
-        val used = ((item.trafficUploadBytes ?: 0L) + (item.trafficDownloadBytes ?: 0L)).coerceAtLeast(0L)
+        val traffic = SubscriptionUsageInfo(
+            upload = item.trafficUploadBytes ?: 0L,
+            download = item.trafficDownloadBytes ?: 0L,
+            total = item.trafficTotalBytes ?: 0L,
+        )
+        val total = traffic.total.coerceAtLeast(0L)
+        val used = traffic.used.coerceAtLeast(0L)
         val expire = (item.commentExpireEpochSeconds ?: item.expireEpochSeconds ?: 0L)
             .coerceAtLeast(0L)
-        if (total <= 0L && expire <= 0L) {
+        val hasUsage = item.usageInfo != null || item.trafficUploadBytes != null || item.trafficDownloadBytes != null
+        if (total <= 0L && expire <= 0L && !hasUsage) {
             binding.subscriptionCard.visibility = View.GONE
             return
         }
@@ -961,15 +841,31 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             binding.tvSubscriptionUsage.visibility = View.VISIBLE
         } else {
             binding.subscriptionProgress.visibility = View.GONE
-            binding.tvSubscriptionUsage.visibility = View.GONE
+            binding.tvSubscriptionUsage.text = getString(
+                R.string.mobiletina_subscription_usage_compact,
+                formatBytes(used), getString(R.string.sub_info_unlimited)
+            )
+            binding.tvSubscriptionUsage.visibility = if (hasUsage) View.VISIBLE else View.GONE
         }
 
-        if (expire > 0L) {
-            val days = ceil(((expire * 1000L - System.currentTimeMillis()).coerceAtLeast(0L)) / 86_400_000.0).toLong()
-            binding.tvSubscriptionDays.text = String.format(java.util.Locale.ROOT, r.a(7), days)
-            binding.tvSubscriptionDays.visibility = View.VISIBLE
-        } else {
-            binding.tvSubscriptionDays.visibility = View.GONE
+        val model = buildSubscriptionInfoUiModel(traffic.copy(expire = expire), System.currentTimeMillis())
+        when (model.validityLabel) {
+            SubscriptionValidityLabel.EXPIRED -> binding.tvSubscriptionDays.setText(R.string.mobiletina_subscription_expired)
+            SubscriptionValidityLabel.TRAFFIC_EXHAUSTED -> binding.tvSubscriptionDays.setText(R.string.mobiletina_subscription_traffic_exhausted)
+            SubscriptionValidityLabel.REMAINING -> binding.tvSubscriptionDays.text =
+                String.format(java.util.Locale.ROOT, r.a(7), model.remainingDays!!)
+            SubscriptionValidityLabel.HIDDEN -> Unit
+        }
+        binding.tvSubscriptionDays.visibility =
+            if (model.validityLabel == SubscriptionValidityLabel.HIDDEN) View.GONE else View.VISIBLE
+        if (subscriptionCardActive) {
+            model.nextRefreshDelayMillis?.let { next ->
+                subscriptionCardRefreshJob = lifecycleScope.launch {
+                    delay(next)
+                    subscriptionCardRefreshJob = null
+                    refreshSubscriptionCard()
+                }
+            }
         }
     }
 
@@ -1009,6 +905,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onResume() {
         super.onResume()
+        subscriptionCardActive = true
         mainViewModel.reconcileRunningState()
         MobileTinaExpiryManager.recoverPending(this)
         setupGroupTab()
@@ -1018,6 +915,31 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         showExpiredSubscriptionToastIfNeeded()
         reconcileExistingMarkersAsync()
         updateSubscriptionOnResume()
+        syncSmartConnectServiceState()
+    }
+
+    private fun syncSmartConnectServiceState() {
+        when (SmartConnectServiceState.phase(this)) {
+            SmartConnectServiceState.Phase.SELECTING, SmartConnectServiceState.Phase.STARTING -> {
+                awaitingSmartServiceStart = false
+                smartConnecting = true
+                smartConnectionFailed = false
+            }
+            SmartConnectServiceState.Phase.FAILED -> if (!awaitingSmartServiceStart &&
+                !pendingSmartVpnPermission && smartConnectJob?.isActive != true
+            ) {
+                smartConnecting = false
+                smartConnectionFailed = true
+                smartStartWatchdogJob?.cancel()
+            }
+            SmartConnectServiceState.Phase.IDLE -> if (!awaitingSmartServiceStart &&
+                !pendingSmartVpnPermission && smartConnectJob?.isActive != true
+            ) {
+                smartConnecting = false
+                smartStartWatchdogJob?.cancel()
+            }
+        }
+        refreshSelectedServerUi()
     }
 
     private fun reconcileExistingMarkersAsync() {
@@ -1070,7 +992,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun refreshSubscriptionsSilently() {
-        if (subscriptionRefreshing) return
+        if (resetting || subscriptionRefreshing) return
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
@@ -1101,7 +1023,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     fun importConfigViaSub(): Boolean {
-        if (subscriptionRefreshing) return false
+        if (resetting || subscriptionRefreshing) return false
         subscriptionRefreshing = true
         binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch(Dispatchers.IO) {
@@ -1133,6 +1055,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         MmkvManager.decodeSubscriptions().forEach { cache ->
             if (cache.guid == AppConfig.DEFAULT_SUBSCRIPTION_ID) return@forEach
             if (cache.subscription.remarks != DEFAULT_SUBSCRIPTION_NAME) {
+                com.v2ray.ang.handler.ProfileActionPolicy.seal(cache.subscription)
                 cache.subscription.remarks = DEFAULT_SUBSCRIPTION_NAME
                 MmkvManager.encodeSubscription(cache.guid, cache.subscription)
             }
@@ -1282,16 +1205,53 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         else -> super.onOptionsItemSelected(item)
     }
 
+    fun refreshServerGroups() {
+        setupGroupTab()
+        mainViewModel.reloadServerListAsync()
+        refreshSelectedServerUi()
+    }
+
+    fun editServer(guid: String) {
+        if (resetting || !com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) return
+        val profile = MmkvManager.decodeServerConfig(guid) ?: return
+        val editor = when (profile.configType) {
+            EConfigType.VMESS -> ServerVmessActivity::class.java
+            EConfigType.VLESS -> ServerVlessActivity::class.java
+            EConfigType.SHADOWSOCKS -> ServerShadowsocksActivity::class.java
+            EConfigType.SOCKS -> ServerSocksActivity::class.java
+            EConfigType.HTTP -> ServerHttpActivity::class.java
+            EConfigType.TROJAN -> ServerTrojanActivity::class.java
+            EConfigType.WIREGUARD -> ServerWireguardActivity::class.java
+            EConfigType.HYSTERIA2 -> ServerHysteria2Activity::class.java
+            EConfigType.CUSTOM -> com.v2ray.ang.ui.server.ServerCustomConfigActivity::class.java
+            EConfigType.POLICYGROUP -> com.v2ray.ang.ui.server.ServerGroupActivity::class.java
+            EConfigType.PROXYCHAIN -> com.v2ray.ang.ui.server.ServerProxyChainActivity::class.java
+            else -> return
+        }
+        requestActivityLauncher.launch(Intent(this, editor).apply {
+            putExtra("guid", guid)
+            putExtra("subscriptionId", profile.subscriptionId)
+            putExtra("isRunning", mainViewModel.isRunning.value == true)
+        })
+    }
+
     private fun importManually(createConfigType: Int) {
-        val intent = if (createConfigType == EConfigType.POLICYGROUP.value) {
-            Intent()
-                .putExtra("subscriptionId", mainViewModel.subscriptionId)
-                .setClass(this, ServerGroupActivity::class.java)
-        } else {
-            Intent()
-                .putExtra("createConfigType", createConfigType)
-                .putExtra("subscriptionId", mainViewModel.subscriptionId)
-                .setClass(this, ServerActivity::class.java)
+        val intent = when (createConfigType) {
+            EConfigType.POLICYGROUP.value -> Intent(this, ServerGroupActivity::class.java)
+            EConfigType.PROXYCHAIN.value -> Intent(this, ServerProxyChainActivity::class.java)
+            EConfigType.VMESS.value -> Intent(this, ServerVmessActivity::class.java)
+            EConfigType.VLESS.value -> Intent(this, ServerVlessActivity::class.java)
+            EConfigType.SHADOWSOCKS.value -> Intent(this, ServerShadowsocksActivity::class.java)
+            EConfigType.SOCKS.value -> Intent(this, ServerSocksActivity::class.java)
+            EConfigType.HTTP.value -> Intent(this, ServerHttpActivity::class.java)
+            EConfigType.TROJAN.value -> Intent(this, ServerTrojanActivity::class.java)
+            EConfigType.WIREGUARD.value -> Intent(this, ServerWireguardActivity::class.java)
+            EConfigType.HYSTERIA2.value -> Intent(this, ServerHysteria2Activity::class.java)
+            else -> Intent(this, ServerHttpActivity::class.java).apply {
+                putExtra("createConfigType", createConfigType)
+            }
+        }.apply {
+            putExtra("subscriptionId", mainViewModel.subscriptionId)
         }
         requestActivityLauncher.launch(intent)
     }
@@ -1331,75 +1291,74 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun readContentFromUri(uri: Uri) {
-        try {
-            contentResolver.openInputStream(uri).use { input ->
-                importBatchConfig(input?.bufferedReader()?.readText())
-            }
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to read config file", e)
-            toastError("خطا")
+        lifecycleScope.launch {
+            try {
+                val content = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri).use { input ->
+                        val bytes = input?.readBytesLimited(8 * 1024 * 1024) ?: return@use null
+                        bytes.toString(Charsets.UTF_8)
+                    }
+                }
+                importBatchConfig(content)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (_: Exception) { toastError(R.string.toast_failure) }
         }
     }
 
     private fun importBatchConfig(raw: String?) {
+        if (raw.isNullOrBlank() || resetting || importJob?.isActive == true) return
+        val generation = MmkvManager.dataGeneration()
+        val current = mainViewModel.subscriptionId
+        val targetId = current.takeIf { MmkvManager.decodeSubscription(it)?.url.isNullOrBlank() &&
+            com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(it) } ?: AppConfig.DEFAULT_SUBSCRIPTION_ID
         binding.progressBar.visibility = View.VISIBLE
-        lifecycleScope.launch(Dispatchers.IO) {
+        importJob = lifecycleScope.launch {
             try {
-                val normalized = MobileTinaImportNormalizer.normalize(raw)
-                val (count, countSub) = AngConfigManager.importBatchConfig(normalized, mainViewModel.subscriptionId, true)
-                if (countSub > 0) MobileTinaSubscriptionInfo.refreshAll()
-                withContext(Dispatchers.Main) {
-                    normalizeSubscriptionNames()
-                    showExpiredSubscriptionToastIfNeeded()
-                    when {
-                        count > 0 -> {
-                            val targetSubscriptionId = ensureImportedConfigsHaveVisibleGroup()
-                            targetSubscriptionId?.let { subscriptionId ->
-                                MobileTinaExpiryManager.scheduleFromImportedText(
-                                    this@MainActivity,
-                                    normalized,
-                                    subscriptionId
-                                )
-                            }
-                            toast(getString(R.string.title_import_config_count, count))
-                            setupGroupTab()
-                            mainViewModel.reloadServerList()
-                            ensureSelectedServerForCurrentSubscription()
-                        }
-                        countSub > 0 -> {
-                            setupGroupTab()
-                            if (hasInternetConnection()) refreshSubscriptionsSilently()
-                        }
-                        else -> toastError("خطا")
+                val result = withContext(Dispatchers.IO) {
+                    val normalized = MobileTinaImportNormalizer.normalize(raw)
+                    val counts = AngConfigManager.importBatchConfig(normalized, targetId, true, refreshSubscriptions = false, expectedGeneration = generation)
+                    val group = MmkvManager.withDataGeneration(generation) {
+                        normalizeSubscriptionNames()
+                        val id = if (counts.first > 0) ensureImportedConfigsHaveVisibleGroup(targetId) else null
+                        id?.let { MobileTinaExpiryManager.scheduleFromImportedText(this@MainActivity, normalized, it) }
+                        id
                     }
-                    binding.progressBar.visibility = View.INVISIBLE
-                    ensureSelectedServerForCurrentSubscription()
-                    refreshSelectedServerUi()
+                    counts to group
                 }
-            } catch (e: Exception) {
-                Log.e(AppConfig.TAG, "Failed to import batch config", e)
-                withContext(Dispatchers.Main) {
-                    toastError("خطا")
-                    binding.progressBar.visibility = View.INVISIBLE
+                if (resetting) return@launch
+                result.second?.let { mainViewModel.subscriptionIdChanged(it) }
+                setupGroupTab()
+                mainViewModel.reloadServerListAsync()
+                ensureSelectedServerForCurrentSubscription()
+                showExpiredSubscriptionToastIfNeeded()
+                when {
+                    result.first.first > 0 -> toast(getString(R.string.title_import_config_count, result.first.first))
+                    result.first.second > 0 -> if (hasInternetConnection()) refreshSubscriptionsSilently()
+                    else -> toastError(R.string.toast_failure)
                 }
+                refreshSelectedServerUi()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (_: Exception) { toastError(R.string.toast_failure)
+            } finally {
+                if (!subscriptionRefreshing && !resetting) binding.progressBar.visibility = View.INVISIBLE
             }
         }
     }
 
-    private fun ensureImportedConfigsHaveVisibleGroup(): String? {
+    private fun ensureImportedConfigsHaveVisibleGroup(importedInto: String): String? {
         val defaultServers = MmkvManager.decodeServerList(AppConfig.DEFAULT_SUBSCRIPTION_ID)
         if (defaultServers.isEmpty()) {
-            return mainViewModel.subscriptionId.takeIf { subscriptionId ->
+            return importedInto.takeIf { subscriptionId ->
                 subscriptionId.isNotBlank() &&
                         subscriptionId != AppConfig.DEFAULT_SUBSCRIPTION_ID &&
                         MmkvManager.decodeSubscription(subscriptionId) != null
             }
         }
 
-        val currentId = mainViewModel.subscriptionId
+        val currentId = importedInto
             .takeIf { it.isNotBlank() && it != AppConfig.DEFAULT_SUBSCRIPTION_ID }
         val existingId = MmkvManager.decodeSubscriptions()
-            .firstOrNull { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID }
+            .firstOrNull { it.guid != AppConfig.DEFAULT_SUBSCRIPTION_ID && it.subscription.url.isBlank() && com.v2ray.ang.handler.ProfileActionPolicy.allows(it.subscription) }
             ?.guid
         val targetId = currentId ?: existingId ?: Utils.getUuid().also { newId ->
             MmkvManager.encodeSubscription(
@@ -1417,7 +1376,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         }
         MmkvManager.encodeServerList(merged, targetId)
         MmkvManager.encodeServerList(mutableListOf(), AppConfig.DEFAULT_SUBSCRIPTION_ID)
-        mainViewModel.subscriptionIdChanged(targetId)
         if (MmkvManager.getSelectServer().isNullOrBlank()) {
             merged.firstOrNull()?.let(MmkvManager::setSelectServer)
         }
@@ -1520,10 +1478,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             R.id.routing_setting -> requestActivityLauncher.launch(Intent(this, RoutingSettingActivity::class.java))
             R.id.user_asset_setting -> requestActivityLauncher.launch(Intent(this, UserAssetActivity::class.java))
             R.id.settings -> requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java))
-            R.id.mobiletina_subscriptions -> startActivity(
-                Intent(this, SubSettingActivity::class.java)
-                    .putExtra(SubSettingActivity.EXTRA_HIDDEN_MODE, true)
-            )
             R.id.promotion -> Utils.openUri(this, "${Utils.decode(AppConfig.APP_PROMOTION_URL)}?t=${System.currentTimeMillis()}")
             R.id.logcat -> startActivity(Intent(this, LogcatActivity::class.java))
             R.id.check_for_update -> startActivity(Intent(this, CheckUpdateActivity::class.java))
@@ -1535,11 +1489,12 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
     }
 
     private fun openDeveloperTelegram() {
-        val username = q.a(10).removePrefix("@")
+        val channelUrl = q.a(3)
+        val username = Uri.parse(channelUrl).lastPathSegment.orEmpty()
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=$username")))
         } catch (_: ActivityNotFoundException) {
-            Utils.openUri(this, q.a(3))
+            Utils.openUri(this, channelUrl)
         }
     }
 
@@ -1548,12 +1503,29 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             .setTitle(R.string.mobiletina_reset_title)
             .setMessage(R.string.mobiletina_reset_message)
             .setPositiveButton(R.string.mobiletina_reset_confirm) { _, _ ->
-                MobileTinaResetManager.reset(this)
+                if (resetting) return@setPositiveButton
+                resetting = true
                 clearSmartConnectState()
-                setupGroupTab()
-                mainViewModel.reloadServerList()
-                refreshSelectedServerUi()
-                toast(R.string.mobiletina_reset_done)
+                importJob?.cancel()
+                markerRecoveryJob?.cancel()
+                subscriptionHolds.forEach { it.cancel() }
+                binding.progressBar.visibility = View.VISIBLE
+                lifecycleScope.launch {
+                    try {
+                        val success = MobileTinaResetManager.reset(applicationContext)
+                        if (success) {
+                            mainViewModel.subscriptionIdChanged("")
+                            setupGroupTab()
+                            mainViewModel.reloadServerListAsync()
+                            mainViewModel.reconcileRunningState()
+                            refreshSelectedServerUi()
+                            toast(R.string.mobiletina_reset_done)
+                        } else toastError(R.string.toast_failure)
+                    } finally {
+                        resetting = false
+                        binding.progressBar.visibility = View.INVISIBLE
+                    }
+                }
             }
             .setNegativeButton(R.string.mobiletina_cancel, null)
             .show()
@@ -1567,7 +1539,18 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         return super.onKeyDown(keyCode, event)
     }
 
+    override fun onPause() {
+        subscriptionCardActive = false
+        subscriptionCardRefreshJob?.cancel()
+        subscriptionCardRefreshJob = null
+        super.onPause()
+    }
+
     override fun onDestroy() {
+        subscriptionCardRefreshJob?.cancel()
+        importJob?.cancel()
+        subscriptionHolds.forEach { it.dispose() }
+        subscriptionHolds.clear()
         smartConnectJob?.cancel()
         smartStartWatchdogJob?.cancel()
         smartStopWatchdogJob?.cancel()
@@ -1577,10 +1560,6 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             unregisterReceiver(expiryDataChangedReceiver)
             expiryReceiverRegistered = false
         }
-        cancelDrawerReveal()
-        drawerSecretHandler.removeCallbacksAndMessages(null)
-        drawerRevealRunnable = null
-        drawerHideRunnable = null
         internetDialogHandler.removeCallbacksAndMessages(null)
         internetDialog?.dismiss()
         internetDialog = null
@@ -1597,18 +1576,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         private const val MODE_MANUAL = 1
         private const val FIRST_RUN_COMPLETED = "permissions_completed"
         private const val SUBSCRIPTION_REFRESH_GUARD_MS = 30_000L
-        private const val DRAWER_SUBSCRIPTION_HOLD_MS = 10_000L
-        private const val DRAWER_SUBSCRIPTION_VISIBLE_MS = 60_000L
-        private const val MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L
         private const val SMART_SUBSCRIPTION_REFRESH_GRACE_MS = 1_200L
-        private const val SMART_FIRST_PING_TIMEOUT_MS = 6_000L
-        private const val SMART_RETRY_PING_TIMEOUT_MS = 5_000L
-        private const val SMART_RETRY_DELAY_MS = 300L
-        private const val SMART_START_CONFIRM_TIMEOUT_MS = 15_000L
-        private const val SMART_BATCH_ID_MULTIPLIER = 10L
-        private const val SMART_BATCH_START_POLL_MS = 20L
-        private const val SMART_PING_RESULT_POLL_MS = 60L
-        private const val SMART_FAST_SETTLE_MS = 350L
+        private const val SMART_SERVICE_CONFIRM_TIMEOUT_MS = 33_000L
         private val SMART_STOP_RETRY_DELAYS_MS = longArrayOf(300L, 900L, 1_800L)
         private const val MODE_SWITCH_ANIMATION_MS = 180L
         private const val INTERNET_DIALOG_DURATION_MS = 3_000L

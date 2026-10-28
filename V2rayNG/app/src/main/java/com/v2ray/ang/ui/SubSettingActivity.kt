@@ -23,6 +23,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.MobileTinaHiddenShareManager
+import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.helper.SimpleItemTouchHelperCallback
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.QRCodeDecoder
@@ -31,6 +32,7 @@ import com.v2ray.ang.viewmodel.SubscriptionsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SubSettingActivity : BaseActivity() {
     private val binding by lazy { ActivitySubSettingBinding.inflate(layoutInflater) }
@@ -92,7 +94,8 @@ class SubSettingActivity : BaseActivity() {
             showLoading()
 
             lifecycleScope.launch(Dispatchers.IO) {
-                AngConfigManager.updateConfigViaSubAll()
+                val result = AngConfigManager.updateConfigViaSubAll()
+                if (result.configCount > 0) SettingsChangeManager.makeSetupGroupTab()
                 delay(500L)
                 launch(Dispatchers.Main) {
                     hideLoading()
@@ -116,10 +119,13 @@ class SubSettingActivity : BaseActivity() {
     private fun revealSubscription(subscriptionId: String) {
         if (!hiddenMode || secretDialog?.isShowing == true) return
         val subscription = MmkvManager.decodeSubscription(subscriptionId) ?: return
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allows(subscription)) return
         val link = subscription.url.trim()
         if (link.isEmpty()) {
-            val copied = MobileTinaHiddenShareManager.copyAllConfigs(this, subscriptionId)
-            toast(r.a(if (copied > 0) 2 else 3))
+            lifecycleScope.launch {
+                val copied = withContext(Dispatchers.IO) { MobileTinaHiddenShareManager.copyAllConfigs(this@SubSettingActivity, subscriptionId) }
+                toast(r.a(if (copied > 0) 2 else 3))
+            }
             return
         }
 
@@ -127,19 +133,24 @@ class SubSettingActivity : BaseActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 12, 40, 12)
         }
-        QRCodeDecoder.createQRCode(link)?.let { bitmap ->
-            container.addView(ImageView(this).apply {
+        lifecycleScope.launch {
+        withContext(Dispatchers.Default) { QRCodeDecoder.createQRCode(link) }?.let { bitmap ->
+            container.addView(ImageView(this@SubSettingActivity).apply {
                 setImageBitmap(bitmap)
                 adjustViewBounds = true
                 layoutParams = LinearLayout.LayoutParams(-1, 520)
             })
         }
-        container.addView(Button(this).apply {
+        if (isFinishing || isDestroyed || !com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId)) return@launch
+        container.addView(Button(this@SubSettingActivity).apply {
             text = r.a(5)
-            setOnClickListener { Utils.setClipboard(this@SubSettingActivity, link) }
+            setOnClickListener {
+                if (com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(subscriptionId))
+                    Utils.setClipboard(this@SubSettingActivity, link)
+            }
         })
 
-        secretDialog = AlertDialog.Builder(this)
+        secretDialog = AlertDialog.Builder(this@SubSettingActivity)
             .setTitle(subscription.remarks.ifBlank {
                 r.a(4)
             })
@@ -154,6 +165,8 @@ class SubSettingActivity : BaseActivity() {
             }
     }
 
+    }
+
     override fun onDestroy() {
         secretDialog?.dismiss()
         secretDialog = null
@@ -162,6 +175,7 @@ class SubSettingActivity : BaseActivity() {
 
     private inner class ActivityAdapterListener : BaseAdapterListener {
         override fun onEdit(guid: String, position: Int) {
+            if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(guid)) return
             startActivity(
                 Intent(ownerActivity, SubEditActivity::class.java)
                     .putExtra("subId", guid)
@@ -169,6 +183,7 @@ class SubSettingActivity : BaseActivity() {
         }
 
         override fun onRemove(guid: String, position: Int) {
+            if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsSubscription(guid)) return
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_CONFIRM_REMOVE)) {
                 AlertDialog.Builder(ownerActivity)
                     .setMessage(R.string.del_config_comfirm)
@@ -185,6 +200,7 @@ class SubSettingActivity : BaseActivity() {
         }
 
         override fun onShare(url: String) {
+            if (com.v2ray.ang.handler.ProfileActionPolicy.restricted(url)) return
             AlertDialog.Builder(ownerActivity)
                 .setItems(share_method.asList().toTypedArray()) { _, i ->
                     try {

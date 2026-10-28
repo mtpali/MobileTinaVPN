@@ -1,7 +1,6 @@
 package com.v2ray.ang.handler
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -9,19 +8,22 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
+import android.widget.RemoteViews
+import android.view.View
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.dto.entities.ProfileItem
+import com.v2ray.ang.extension.delay
 import com.v2ray.ang.extension.toSpeedString
+import com.v2ray.ang.helper.NotificationHelper
 import com.v2ray.ang.ui.MainActivity
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -32,6 +34,9 @@ object NotificationManager {
     private const val NOTIFICATION_PENDING_INTENT_STOP_V2RAY = 1
     private const val NOTIFICATION_ICON_THRESHOLD = 3000
     private const val QUERY_INTERVAL_MS = 3000L
+
+    private var stopPendingIntent: PendingIntent? = null
+    private var notificationTitle: String = ""
 
     private var lastQueryTime = 0L
     private var mBuilder: NotificationCompat.Builder? = null
@@ -60,6 +65,7 @@ object NotificationManager {
      * Shows the notification.
      * @param currentConfig The current profile configuration.
      */
+    @Synchronized
     fun showNotification(currentConfig: ProfileItem?) {
         val service = getService() ?: return
 
@@ -76,6 +82,9 @@ object NotificationManager {
         stopV2RayIntent.putExtra("key", AppConfig.MSG_STATE_STOP)
         val stopV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_STOP_V2RAY, stopV2RayIntent, flags)
 
+        stopPendingIntent = stopV2RayPendingIntent
+        notificationTitle = currentConfig?.remarks ?: service.getString(R.string.app_name)
+
         val channelId =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 createNotificationChannel()
@@ -87,17 +96,17 @@ object NotificationManager {
 
         mBuilder = NotificationCompat.Builder(service, channelId)
             .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(currentConfig?.remarks)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setContentTitle(currentConfig?.remarks ?: service.getString(R.string.app_name))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentPendingIntent)
-            .addAction(
-                R.drawable.ic_delete_24dp,
-                service.getString(R.string.notification_action_stop_v2ray),
-                stopV2RayPendingIntent
-            )
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(stopView(service, stopV2RayPendingIntent, "", false))
+            .setCustomBigContentView(stopView(service, stopV2RayPendingIntent, "", true))
 
         //mBuilder?.setDefaults(NotificationCompat.FLAG_ONLY_ALERT_ONCE)
 
@@ -105,12 +114,26 @@ object NotificationManager {
     }
 
     /**
+     * Fulfills or refreshes the foreground-service contract before a start command can
+     * return early. A duplicate startForegroundService call still requires the service
+     * to enter foreground state promptly, even when the core is already running.
+     */
+    @Synchronized
+    fun ensureForeground() {
+        val service = getService() ?: return
+        val notification = mBuilder?.build()
+        if (notification == null) showNotification(null) else service.startForeground(NOTIFICATION_ID, notification)
+    }
+
+    /**
      * Cancels the notification.
      */
+    @Synchronized
     fun cancelNotification() {
         val service = getService() ?: return
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
 
+        stopPendingIntent = null
         mBuilder = null
         speedNotificationJob?.cancel()
         speedNotificationJob = null
@@ -135,15 +158,17 @@ object NotificationManager {
     @RequiresApi(Build.VERSION_CODES.O)
     private fun createNotificationChannel(): String {
         val channelId = AppConfig.RAY_NG_CHANNEL_ID
-        val channelName = AppConfig.RAY_NG_CHANNEL_NAME
-        val chan = NotificationChannel(
-            channelId,
-            channelName, NotificationManager.IMPORTANCE_HIGH
-        )
-        chan.lightColor = Color.DKGRAY
-        chan.importance = NotificationManager.IMPORTANCE_NONE
-        chan.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-        getNotificationManager()?.createNotificationChannel(chan)
+        val service = getService() ?: return channelId
+        NotificationHelper.ensureNotificationChannel(
+            context = service,
+            channelId = channelId,
+            channelNameRes = R.string.notification_channel_service,
+            // Foreground-service notifications must remain visible; LOW is silent but valid.
+            importance = NotificationManager.IMPORTANCE_LOW,
+        ) {
+            lightColor = Color.DKGRAY
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        }
         return channelId
     }
 
@@ -153,6 +178,7 @@ object NotificationManager {
      * @param proxyTraffic The proxy traffic.
      * @param directTraffic The direct traffic.
      */
+    @Synchronized
     private fun updateNotification(contentText: String?, proxyTraffic: Long, directTraffic: Long) {
         if (mBuilder != null) {
             if (proxyTraffic < NOTIFICATION_ICON_THRESHOLD && directTraffic < NOTIFICATION_ICON_THRESHOLD) {
@@ -162,11 +188,24 @@ object NotificationManager {
             } else {
                 mBuilder?.setSmallIcon(R.drawable.ic_stat_direct)
             }
-            mBuilder?.setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
+            val service = getService() ?: return
+            val stop = stopPendingIntent ?: return
+            mBuilder?.setCustomContentView(stopView(service, stop, contentText.orEmpty(), false))
+            mBuilder?.setCustomBigContentView(stopView(service, stop, contentText.orEmpty(), true))
             mBuilder?.setContentText(contentText)
             getNotificationManager()?.notify(NOTIFICATION_ID, mBuilder?.build())
         }
     }
+
+    private fun stopView(context: Context, stop: PendingIntent, traffic: String, expanded: Boolean): RemoteViews =
+        RemoteViews(context.packageName, if (expanded) R.layout.notification_vpn_expanded else R.layout.notification_vpn_compact).apply {
+            setTextViewText(R.id.notification_profile, notificationTitle)
+            setOnClickPendingIntent(R.id.notification_stop, stop)
+            if (expanded) {
+                setTextViewText(R.id.notification_traffic, traffic)
+                setViewVisibility(R.id.notification_traffic, if (traffic.isBlank()) View.GONE else View.VISIBLE)
+            }
+        }
 
     /**
      * Gets the notification manager.
@@ -229,7 +268,8 @@ object NotificationManager {
                     }
                 }
 
-                stat.tag.startsWith(AppConfig.TAG_PROXY) -> {
+                // Accumulate stats for all proxy outbounds (including custom subscription tags)
+                stat.tag != AppConfig.TAG_BLOCKED -> {
                     when (stat.direction) {
                         AppConfig.UPLINK -> proxyUplink += stat.value
                         AppConfig.DOWNLINK -> proxyDownlink += stat.value

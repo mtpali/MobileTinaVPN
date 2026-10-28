@@ -48,7 +48,9 @@ object MobileTinaSubscriptionUpdateOptimizer {
     }
 
     private fun updateOne(cache: SubscriptionCache): SubscriptionUpdateResult {
+        val generation = MmkvManager.dataGeneration()
         val item = cache.subscription
+        if (MmkvManager.decodeSubscription(cache.guid)?.url != item.url) return SubscriptionUpdateResult(skipCount = 1)
 
         // Keep the existing manager authoritative for local marker groups, disabled
         // subscriptions and malformed URLs.
@@ -72,7 +74,7 @@ object MobileTinaSubscriptionUpdateOptimizer {
             return MobileTinaSubscriptionMarkerManager.update(cache)
         }
 
-        val remoteHash = remoteFingerprint(snapshot.body, item.filter)
+        val remoteHash = remoteFingerprint(snapshot.body, listOf(item.filter.orEmpty(), item.requestHeaders.orEmpty(), item.userAgent.orEmpty()).joinToString("\u0000"))
         val localHash = localFingerprint(cache.guid)
         val savedRemoteHash = MmkvManager.decodeSettingsString(REMOTE_HASH_PREFIX + cache.guid)
         val savedLocalHash = MmkvManager.decodeSettingsString(LOCAL_HASH_PREFIX + cache.guid)
@@ -81,22 +83,13 @@ object MobileTinaSubscriptionUpdateOptimizer {
             remoteHash == savedRemoteHash &&
             localHash == savedLocalHash
         ) {
-            // Even with unchanged configs these side effects must remain current.
-            MobileTinaExpiryManager.syncFromSubscriptionPayload(
-                AngApplication.application,
-                snapshot.body,
-                cache.guid
-            )
-            item.lastUpdated = System.currentTimeMillis()
-            MmkvManager.encodeSubscription(cache.guid, item)
-
-            LogUtil.i(
-                AppConfig.TAG,
-                "Subscription unchanged; skipped profile rewrite for ${cache.guid}"
-            )
-            // configCount deliberately stays zero: no profile was added, removed or rewritten.
-            // MainActivity uses this to skip its expensive tab/list rebuild after auto refresh.
-            return SubscriptionUpdateResult(successCount = 1)
+            return MmkvManager.withDataGeneration(generation) {
+                if (MmkvManager.decodeSubscription(cache.guid)?.url != item.url) return@withDataGeneration SubscriptionUpdateResult(skipCount = 1)
+                MobileTinaExpiryManager.syncFromSubscriptionPayload(AngApplication.application, snapshot.body, cache.guid)
+                item.lastUpdated = System.currentTimeMillis()
+                MmkvManager.encodeSubscription(cache.guid, item)
+                SubscriptionUpdateResult(successCount = 1)
+            } ?: SubscriptionUpdateResult(skipCount = 1)
         }
 
         // First run, changed remote content, changed filter, or locally modified profiles:
