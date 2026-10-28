@@ -11,6 +11,7 @@ if [[ ! -d $NDK_HOME ]]; then
   exit 1
 fi
 TMPDIR=$(mktemp -d)
+hev_revision="$(git -C "$__dir/hev-socks5-tunnel" rev-parse --short HEAD)"
 clear_tmp () {
   rm -rf $TMPDIR
 }
@@ -21,7 +22,9 @@ ABIS="armeabi-v7a arm64-v8a x86 x86_64"
 mkdir -p "$TMPDIR/jni"
 pushd "$TMPDIR"
 
-ln -s "$__dir/hev-socks5-tunnel" jni/hev-socks5-tunnel
+cp -a "$__dir/hev-socks5-tunnel" jni/hev-socks5-tunnel
+patch --batch --forward --fuzz=0 --silent -p1 -d jni/hev-socks5-tunnel < "$__dir/core/patches/hev-app-traffic.patch"
+cp "$__dir"/core/app-traffic/hev/hev-app-traffic.{c,h} jni/hev-socks5-tunnel/src/
 
 # 1) JNI shared library (libhev-socks5-tunnel.so) — loaded in-process by
 #    com.v2ray.ang.service.TProxyService for the VpnService hev tun mode.
@@ -32,6 +35,7 @@ echo 'include $(call all-subdir-makefiles)' > jni/Android.mk
     APP_BUILD_SCRIPT=jni/Android.mk \
     "APP_ABI=$ABIS" \
     APP_PLATFORM=android-24 \
+    "REV_ID=$hev_revision" \
     NDK_LIBS_OUT="$TMPDIR/libs" \
     NDK_OUT="$TMPDIR/obj" \
     "APP_CFLAGS=-O3 -DPKGNAME=com/v2ray/ang/service" \
@@ -85,6 +89,7 @@ EXECMK
     APP_BUILD_SCRIPT=jni/exec.mk \
     "APP_ABI=$ABIS" \
     APP_PLATFORM=android-24 \
+    "REV_ID=$hev_revision" \
     NDK_LIBS_OUT="$TMPDIR/libs-exec" \
     NDK_OUT="$TMPDIR/obj-exec" \
     "APP_CFLAGS=-O3" \
@@ -101,3 +106,5 @@ done
 
 popd
 rm -rf $TMPDIR
+
+python3 "$__dir/scripts/verify-hev-app-traffic.py" record "$__dir/libs"

@@ -85,6 +85,17 @@ jobs:
 
           bash scripts/verify-artwork.sh
 
+      - name: Verify VPN app source attribution and accounting boundaries
+        run: |
+          set -euo pipefail
+          mkdir -p build/native-tests
+          gcc -std=c11 -Wall -Wextra -Werror -DANDROID -DENABLE_LIBRARY -pthread -fsanitize=address,undefined -g \
+            core/app-traffic/hev/hev-app-traffic.c core/app-traffic/hev/source_map_test.c -o /tmp/vpn-app-source-test
+          /tmp/vpn-app-source-test | tee build/native-tests/hev-app-traffic-test.txt
+          ! grep -RqE 'NetworkStatsManager|querySummary|PACKAGE_USAGE_STATS|ACTION_USAGE_ACCESS_SETTINGS' \
+            V2rayNG/app/src/main/java/com/v2ray/ang/handler/AppTraffic* \
+            V2rayNG/app/src/main/java/com/v2ray/ang/ui/traffic V2rayNG/app/src/main/AndroidManifest.xml
+
       - uses: android-actions/setup-android@v4
         with:
           log-accepted-android-sdk-licenses: false
@@ -107,8 +118,10 @@ jobs:
         id: hev-cache
         uses: actions/cache/restore@v6
         with:
-          path: ${{ github.workspace }}/libs
-          key: mt2313-hev-ndk30.0.16248370-${{ runner.os }}-${{ env.HEV_SOURCE_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
+          path: |
+            ${{ github.workspace }}/libs
+            ${{ github.workspace }}/build/hev-tests
+          key: mt2313-hev-ndk30.0.16248370-${{ runner.os }}-${{ env.HEV_SOURCE_SHA }}-${{ hashFiles('compile-hevtun.sh', 'core/patches/hev-app-traffic.patch', 'core/app-traffic/hev/*', 'scripts/verify-hev-app-traffic.py', 'scripts/verify-packaged-native.py') }}
 
       - name: Build libhevtun
         if: steps.hev-cache.outputs.cache-hit != 'true'
@@ -118,8 +131,10 @@ jobs:
         if: steps.hev-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: ${{ github.workspace }}/libs
-          key: mt2313-hev-ndk30.0.16248370-${{ runner.os }}-${{ env.HEV_SOURCE_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
+          path: |
+            ${{ github.workspace }}/libs
+            ${{ github.workspace }}/build/hev-tests
+          key: mt2313-hev-ndk30.0.16248370-${{ runner.os }}-${{ env.HEV_SOURCE_SHA }}-${{ hashFiles('compile-hevtun.sh', 'core/patches/hev-app-traffic.patch', 'core/app-traffic/hev/*', 'scripts/verify-hev-app-traffic.py', 'scripts/verify-packaged-native.py') }}
 
       - name: Copy libhevtun
         run: cp -r "${{ github.workspace }}/libs" "${{ github.workspace }}/V2rayNG/app"
@@ -144,7 +159,7 @@ jobs:
           path: |
             V2rayNG/app/libs/libv2ray.aar
             build/native-tests
-          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
+          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'core/app-traffic/**/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -167,7 +182,7 @@ jobs:
           path: |
             V2rayNG/app/libs/libv2ray.aar
             build/native-tests
-          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
+          key: mt2313-awg-go1.27.3-ndk30.0.16248370-api24-arm32-arm64-${{ runner.os }}-${{ runner.arch }}-${{ env.XRAY_WRAPPER_SHA }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'core/app-traffic/**/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
       - name: Prepare hardened APK signing certificate
         env:
@@ -249,6 +264,7 @@ jobs:
           test -n "$APK"
           echo "Verifying $APK"
           python3 scripts/verify-packaged-native.py V2rayNG/app/libs/libv2ray.aar "$APK" build/native-tests/packaged-native.json
+          python3 scripts/verify-hev-app-traffic.py verify "$APK"
 
           $ANDROID_HOME/build-tools/37.0.0/apksigner verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
           grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' /tmp/apksigner.txt
@@ -327,7 +343,9 @@ jobs:
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
             'instagram 3 : mobile.tinaa' \
-            'instagram 3 : mbile.tinaa'; do
+            'instagram 3 : mbile.tinaa' \
+            'Telegram : mobile_tina' \
+            'ارتباط در تلگرام'; do
             if has_dex_token "$protected_text"; then
               echo "::error::Protected hidden-access text survived as plaintext: $protected_text"
               exit 1
@@ -348,7 +366,9 @@ jobs:
             'instagram 1 : mobile.tina' \
             'instagram 2 : mobile.tina2' \
             'instagram 3 : mobile.tinaa' \
-            'instagram 3 : mbile.tinaa'; do
+            'instagram 3 : mbile.tinaa' \
+            'Telegram : mobile_tina' \
+            'ارتباط در تلگرام'; do
             if grep -aFq -- "$protected_resource_text" /tmp/resources.arsc; then
               echo "::error::Protected UI text survived in resources.arsc: $protected_resource_text"
               exit 1
@@ -378,6 +398,7 @@ jobs:
             'Lcom/v2ray/ang/core/CoreServiceManager$XrayProcessFinder;' \
             'Lcom/v2ray/ang/service/TProxyService;' \
             'Llibv2ray/CoreController;' \
+            'Llibv2ray/AppTrafficLog;' \
             'Lgo/Seq;'; do
             has_dex_token "$runtime_class" || { echo "::error::Required runtime class missing: $runtime_class"; exit 1; }
           done
@@ -407,5 +428,6 @@ jobs:
             V2rayNG/app/build/test-results/
             V2rayNG/app/build/outputs/mapping/playstoreRelease/mapping.txt
             build/native-tests/
+            build/hev-tests/
           if-no-files-found: error
           retention-days: 90

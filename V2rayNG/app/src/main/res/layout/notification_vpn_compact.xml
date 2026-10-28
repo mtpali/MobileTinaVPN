@@ -9,15 +9,15 @@
         android:gravity="start|center_vertical" android:textAlignment="viewStart"
         android:textDirection="firstStrong"
         android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
-    <FrameLayout android:id="@+id/notification_stop" android:layout_width="148dp"
+    <FrameLayout android:id="@+id/notification_stop" android:layout_width="136dp"
         android:layout_height="48dp" android:layout_gravity="center_vertical"
         android:contentDescription="@string/notification_action_stop_v2ray"
         android:clickable="true" android:focusable="true">
-        <TextView android:layout_width="140dp" android:layout_height="32dp"
+        <TextView android:layout_width="128dp" android:layout_height="32dp"
             android:layout_gravity="center" android:gravity="center"
             android:background="@drawable/vpn_notification_stop" android:paddingHorizontal="6dp"
             android:text="@string/notification_action_stop_v2ray" android:textColor="#000000"
-            android:textSize="11sp" android:textStyle="bold" android:maxLines="2"
+            android:textSize="12sp" android:textStyle="bold" android:maxLines="2"
             android:fontFamily="sans-serif-medium" android:textDirection="rtl"
             android:textAlignment="center"
             android:includeFontPadding="false" android:importantForAccessibility="no" />

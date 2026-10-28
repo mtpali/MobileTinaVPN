@@ -1,3 +1,5 @@
+> Historical V1 accounting only. Current VPN-only behavior, migration and validation: [MOBILETINA_2026_10_28_VPN_LOG_FIX.md](MOBILETINA_2026_10_28_VPN_LOG_FIX.md). Do not restore NetworkStatsManager/Usage Access from this historical note.
+
 # App traffic log and 1.5-second subscription QR — 2026-10-28
 
 Both editions continue from the successful UI-fix heads:

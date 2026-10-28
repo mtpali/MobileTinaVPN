@@ -1,10 +1,7 @@
 package com.v2ray.ang.ui.traffic
 
 import android.app.Application
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.text.format.Formatter
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Column
@@ -18,7 +15,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -56,10 +52,10 @@ class AppTrafficLogActivity : BaseComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                AppTrafficLogManager.requestRefresh(applicationContext)
                 while (isActive) {
+                    AppTrafficLogManager.requestRefresh(applicationContext)
                     model.refresh()
-                    delay(5_000L) // Reads the small local aggregate; never queries network stats here.
+                    delay(5_000L) // Signal a native snapshot; the UI reads only local aggregates.
                 }
             }
         }
@@ -68,7 +64,7 @@ class AppTrafficLogActivity : BaseComponentActivity() {
     @Composable
     override fun ScreenContent() {
         val rows by model.rows.collectAsStateWithLifecycle()
-        val access by model.access.collectAsStateWithLifecycle()
+        val supported = AppTrafficLogManager.isSupported()
         val context = LocalContext.current
         Scaffold(
             contentWindowInsets = WindowInsets(0),
@@ -87,10 +83,8 @@ class AppTrafficLogActivity : BaseComponentActivity() {
             },
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
-                if (!access) {
-                    TextButton(onClick = { openUsageAccess() }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.mobiletina_log_usage_access))
-                    }
+                if (!supported) {
+                    Text(stringResource(R.string.mobiletina_log_android_required), modifier = Modifier.padding(20.dp))
                 }
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(rows, key = { it.key }) { row ->
@@ -105,28 +99,16 @@ class AppTrafficLogActivity : BaseComponentActivity() {
             }
         }
     }
-
-    private fun openUsageAccess() {
-        try {
-            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:$packageName")))
-        } catch (_: Exception) {
-            try { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
-            catch (_: Exception) { toastError(R.string.toast_failure) }
-        }
-    }
 }
 
 class AppTrafficLogViewModel(application: Application) : AndroidViewModel(application) {
     private val updates = Mutex()
     private val _rows = MutableStateFlow<List<AppTrafficLogEntry>>(emptyList())
     internal val rows = _rows.asStateFlow()
-    private val _access = MutableStateFlow(true)
-    val access = _access.asStateFlow()
 
     suspend fun refresh() = updates.withLock { readSnapshot() }
 
     private suspend fun readSnapshot() = withContext(Dispatchers.IO) {
-        _access.value = AppTrafficLogManager.hasAccess(getApplication<Application>())
         _rows.value = AppTrafficLogManager.entries()
     }
 

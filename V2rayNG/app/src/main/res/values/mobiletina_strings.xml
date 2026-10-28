@@ -27,7 +27,7 @@
     <string name="mobiletina_subscription_traffic_exhausted" translatable="false">اتمام حجم</string>
     <string name="mobiletina_app_traffic_log" translatable="false">log</string>
     <string name="mobiletina_log_clear" translatable="false">پاک کردن تاریخچه</string>
-    <string name="mobiletina_log_usage_access" translatable="false">دسترسی مصرف</string>
+    <string name="mobiletina_log_android_required" translatable="false">نمایش مصرف هر برنامه به اندروید ۱۰ یا بالاتر نیاز دارد.</string>
     <string name="mobiletina_subscription_secret_title" translatable="false">.</string>
     <string name="mobiletina_copy_subscription_link" translatable="false">.</string>
     <string name="mobiletina_copy_all_configs" translatable="false">کپی تمام کانفیگ‌ها</string>
