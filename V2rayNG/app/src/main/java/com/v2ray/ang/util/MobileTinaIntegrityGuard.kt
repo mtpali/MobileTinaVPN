@@ -31,9 +31,7 @@ object MobileTinaIntegrityGuard {
 
             verifyPackageName(context)
             verifyArtwork(context)
-            // Branded copy intentionally changes between compatible releases. Exact text is
-            // validated by source/CI contracts; pinning a runtime text digest here caused
-            // valid signed builds to crash on startup after legitimate copy updates.
+            verifyBrandText(context)
             verifySigningCertificate(context)
 
             verified = true
@@ -105,7 +103,10 @@ object MobileTinaIntegrityGuard {
         }
     }
 
-    private fun verifyBrandText(context: Context) {
+    private fun verifyBrandText(context: Context) = verifyBrandText(context::getString)
+
+    /** Same validation used at startup; resolver permits testing real flavor resources on JVM. */
+    internal fun verifyBrandText(resolveString: (Int) -> String) {
         val a = intArrayOf(
             R.string.app_name,
             R.string.app_widget_name,
@@ -169,18 +170,18 @@ object MobileTinaIntegrityGuard {
                     R.string.mobiletina_subscription_secret_title -> r.a(4)
                     R.string.mobiletina_copy_subscription_link -> r.a(5)
                     R.string.mobiletina_close -> r.a(6)
-                    else -> context.getString(resourceId)
+                    else -> resolveString(resourceId)
                 }
             )
         }
         intArrayOf(8, 4, 5, 6, 7).forEach { u(q.a(it)) }
-        b.forEach { u(context.getString(it)) }
+        b.forEach { u(resolveString(it)) }
 
         val expected = byteArrayOf(
-            -18, 9, 107, 2, 34, 103, 119, -63,
-            -91, 13, -76, 29, 71, -48, 101, -90,
-            126, -47, -52, -65, -114, -96, -97, 100,
-            105, -19, -93, -116, -10, -56, 35, 70
+            -10, -104, -103, 45, 57, 120, 12, 35,
+            18, 61, 13, -26, 54, 23, -60, 47,
+            9, -120, 93, -116, -38, 3, 105, -120,
+            11, 112, 11, -98, -15, -38, -77, -79
         )
         requireDigest(digest.digest(), expected)
     }
