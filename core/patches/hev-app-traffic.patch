@@ -1,44 +1,42 @@
---- a/src/hev-socks5-session.h
-+++ b/src/hev-socks5-session.h
-@@ -13,6 +13,7 @@
- #include <hev-task.h>
- 
- #include "hev-list.h"
-+#include "hev-app-traffic.h"
- 
- #define HEV_SOCKS5_SESSION(p) ((HevSocks5Session *)p)
- #define HEV_SOCKS5_SESSION_IFACE(p) ((HevSocks5SessionIface *)p)
-@@ -27,6 +28,8 @@
-     HevListNode node;
-     HevTask *task;
-     HevSocks5Session *self;
-+    HevAppTrafficSource source_tcp;
-+    HevAppTrafficSource source_udp;
- };
- 
- struct _HevSocks5SessionIface
---- a/src/hev-socks5-session.c
-+++ b/src/hev-socks5-session.c
-@@ -8,6 +8,7 @@
+--- a/src/hev-jni.c
++++ b/src/hev-jni.c
+@@ -7,7 +7,7 @@
+  ============================================================================
   */
  
+-#ifdef ANDROID
++#if defined(ANDROID) && defined(ENABLE_LIBRARY)
+ 
+ #include <jni.h>
+ #include <pthread.h>
+@@ -19,6 +19,7 @@
  #include <string.h>
-+#include <netinet/in.h>
  
- #include "hev-utils.h"
- #include "hev-logger.h"
-@@ -34,6 +35,11 @@
-     if (res < 0) {
-         LOG_I ("%p socks5 session connect", self);
-         return;
-+    }
+ #include "hev-main.h"
++#include "hev-app-traffic.h"
+ 
+ #include "hev-jni.h"
+ 
+@@ -56,7 +57,19 @@
+ static jboolean native_is_running (JNIEnv *env, jobject thiz);
+ static jlongArray native_get_stats (JNIEnv *env, jobject thiz);
+ 
++static jstring
++native_get_source (JNIEnv *env, jobject thiz, jint protocol, jint port)
++{
++    char address[46], result[64];
++    int original_port;
++    if (!hev_app_traffic_resolve (protocol, port, address, sizeof (address), &original_port))
++        return NULL;
++    snprintf (result, sizeof (result), "%s\n%d", address, original_port);
++    return (*env)->NewStringUTF (env, result);
++}
 +
-+    {
-+        HevSocks5SessionData *data = container_of (hev_socks5_session_get_node (self), HevSocks5SessionData, node);
-+        hev_app_traffic_register (&data->source_tcp, IPPROTO_TCP, HEV_SOCKS5 (self)->fd);
-     }
- 
-     if (srv->user && srv->pass) {
+ static JNINativeMethod native_methods[] = {
++    { "TProxyGetSource", "(II)Ljava/lang/String;", (void *)native_get_source },
+     { "TProxyStartService", "(Ljava/lang/String;I)Z",
+       (void *)native_start_service },
+     { "TProxyStopService", "()Z", (void *)native_stop_service },
 --- a/src/hev-socks5-session-tcp.c
 +++ b/src/hev-socks5-session-tcp.c
 @@ -9,6 +9,7 @@
@@ -113,42 +111,47 @@
  
      node = hev_list_first (&self->frame_list);
      while (node) {
---- a/src/hev-jni.c
-+++ b/src/hev-jni.c
-@@ -7,7 +7,7 @@
-  ============================================================================
+--- a/src/hev-socks5-session.c
++++ b/src/hev-socks5-session.c
+@@ -8,8 +8,10 @@
   */
  
--#ifdef ANDROID
-+#if defined(ANDROID) && defined(ENABLE_LIBRARY)
- 
- #include <jni.h>
- #include <pthread.h>
-@@ -19,6 +19,7 @@
  #include <string.h>
++#include <netinet/in.h>
  
- #include "hev-main.h"
+ #include "hev-utils.h"
++#include "hev-compiler.h"
+ #include "hev-logger.h"
+ #include "hev-config.h"
+ #include "hev-config-const.h"
+@@ -34,6 +36,11 @@
+     if (res < 0) {
+         LOG_I ("%p socks5 session connect", self);
+         return;
++    }
++
++    {
++        HevSocks5SessionData *data = container_of (hev_socks5_session_get_node (self), HevSocks5SessionData, node);
++        hev_app_traffic_register (&data->source_tcp, IPPROTO_TCP, HEV_SOCKS5 (self)->fd);
+     }
+ 
+     if (srv->user && srv->pass) {
+--- a/src/hev-socks5-session.h
++++ b/src/hev-socks5-session.h
+@@ -13,6 +13,7 @@
+ #include <hev-task.h>
+ 
+ #include "hev-list.h"
 +#include "hev-app-traffic.h"
  
- #include "hev-jni.h"
+ #define HEV_SOCKS5_SESSION(p) ((HevSocks5Session *)p)
+ #define HEV_SOCKS5_SESSION_IFACE(p) ((HevSocks5SessionIface *)p)
+@@ -27,6 +28,8 @@
+     HevListNode node;
+     HevTask *task;
+     HevSocks5Session *self;
++    HevAppTrafficSource source_tcp;
++    HevAppTrafficSource source_udp;
+ };
  
-@@ -56,7 +57,19 @@
- static jboolean native_is_running (JNIEnv *env, jobject thiz);
- static jlongArray native_get_stats (JNIEnv *env, jobject thiz);
- 
-+static jstring
-+native_get_source (JNIEnv *env, jobject thiz, jint protocol, jint port)
-+{
-+    char address[46], result[64];
-+    int original_port;
-+    if (!hev_app_traffic_resolve (protocol, port, address, sizeof (address), &original_port))
-+        return NULL;
-+    snprintf (result, sizeof (result), "%s\n%d", address, original_port);
-+    return (*env)->NewStringUTF (env, result);
-+}
-+
- static JNINativeMethod native_methods[] = {
-+    { "TProxyGetSource", "(II)Ljava/lang/String;", (void *)native_get_source },
-     { "TProxyStartService", "(Ljava/lang/String;I)Z",
-       (void *)native_start_service },
-     { "TProxyStopService", "()Z", (void *)native_stop_service },
+ struct _HevSocks5SessionIface

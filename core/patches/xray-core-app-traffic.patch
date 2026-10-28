@@ -16,11 +16,10 @@
  	ohm    outbound.Manager
  	router routing.Router
  	policy policy.Manager
-@@ -504,6 +506,7 @@
+@@ -504,5 +506,6 @@
  		log.Record(accessMessage)
  	}
  
 +	ctx, link = d.wrapAppTraffic(ctx, handler, link)
  	handler.Dispatch(ctx, link)
  }
- 
