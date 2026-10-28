@@ -1,5 +1,6 @@
 package com.v2ray.ang.core
 
+import com.v2ray.ang.handler.AppTrafficLogManager
 import android.app.Activity
 import android.app.Service
 import android.content.BroadcastReceiver
@@ -219,6 +220,9 @@ object CoreServiceManager {
         NotificationManager.showNotification(currentConfig)
         MobileTinaSessionLimiter.schedule(service)
         MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, true)
+        if (vpnInterface != null) {
+            AppTrafficLogManager.start(service) { generation == lifecycleGeneration.get() && isRunning() }
+        }
         if (!isReload) {
             MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         }
@@ -233,6 +237,7 @@ object CoreServiceManager {
      */
     fun stopCoreLoop(): Boolean {
         lifecycleGeneration.incrementAndGet()
+        AppTrafficLogManager.stop()
         val completion = CompletableFuture<Unit>()
         nativeCleanup = completion
         connectionTestScope.coroutineContext.cancelChildren()

@@ -9,7 +9,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import kotlin.math.abs
 
-/** A deliberate two-second hold, independent of the system's accessibility long-press delay. */
+/** A deliberate 1.5-second hold, independent of the system's accessibility long-press delay. */
 internal class SubscriptionHeaderHold(
     private val view: View,
     owner: LifecycleOwner,
@@ -51,7 +51,7 @@ internal class SubscriptionHeaderHold(
                 cancel()
                 downX = event.x
                 downY = event.y
-                if (valid()) view.postDelayed(action, 2_000L)
+                if (valid()) view.postDelayed(action, 1_500L)
             }
             MotionEvent.ACTION_MOVE -> if (abs(event.x - downX) > slop || abs(event.y - downY) > slop) cancel()
             MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> cancel()
