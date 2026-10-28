@@ -17,7 +17,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +42,9 @@ import com.v2ray.ang.util.Utils
 private const val MILLIS_PER_SECOND = 1000L
 private const val EXPIRY_DATE_PATTERN = "yyyy-MM-dd"
 private const val CARD_ALPHA = 0.97f
+private const val MILLIS_PER_DAY = 86_400_000L
+
+internal enum class SubscriptionValidityLabel { EXPIRED, TRAFFIC_EXHAUSTED, REMAINING, HIDDEN }
 
 /** Locale-neutral values the subscription information box renders. */
 internal data class SubscriptionInfoUiModel(
@@ -50,9 +58,19 @@ internal data class SubscriptionInfoUiModel(
     /** Expiry in epoch milliseconds; null when the subscription never expires. */
     val expireMillis: Long?,
     val expired: Boolean,
+    val remainingDays: Long?,
+    /** One UI wake-up at the next displayed-day boundary, or none after expiry. */
+    val nextRefreshDelayMillis: Long?,
     val supportUrl: String?,
     val webPageUrl: String?,
 ) {
+    val validityLabel: SubscriptionValidityLabel get() = when {
+        expired -> SubscriptionValidityLabel.EXPIRED
+        trafficExhausted -> SubscriptionValidityLabel.TRAFFIC_EXHAUSTED
+        expireMillis != null -> SubscriptionValidityLabel.REMAINING
+        else -> SubscriptionValidityLabel.HIDDEN
+    }
+
     val trafficLow: Boolean get() = trafficFraction != null && trafficFraction >= TRAFFIC_WARNING_FRACTION
 
     companion object {
@@ -65,7 +83,9 @@ internal fun buildSubscriptionInfoUiModel(
     nowMillis: Long,
 ): SubscriptionInfoUiModel {
     val unlimited = info.total <= 0L
-    val expireMillis = info.expire.takeIf { it > 0L }?.let { it * MILLIS_PER_SECOND }
+    val expireMillis = info.expire.takeIf { it > 0L }
+        ?.coerceAtMost(Long.MAX_VALUE / MILLIS_PER_SECOND)?.let { it * MILLIS_PER_SECOND }
+    val remainingMillis = expireMillis?.let { (it - nowMillis).coerceAtLeast(0L) }
     return SubscriptionInfoUiModel(
         title = info.title,
         usedBytes = info.used,
@@ -73,7 +93,11 @@ internal fun buildSubscriptionInfoUiModel(
         trafficFraction = if (unlimited) null else (info.used.toDouble() / info.total).toFloat().coerceIn(0f, 1f),
         trafficExhausted = info.trafficExhausted,
         expireMillis = expireMillis,
-        expired = expireMillis != null && expireMillis <= nowMillis,
+        expired = remainingMillis == 0L,
+        remainingDays = remainingMillis?.let { if (it == 0L) 0L else 1L + (it - 1L) / MILLIS_PER_DAY },
+        nextRefreshDelayMillis = remainingMillis?.takeIf { it > 0L }?.let {
+            if (info.trafficExhausted) it else 1L + (it - 1L) % MILLIS_PER_DAY
+        },
         supportUrl = info.supportUrl,
         webPageUrl = info.webPageUrl,
     )
@@ -91,7 +115,21 @@ internal fun SubscriptionInfoCard(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val model = remember(info) { buildSubscriptionInfoUiModel(info, System.currentTimeMillis()) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val model by produceState(
+        initialValue = buildSubscriptionInfoUiModel(info, System.currentTimeMillis()),
+        key1 = info,
+        key2 = lifecycle,
+    ) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val current = buildSubscriptionInfoUiModel(info, System.currentTimeMillis())
+                value = current
+                val next = current.nextRefreshDelayMillis ?: break
+                delay(next)
+            }
+        }
+    }
 
     Surface(
         modifier = modifier
@@ -191,10 +229,10 @@ private fun StatsRow(model: SubscriptionInfoUiModel) {
         if (model.trafficExhausted || model.expireMillis != null) {
             Spacer(Modifier.size(8.dp))
             Text(
-                text = if (model.trafficExhausted) {
-                    stringResource(R.string.mobiletina_subscription_traffic_exhausted)
-                } else {
-                    Utils.formatTimestamp(model.expireMillis!!, EXPIRY_DATE_PATTERN)
+                text = when (model.validityLabel) {
+                    SubscriptionValidityLabel.EXPIRED -> stringResource(R.string.mobiletina_subscription_expired)
+                    SubscriptionValidityLabel.TRAFFIC_EXHAUSTED -> stringResource(R.string.mobiletina_subscription_traffic_exhausted)
+                    else -> Utils.formatTimestamp(model.expireMillis!!, EXPIRY_DATE_PATTERN)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = if (model.trafficExhausted || model.expired) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,

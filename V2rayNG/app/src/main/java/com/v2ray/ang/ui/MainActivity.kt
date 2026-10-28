@@ -84,7 +84,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.math.ceil
+import com.v2ray.ang.ui.main.SubscriptionValidityLabel
+import com.v2ray.ang.ui.main.buildSubscriptionInfoUiModel
 
 class MainActivity : HelperBaseActivity(), com.google.android.material.navigation.NavigationView.OnNavigationItemSelectedListener {
     private val binding by lazy { ActivityMainBinding.inflate(layoutInflater) }
@@ -800,7 +801,12 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         else -> getString(R.string.mobiletina_ping_unknown)
     }
 
+    private var subscriptionCardRefreshJob: kotlinx.coroutines.Job? = null
+    private var subscriptionCardActive = false
+
     private fun refreshSubscriptionCard() {
+        subscriptionCardRefreshJob?.cancel()
+        subscriptionCardRefreshJob = null
         val item = MmkvManager.decodeSubscription(mainViewModel.subscriptionId)
         if (item == null) {
             binding.subscriptionCard.visibility = View.GONE
@@ -842,15 +848,24 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             binding.tvSubscriptionUsage.visibility = if (hasUsage) View.VISIBLE else View.GONE
         }
 
-        if (traffic.trafficExhausted) {
-            binding.tvSubscriptionDays.setText(R.string.mobiletina_subscription_traffic_exhausted)
-            binding.tvSubscriptionDays.visibility = View.VISIBLE
-        } else if (expire > 0L) {
-            val days = ceil(((expire * 1000L - System.currentTimeMillis()).coerceAtLeast(0L)) / 86_400_000.0).toLong()
-            binding.tvSubscriptionDays.text = String.format(java.util.Locale.ROOT, r.a(7), days)
-            binding.tvSubscriptionDays.visibility = View.VISIBLE
-        } else {
-            binding.tvSubscriptionDays.visibility = View.GONE
+        val model = buildSubscriptionInfoUiModel(traffic.copy(expire = expire), System.currentTimeMillis())
+        when (model.validityLabel) {
+            SubscriptionValidityLabel.EXPIRED -> binding.tvSubscriptionDays.setText(R.string.mobiletina_subscription_expired)
+            SubscriptionValidityLabel.TRAFFIC_EXHAUSTED -> binding.tvSubscriptionDays.setText(R.string.mobiletina_subscription_traffic_exhausted)
+            SubscriptionValidityLabel.REMAINING -> binding.tvSubscriptionDays.text =
+                String.format(java.util.Locale.ROOT, r.a(7), model.remainingDays!!)
+            SubscriptionValidityLabel.HIDDEN -> Unit
+        }
+        binding.tvSubscriptionDays.visibility =
+            if (model.validityLabel == SubscriptionValidityLabel.HIDDEN) View.GONE else View.VISIBLE
+        if (subscriptionCardActive) {
+            model.nextRefreshDelayMillis?.let { next ->
+                subscriptionCardRefreshJob = lifecycleScope.launch {
+                    delay(next)
+                    subscriptionCardRefreshJob = null
+                    refreshSubscriptionCard()
+                }
+            }
         }
     }
 
@@ -890,6 +905,7 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
 
     override fun onResume() {
         super.onResume()
+        subscriptionCardActive = true
         mainViewModel.reconcileRunningState()
         MobileTinaExpiryManager.recoverPending(this)
         setupGroupTab()
@@ -1522,7 +1538,15 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         return super.onKeyDown(keyCode, event)
     }
 
+    override fun onPause() {
+        subscriptionCardActive = false
+        subscriptionCardRefreshJob?.cancel()
+        subscriptionCardRefreshJob = null
+        super.onPause()
+    }
+
     override fun onDestroy() {
+        subscriptionCardRefreshJob?.cancel()
         importJob?.cancel()
         subscriptionHolds.forEach { it.dispose() }
         subscriptionHolds.clear()
