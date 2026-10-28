@@ -22,7 +22,7 @@ class X7 : BaseActivity() {
 
         findViewById<View>(R.id.a1).setOnClickListener { Utils.openUri(this, q.a(0)) }
         findViewById<View>(R.id.a2).setOnClickListener { Utils.openUri(this, q.a(1)) }
-        findViewById<View>(R.id.a3).setOnClickListener { Utils.openUri(this, q.a(2)) }
-        findViewById<View>(R.id.a4).setOnClickListener { Utils.openUri(this, q.a(3)) }
+        findViewById<View>(R.id.a3).setOnClickListener { Utils.openTelegram(this, q.a(2)) }
+        findViewById<View>(R.id.a4).setOnClickListener { Utils.openTelegram(this, q.a(3)) }
     }
 }

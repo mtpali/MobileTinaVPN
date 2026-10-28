@@ -16,9 +16,9 @@ class MobileTinaVaultCompatibilityTest {
     }
 
     @Test
-    fun `all social and first launch records retain their contents`() {
+    fun `social records reflect the requested Telegram account`() {
         assertEquals(
-            "f7a629819ca810e63d60ca094dfbb3b29909608822367fee064064ad52d7ff11",
+            "4dbba008ef79e95a576d3b606ba0d4106e397d4c208a11a55154f674c29185a9",
             digest((0..11).map(q::a))
         )
     }

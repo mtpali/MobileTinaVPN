@@ -258,6 +258,17 @@ object Utils {
      * @param context The context to use.
      * @param uriString The URI string to open.
      */
+    fun openTelegram(context: Context, webLink: String) {
+        val account = webLink.toUri().lastPathSegment ?: return openUri(context, webLink)
+        val deepLink = android.net.Uri.Builder().scheme("tg").authority("resolve")
+            .appendQueryParameter("domain", account).build()
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, deepLink))
+        } catch (_: Exception) {
+            openUri(context, webLink)
+        }
+    }
+
     fun openUri(context: Context, uriString: String) {
         try {
             val uri = uriString.toUri()

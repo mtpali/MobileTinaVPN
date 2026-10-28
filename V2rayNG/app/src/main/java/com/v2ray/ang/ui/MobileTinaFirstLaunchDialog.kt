@@ -20,10 +20,10 @@ import com.v2ray.ang.util.Utils
 internal object MobileTinaFirstLaunchDialog {
     private val k = byteArrayOf(110, 95, 55, 100, 50, 99, 57, 49)
     private val expected = byteArrayOf(
-        -120, 26, 127, -109, -62, -16, -34, -79,
-        101, 96, 54, -117, 117, 41, 86, -31,
-        -78, 17, 18, 23, 8, 70, -94, -12,
-        22, -7, 55, -49, 6, 108, 106, 43
+        -116, -48, 121, 39, -14, -18, 114, 10,
+        -111, 52, -52, 103, 107, 61, 122, 57,
+        -85, 105, -116, -122, -1, 126, -69, 69,
+        105, 1, -96, -69, 78, -56, 5, -106
     )
 
     fun showOnce(
@@ -55,7 +55,7 @@ internal object MobileTinaFirstLaunchDialog {
         root.addView(View(activity).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(13, 71, 161), Color.rgb(25, 118, 210), Color.rgb(66, 165, 245))
+                intArrayOf(primary, primary)
             ).apply { cornerRadius = dp(activity, 3).toFloat() }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 5)).apply {
             bottomMargin = dp(activity, 18)
@@ -66,7 +66,10 @@ internal object MobileTinaFirstLaunchDialog {
                 text = value
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { Utils.openUri(activity, q.a(index)) }
+                setOnClickListener {
+                    if (index == 2) Utils.openTelegram(activity, q.a(index))
+                    else Utils.openUri(activity, q.a(index))
+                }
                 setTextColor(Color.WHITE)
                 textSize = 15f
                 gravity = Gravity.CENTER

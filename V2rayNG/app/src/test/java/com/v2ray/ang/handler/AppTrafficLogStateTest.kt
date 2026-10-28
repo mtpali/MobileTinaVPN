@@ -46,6 +46,8 @@ class AppTrafficLogStateTest {
         assertTrue(state.entries.isEmpty())
         val fresh = state.window("vpn", 400L)!!
         assertEquals(300L, fresh.startMillis)
+        assertFalse(state.record(fresh, mapOf(telegram.uid to 5000L), identities))
+        assertTrue(state.acknowledgeReset(fresh))
         state.record(fresh, mapOf(telegram.uid to 20L), identities)
         assertEquals(20L, state.entries[telegram.key]!!.bytes)
     }
@@ -118,5 +120,41 @@ class AppTrafficLogStateTest {
         val state = started()
         state.record(state.window("vpn", 200L)!!, mapOf(telegram.uid to -1L), identities)
         assertTrue(state.entries.isEmpty())
+    }
+
+    @Test
+    fun aSecondClearCannotBeAcknowledgedByAnOlderNativeReset() {
+        val state = started()
+        state.clear(300L, false)
+        val first = state.window("vpn", 400L)!!
+        state.clear(500L, false)
+        assertFalse(state.acknowledgeReset(first))
+        assertFalse(state.record(first, mapOf(telegram.uid to 999L), identities))
+        val second = state.window("vpn", 600L)!!
+        assertTrue(state.acknowledgeReset(second))
+        assertTrue(state.record(second, mapOf(telegram.uid to 3L), identities))
+        assertEquals(3L, state.entries[telegram.key]!!.bytes)
+    }
+
+    @Test
+    fun nativeTotalsDoNotDependOnWallClockBucketsOrClockChanges() {
+        val state = started()
+        state.record(state.window("vpn", 50L)!!, mapOf(telegram.uid to 7L), identities)
+        assertEquals(7L, state.entries[telegram.key]!!.bytes)
+    }
+
+    @Test
+    fun unknownPackagesDoNotConsumeTheNativeBaseline() {
+        val state = started()
+        val window = state.window("vpn", 200L)!!
+        assertFalse(state.record(window, mapOf(telegram.uid to 100L), emptyMap()))
+        assertTrue(state.record(window, mapOf(telegram.uid to 100L), identities))
+        assertEquals(100L, state.entries[telegram.key]!!.bytes)
+    }
+
+    @Test
+    fun parserAcceptsOnlyValidNativePayloadCounters() {
+        assertEquals(mapOf(10123 to 120L, 10124 to 5L), AppTrafficStatsReader.parse("10123,100,20;10124,0,5;broken;1,2;-1,7,8;12,-1,2;13,overflow,2;"))
+        assertEquals(Long.MAX_VALUE, AppTrafficStatsReader.parse("10123,9223372036854775807,100;")[10123])
     }
 }

@@ -9,7 +9,14 @@ import com.v2ray.ang.dto.entities.AppTrafficLogWindow
 
 /** A separate multi-process store keeps log clearing independent from profile/index locks. */
 internal object AppTrafficLogStore {
-    private val storage by lazy { MMKV.mmkvWithID("APP_TRAFFIC_LOG_V1", MMKV.MULTI_PROCESS_MODE) }
+    private val storage by lazy {
+        // V1 was whole-device Android history; it cannot be converted to VPN payload.
+        val current = MMKV.mmkvWithID("APP_TRAFFIC_LOG_V2", MMKV.MULTI_PROCESS_MODE)
+        val legacy = MMKV.mmkvWithID("APP_TRAFFIC_LOG_V1", MMKV.MULTI_PROCESS_MODE)
+        legacy.lock()
+        try { legacy.clearAll(); legacy.sync() } finally { legacy.unlock() }
+        current
+    }
     private val gson = Gson()
 
     private fun load(): AppTrafficLogState =
@@ -29,6 +36,7 @@ internal object AppTrafficLogStore {
         val state = load()
         state.begin(session, pending)
         save(state)
+        state.window(session.id, session.startMillis)!!
     }
 
     fun window(id: String, nowMillis: Long): AppTrafficLogWindow? = locked { load().window(id, nowMillis) }
@@ -36,6 +44,11 @@ internal object AppTrafficLogStore {
     fun record(window: AppTrafficLogWindow, totals: Map<Int, Long>, identities: Map<Int, AppTrafficLogEntry>) = locked {
         val state = load()
         if (state.record(window, totals, identities)) save(state)
+    }
+
+    fun acknowledgeReset(window: AppTrafficLogWindow) = locked {
+        val state = load()
+        if (state.acknowledgeReset(window)) save(state)
     }
 
     fun end(id: String, nowMillis: Long) = locked {
