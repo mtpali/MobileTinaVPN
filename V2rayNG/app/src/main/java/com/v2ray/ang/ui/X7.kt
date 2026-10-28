@@ -3,12 +3,11 @@ package com.v2ray.ang.ui
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import com.v2ray.ang.R
 import com.v2ray.ang.util.Utils
 
-class X7 : AppCompatActivity() {
+class X7 : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.x7)
@@ -24,6 +23,6 @@ class X7 : AppCompatActivity() {
         findViewById<View>(R.id.a1).setOnClickListener { Utils.openUri(this, q.a(0)) }
         findViewById<View>(R.id.a2).setOnClickListener { Utils.openUri(this, q.a(1)) }
         findViewById<View>(R.id.a3).setOnClickListener { Utils.openUri(this, q.a(2)) }
-        findViewById<View>(R.id.a4).setOnClickListener { Utils.openUri(this, q.a(3)) }
+        findViewById<View>(R.id.a4).setOnClickListener { Utils.openTelegram(this, q.a(3)) }
     }
 }

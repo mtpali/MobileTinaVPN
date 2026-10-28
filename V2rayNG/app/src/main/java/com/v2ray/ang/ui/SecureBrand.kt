@@ -28,7 +28,7 @@ internal object w {
                     ((i * 37 + 0xa7) and 0xff)
                 ).toByte()
         }
-        val appId = BuildConfig.APPLICATION_ID.toByteArray(Charsets.UTF_8)
+        val appId = BuildConfig.APPLICATION_ID.removeSuffix(".fdroid").toByteArray(Charsets.UTF_8)
         val prk = try {
             Mac.getInstance("HmacSHA256").run {
                 init(SecretKeySpec(seed, "HmacSHA256"))
@@ -39,17 +39,20 @@ internal object w {
             appId.fill(0)
         }
 
-        val version = BuildConfig.VERSION_NAME.toByteArray(Charsets.UTF_8)
+        // This is the encrypted record's key context, not the APK version. The existing
+        // payload was sealed with the original 2.2.6 context, which must remain stable
+        // across app upgrades unless the payload is re-encrypted at the same time.
+        val keyContext = byteArrayOf(0x32, 0x2e, 0x32, 0x2e, 0x36)
         val key = try {
             Mac.getInstance("HmacSHA256").run {
                 init(SecretKeySpec(prk, "HmacSHA256"))
-                update(version)
+                update(keyContext)
                 update(byteArrayOf(0x53, 0x2d, 0x71, 0xb4.toByte(), 0x19, 0x8c.toByte(), 0xe3.toByte()))
                 doFinal()
             }
         } finally {
             prk.fill(0)
-            version.fill(0)
+            keyContext.fill(0)
         }
 
         check(e.size == f.size && f.size == g.size && e.size > 28)

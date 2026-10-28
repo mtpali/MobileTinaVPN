@@ -73,8 +73,10 @@ internal object r {
         }
     }
 
+    private val deniedPrefix by lazy { a(0) }
+
     fun b(value: String): Boolean {
         val candidate = value.trim()
-        return candidate.isNotEmpty() && !candidate.startsWith(a(0), ignoreCase = true)
+        return candidate.isNotEmpty() && candidate.first().code != 35 && !candidate.startsWith(deniedPrefix, ignoreCase = true)
     }
 }

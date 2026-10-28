@@ -7,13 +7,18 @@ import android.os.IBinder
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.core.CoreServiceManager
-import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.AppLocaleManager
+import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.root.RootProxyManager
 import com.v2ray.ang.util.LogUtil
-import com.v2ray.ang.util.MyContextWrapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -30,7 +35,9 @@ import java.lang.ref.SoftReference
  */
 class CoreRootService : Service(), ServiceControl {
 
+    private val setupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var setupJob: Job? = null
+    @Volatile private var stopping = false
 
     override fun onCreate() {
         super.onCreate()
@@ -39,21 +46,19 @@ class CoreRootService : Service(), ServiceControl {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
-        // Start the in-process core first (this also posts the foreground notification),
-        // then install the root routing off the main thread.
-        if (!CoreServiceManager.startCoreLoop(null)) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Root: core failed to start")
-            stopService()
-            return START_NOT_STICKY
-        }
-
-        setupJob = CoroutineScope(Dispatchers.IO).launch {
-            if (!RootProxyManager.start(this@CoreRootService)) {
-                LogUtil.e(AppConfig.TAG, "StartCore-Root: failed to start root mode, stopping")
+        if (stopping) return START_NOT_STICKY
+        if (MmkvManager.decodeSettingsBool(AppConfig.CACHE_SERVICE_RUNNING) && CoreServiceManager.isRunning()) return START_STICKY
+        if (setupJob?.isActive == true) return START_STICKY
+        setupJob = setupScope.launch {
+            if (!isActive || stopping) return@launch
+            if (!CoreServiceManager.startCoreLoop(null)) {
                 stopService()
+                return@launch
             }
+            if (isActive && !stopping && !RootProxyManager.start(this@CoreRootService)) stopService()
         }
 
         return START_STICKY
@@ -66,7 +71,11 @@ class CoreRootService : Service(), ServiceControl {
         // tun to appear); if a stop arrives during that window, teardown would run first and
         // the setup would then re-install the rules + tun pointing at a now-dead core,
         // blackholing all traffic until the next start/stop cycle clears it.
-        runBlocking { setupJob?.cancelAndJoin() }
+        stopping = true
+        // Android root teardown must await rule setup to prevent late routes to a dead listener.
+        // Bound the callback wait; the service scope is cancelled before any rules are removed.
+        setupScope.cancel()
+        runBlocking { withTimeoutOrNull(5_000L) { setupJob?.cancelAndJoin() } }
         // Remove routing rules BEFORE stopping the core so traffic is never redirected
         // to a dead listener. Synchronous on purpose — leaving rules behind breaks the net.
         RootProxyManager.stop(this)
@@ -89,9 +98,7 @@ class CoreRootService : Service(), ServiceControl {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun attachBaseContext(newBase: Context?) {
-        val context = newBase?.let {
-            MyContextWrapper.wrap(newBase, SettingsManager.getLocale())
-        }
+        val context = newBase?.let(AppLocaleManager::localizedContext)
         super.attachBaseContext(context)
     }
 }

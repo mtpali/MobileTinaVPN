@@ -145,8 +145,17 @@ fun MainViewModel.cancelRealPing() {
     )
 }
 
-/** Legacy hidden TCP action is intentionally mapped to the supported 2.2.6 Real Ping path. */
-fun MainViewModel.testAllTcping() = testAllRealPing()
+/** Uses the upstream TCP probe implementation and concurrency controls. */
+fun MainViewModel.testAllTcping() {
+    val guids = currentServerGuids()
+    if (guids.isEmpty()) return
+    MessageUtil.sendMsg2TestService(getApplication(), TestServiceMessage(
+        key = AppConfig.MSG_MEASURE_CONFIG_START,
+        subscriptionId = subscriptionId,
+        serverGuids = guids,
+        onlyTcp = true
+    ))
+}
 
 /** Old UI pre-warm hook; 2.2.6 loads the JNI library in TProxyService's companion initializer. */
 fun TProxyService.Companion.preloadNative() = Unit

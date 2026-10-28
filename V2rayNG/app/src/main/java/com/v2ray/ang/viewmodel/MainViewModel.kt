@@ -15,6 +15,9 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.GroupMapItem
 import com.v2ray.ang.dto.SubscriptionUpdateResult
+import com.v2ray.ang.dto.ConnectionTestResult
+import com.v2ray.ang.dto.RealPingResult
+import com.v2ray.ang.extension.serializable
 import com.v2ray.ang.dto.TestServiceMessage
 import com.v2ray.ang.dto.entities.ServersCache
 import com.v2ray.ang.dto.entities.SubscriptionCache
@@ -146,6 +149,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * @param guid The GUID of the server to remove.
      */
     fun removeServer(guid: String) {
+        if (!com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid)) return
         serverList.remove(guid)
         MmkvManager.removeServer(guid)
         val index = getPosition(guid)
@@ -287,7 +291,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             subscriptionId = id
             MmkvManager.encodeSettings(AppConfig.CACHE_SUBSCRIPTION_ID, subscriptionId)
         }
-        reloadServerList()
+        reloadServerListAsync()
     }
 
     /**
@@ -306,7 +310,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return subscriptions.map { sub ->
             GroupMapItem(
                 id = sub.guid,
-                remarks = sub.subscription.remarks
+                remarks = sub.subscription.remarks,
+                usageInfo = sub.subscription.usageInfo,
             )
         }
     }
@@ -354,7 +359,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-        for (it in deleteServer) {
+        for (it in deleteServer.filter { com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(it) }) {
             MmkvManager.removeServer(it)
         }
 
@@ -365,35 +370,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Removes all servers.
      * @return The number of removed servers.
      */
-    fun removeAllServer(): Int {
-        val count =
-            if (subscriptionId.isEmpty() && keywordFilter.isEmpty()) {
-                MmkvManager.removeAllServer()
-            } else {
-                val serversCopy = serversCache.toList()
-                for (item in serversCopy) {
-                    MmkvManager.removeServer(item.guid)
-                }
-                serversCache.toList().count()
-            }
-        return count
-    }
+    fun removeAllServer(): Int = removeAllowedServers(onlyInvalid = false)
 
-    /**
-     * Removes invalid servers.
-     * @return The number of removed servers.
-     */
-    fun removeInvalidServer(): Int {
-        var count = 0
-        if (subscriptionId.isEmpty() && keywordFilter.isEmpty()) {
-            count += MmkvManager.removeInvalidServer("")
-        } else {
-            val serversCopy = serversCache.toList()
-            for (item in serversCopy) {
-                count += MmkvManager.removeInvalidServer(item.guid)
-            }
+    fun removeInvalidServer(): Int = removeAllowedServers(onlyInvalid = true)
+
+    private fun removeAllowedServers(onlyInvalid: Boolean): Int {
+        val ids = if (subscriptionId.isEmpty() && keywordFilter.isEmpty()) MmkvManager.decodeAllServerList()
+            else serversCache.toList().map { it.guid }
+        val allowed = ids.filter { guid ->
+            com.v2ray.ang.handler.ProfileActionPolicy.allowsProfile(guid) &&
+                (!onlyInvalid || (MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L) < 0L)
         }
-        return count
+        allowed.groupBy { MmkvManager.decodeServerConfig(it)?.subscriptionId.orEmpty() }.forEach { (sub, guids) ->
+            MmkvManager.removeServers(guids, sub)
+        }
+        return allowed.size
     }
 
     /**
@@ -511,13 +502,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     updateRunningState(false)
                 }
 
-                AppConfig.MSG_MEASURE_DELAY_SUCCESS -> {
-                    updateTestResultAction.value = intent.getStringExtra("content")
+                AppConfig.MSG_MEASURE_DELAY_RESULT -> {
+                    intent.serializable<ConnectionTestResult>("content")?.let { result ->
+                        updateTestResultAction.value = if (result.delayMillis >= 0L) "${result.delayMillis} ms" else result.errorMessage
+                    }
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_SUCCESS -> {
-                    val content = intent.getStringExtra("content")
-                    updateListAction.value = getPosition(content ?: "")
+                    val content = intent.serializable<RealPingResult>("content")
+                    updateListAction.value = getPosition(content?.guid.orEmpty())
                 }
 
                 AppConfig.MSG_MEASURE_CONFIG_NOTIFY -> {

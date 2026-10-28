@@ -1,0 +1,17 @@
+# MobileTina / AliMTP: guarded actions and responsiveness
+
+The source remains version 2.3.13 / 753. Native pins, immutable vault context, package identities, independent branding and AliMTP's daemon-owned Smart Connect widget are preserved.
+
+Ordinary manual server rows now expose edit, share (QR/copy/Android chooser) and delete through a compact overflow menu. A two-second hold on a subscription header replaces the old ten-tap gesture. Drawer entry still uses its independent ten-second hold. Protected sources are identified from URL, leading title marker and a persisted sticky restriction before branded title normalization. Their action control is GONE, URL text is omitted in subscription management, header QR/copy is rejected, and export/editor/deletion handlers recheck persisted ownership. Bulk user deletion excludes protected profiles. Confirmed full VPN reset remains intentionally allowed. Existing vault-encrypted source matching, R8, resource obfuscation, artwork and signer guards remain enabled; client protections do not make modification impossible.
+
+Camera QR decoding now releases each frame before scheduling result delivery on main, delivers once, ignores disposed/paused results, and cannot rebind after disposal. Readers are scoped per camera session, padded/pixel-strided Y planes are packed safely, and gallery images are sampled and decoded on IO. Local import reads are bounded at 8 MiB. Subscription registration returns before network fetching; parsing/regrouping/expiry and list reloads run off main. Manually imported profiles use local groups instead of being mixed into a remote protected subscription.
+
+Reset waits for TUN teardown acknowledgement or stable absence of the app's core service, cancels expiry/session/subscription jobs, and clears profile/raw/affiliation/subscription/index data in a single storage operation on IO. A cross-process write generation rejects pre-reset network responses; a bounded reset-in-progress lease prevents stale starts without permanently locking the app after a killed process. User routing and per-app selections remain intact.
+
+The foreground VPN notification has a rounded blue bold stop control in both compact and expanded custom content. Traffic refresh updates those views without replacing the layout. It remains an ordinary ongoing service notification; visibility/dismissibility still obey Android permission and system/OEM notification settings.
+
+Per-app icons use bounded IO concurrency, small rasters sized to the 40dp rows, and Coil memory keys including package update time, density and UI mode. Package enumeration no longer asks for unused permission metadata. The existing five pinned apps and saved selections are preserved.
+
+Only MobileTina receives photo.zip's four status WebPs byte-for-byte, and the supplied PNG icon is packaged losslessly with adaptive launcher safe padding. AliMTP artwork and its integrity digests remain unchanged.
+
+Validation: source/XML/native-pin/artwork/edition checks pass locally. Gradle download is unavailable in this editing environment; full unit suites, debug assemblies and hardened ARMv7/ARM64 release validation run in the existing GitHub migration workflow. No real Android 16 device result is claimed. The existing signing configuration uses repository secrets if available and an ephemeral CI key otherwise; a different temporary signer cannot upgrade an older installed signer. PRs stay draft and unmerged pending phone acceptance and a separate merge decision.

@@ -20,11 +20,13 @@ import com.v2ray.ang.util.Utils
 internal object MobileTinaFirstLaunchDialog {
     private val k = byteArrayOf(110, 95, 55, 100, 50, 99, 57, 49)
     private val expected = byteArrayOf(
-        -120, 26, 127, -109, -62, -16, -34, -79,
-        101, 96, 54, -117, 117, 41, 86, -31,
-        -78, 17, 18, 23, 8, 70, -94, -12,
-        22, -7, 55, -49, 6, 108, 106, 43
+        106, -43, 22, 116, 120, 123, 43, -115,
+        57, 123, -97, -100, -29, -59, 18, 2,
+        -95, -73, -104, -6, -114, -74, 34, -118,
+        -17, 101, 111, 82, -27, 127, 96, 74
     )
+
+    internal fun noticeLines(): Array<String> = arrayOf(q.a(9), q.a(10)).also(::verify)
 
     fun showOnce(
         activity: AppCompatActivity,
@@ -36,8 +38,7 @@ internal object MobileTinaFirstLaunchDialog {
             return null
         }
 
-        val lines = arrayOf(q.a(9), q.a(10), q.a(11))
-        verify(lines)
+        val lines = noticeLines()
 
         val primary = Color.rgb(193, 53, 132)
         val root = LinearLayout(activity).apply {
@@ -55,7 +56,7 @@ internal object MobileTinaFirstLaunchDialog {
         root.addView(View(activity).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(131, 58, 180), Color.rgb(253, 29, 29), Color.rgb(252, 175, 69))
+                intArrayOf(primary, primary)
             ).apply { cornerRadius = dp(activity, 3).toFloat() }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 5)).apply {
             bottomMargin = dp(activity, 18)

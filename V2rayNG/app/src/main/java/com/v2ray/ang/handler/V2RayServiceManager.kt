@@ -4,7 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import com.v2ray.ang.AppConfig
-import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.service.CoreProxyOnlyService
 import com.v2ray.ang.service.CoreRootService
 import com.v2ray.ang.service.CoreVpnService
@@ -30,7 +30,7 @@ object V2RayServiceManager {
     )
 
     fun startVService(context: Context) {
-        CoreServiceManager.startVService(context)
+        LauncherManager.startService(context)
     }
 
     fun stopVService(context: Context) {
@@ -40,7 +40,7 @@ object V2RayServiceManager {
         // possible concrete service explicitly. A few OEM builds occasionally delay/drop the
         // dynamically registered cross-process broadcast; stopService reaches the actual Android
         // component and its idempotent onDestroy teardown even in that state.
-        CoreServiceManager.stopVService(app)
+        LauncherManager.stopService(app)
         arrayOf(
             CoreVpnService::class.java,
             CoreProxyOnlyService::class.java,
@@ -51,6 +51,33 @@ object V2RayServiceManager {
                     LogUtil.w(AppConfig.TAG, "Unable to stop ${serviceClass.simpleName}", error)
                 }
         }
+    }
+
+    /** A reset must observe the matching teardown acknowledgement or stable service absence. */
+    internal suspend fun stopAndAwait(context: Context): Boolean {
+        val request = android.os.SystemClock.elapsedRealtimeNanos().coerceAtLeast(1L)
+        MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_STOP_REQUEST, request)
+        stopVService(context)
+        val deadline = android.os.SystemClock.elapsedRealtime() + 15_000L
+        var absentSamples = 0
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            val complete = MmkvManager.decodeSettingsLong(AppConfig.CACHE_SERVICE_STOP_COMPLETED, 0L)
+            if (!isRunning() && complete == request) return true
+            @Suppress("DEPRECATION")
+            val absent = runCatching {
+                val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                manager.getRunningServices(Int.MAX_VALUE).none {
+                    it.service.packageName == context.packageName && it.service.className in activeCoreServiceNames
+                }
+            }.getOrDefault(false)
+            absentSamples = if (absent) absentSamples + 1 else 0
+            if (absentSamples >= 3) {
+                MmkvManager.encodeSettings(AppConfig.CACHE_SERVICE_RUNNING, false)
+                return true
+            }
+            kotlinx.coroutines.delay(100L)
+        }
+        return false
     }
 
     /** Returns only a confirmed service/core state shared by the daemon process. */

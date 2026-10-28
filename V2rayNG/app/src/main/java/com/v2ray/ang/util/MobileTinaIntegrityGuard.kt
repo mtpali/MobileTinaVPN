@@ -52,20 +52,20 @@ object MobileTinaIntegrityGuard {
         val resources = context.resources
         val protectedArtwork = arrayOf(
             R.drawable.white to byteArrayOf(
-                -1, 76, 8, -73, -117, -54, -102, 22, 84, -7, 24, -7, -72, -104, 19, -66,
-                -112, -91, -106, 109, 101, -128, 92, -60, 25, -75, -79, 72, 42, 117, -75, -43
+                -51, 0, -44, 46, -19, 33, -60, 121, 14, -108, -50, 125, -67, 98, 116, 3,
+                4, -37, -50, 49, -62, 91, -56, -53, 42, -60, -110, -67, 74, -107, -45, -77
             ),
             R.drawable.yellow to byteArrayOf(
-                -124, 58, -2, -63, 41, -78, -69, -10, -19, 32, 88, 84, -89, -115, 65, 113,
-                -112, 84, -69, 57, 5, -41, 6, -57, 59, -87, -23, 107, 100, 81, -74, -27
+                33, 57, -104, -118, 126, 34, -125, -110, -104, -10, 121, -111, -58, 107, -12, -33,
+                -2, 14, 126, 57, -65, 39, 106, -13, 57, -34, 127, 122, -54, 62, -35, 103
             ),
             R.drawable.blue to byteArrayOf(
-                -31, 62, -23, 2, 4, 42, -75, -27, 96, -18, 113, 116, 77, -80, 22, -2,
-                -94, 64, 79, -101, 93, 108, 75, 102, 76, -35, 5, -15, 24, 123, -4, 117
+                99, -19, 87, -14, -118, 102, -29, 97, -38, -89, 71, 19, 82, 83, -40, -48,
+                122, -74, 18, -97, 70, -58, 123, 35, -47, 74, -113, -45, -105, -12, -83, -72
             ),
             R.drawable.red to byteArrayOf(
-                -94, 75, -86, -100, -53, 119, -64, 100, 83, -7, -122, 70, 52, -105, 75, 118,
-                -104, 121, -18, -76, 43, -71, -88, 121, 8, -105, 26, -105, 19, -26, -65, 40
+                -71, 50, 80, -58, -60, 37, -70, 7, 34, -8, 48, 125, 19, 94, -75, 48,
+                -11, -43, 77, -38, -5, -126, 96, -32, 111, 60, 42, 36, 124, -17, 28, 84
             ),
             R.drawable.stop to byteArrayOf(
                 -121, -20, 80, 76, -36, 60, 122, -61, 40, 126, 50, 20, 15, 58, 86, 73,
@@ -84,8 +84,8 @@ object MobileTinaIntegrityGuard {
                 -114, -43, -3, 57, -108, -10, -35, -121, 97, 20, -72, -92, -37, 64, 57, -56
             ),
             R.mipmap.ic_launcher_foreground to byteArrayOf(
-                69, 48, 114, 90, 12, 20, 121, -114, -62, 101, 115, -115, 53, -24, -80, 64,
-                -111, -121, 55, 123, 105, 94, 113, 110, -81, -14, 87, 93, 53, -51, -31, -62
+                -59, -68, 85, 22, 18, 43, 41, 65, -63, 70, 31, -86, -26, 61, 87, 38,
+                41, 52, -31, 33, -55, -42, -15, -79, -61, 61, 76, -64, -57, -66, 44, -97
             )
         )
 
@@ -103,7 +103,10 @@ object MobileTinaIntegrityGuard {
         }
     }
 
-    private fun verifyBrandText(context: Context) {
+    private fun verifyBrandText(context: Context) = verifyBrandText(context::getString)
+
+    /** Same validation used at startup; resolver permits testing real flavor resources on JVM. */
+    internal fun verifyBrandText(resolveString: (Int) -> String) {
         val a = intArrayOf(
             R.string.app_name,
             R.string.app_widget_name,
@@ -167,18 +170,18 @@ object MobileTinaIntegrityGuard {
                     R.string.mobiletina_subscription_secret_title -> r.a(4)
                     R.string.mobiletina_copy_subscription_link -> r.a(5)
                     R.string.mobiletina_close -> r.a(6)
-                    else -> context.getString(resourceId)
+                    else -> resolveString(resourceId)
                 }
             )
         }
         intArrayOf(8, 4, 5, 6, 7).forEach { u(q.a(it)) }
-        b.forEach { u(context.getString(it)) }
+        b.forEach { u(resolveString(it)) }
 
         val expected = byteArrayOf(
-            -18, 9, 107, 2, 34, 103, 119, -63,
-            -91, 13, -76, 29, 71, -48, 101, -90,
-            126, -47, -52, -65, -114, -96, -97, 100,
-            105, -19, -93, -116, -10, -56, 35, 70
+            59, 1, 32, 5, 87, 107, 27, -105,
+            -74, -76, -70, 51, 36, -50, -78, -43,
+            120, -112, -118, 120, -126, 36, -35, -116,
+            -22, 36, -127, 19, 21, -6, 52, 30
         )
         requireDigest(digest.digest(), expected)
     }

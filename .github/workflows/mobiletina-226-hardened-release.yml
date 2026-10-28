@@ -1,4 +1,4 @@
-name: MobileTina 2.2.6 Hardened Release
+name: MobileTina 2.3.12 Hardened Release
 
 on:
   push:
@@ -27,8 +27,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'applicationId = "com.v2ray.mobiletina"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.2.6"' V2rayNG/app/build.gradle.kts
-          grep -q 'versionCode = 744' V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.12"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionCode = 752' V2rayNG/app/build.gradle.kts
           grep -q 'FINAL_HARDENED_BUILD' V2rayNG/app/build.gradle.kts
           grep -q 'isMinifyEnabled = true' V2rayNG/app/build.gradle.kts
           grep -q 'isShrinkResources = true' V2rayNG/app/build.gradle.kts
@@ -41,7 +41,7 @@ jobs:
           grep -q 'const val AMNEZIAWG = "amneziawg://"' V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt
           grep -q 'github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828' core/patches/xray-core-amneziawg.patch
           ! grep -R -q 'sn://awg' V2rayNG/app/src core scripts
-          grep -q 'MobileTinaIntegrityGuard.verify(context.applicationContext)' V2rayNG/app/src/main/java/com/v2ray/ang/core/CoreServiceManager.kt
+          grep -q 'MobileTinaIntegrityGuard.verify(context.applicationContext)' V2rayNG/app/src/main/java/com/v2ray/ang/core/LauncherManager.kt
           grep -q 'MobileTinaGeoAssetManager.ensureReady' V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt
           grep -q 'SMART_CONNECT_MAX_CONCURRENCY = 8' V2rayNG/app/src/main/java/com/v2ray/ang/service/CoreTestService.kt
           grep -q 'secondaryUrl' V2rayNG/app/src/main/java/com/v2ray/ang/service/RealPingWorkerService.kt
@@ -57,7 +57,7 @@ jobs:
           ! grep -Eq 'installSecretHold|shouldRevealAfterTap|MobileTinaHiddenAccessPolicy' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'MANUAL_SUBSCRIPTION_HOLD_MS = 10_000L' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'showManualSubscriptionQr(subscriptionId)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
-          grep -q 'startsWith(a(0), ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
+          grep -q 'startsWith(deniedPrefix, ignoreCase = true)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaHiddenAccess.kt
           grep -q 'MobileTinaFirstLaunchDialog.showOnce' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'continueInitialLaunch()' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MainActivity.kt
           grep -q 'setColor(Color.BLACK)' V2rayNG/app/src/main/java/com/v2ray/ang/ui/MobileTinaFirstLaunchDialog.kt
@@ -74,16 +74,16 @@ jobs:
           cmdline-tools-version: '14742923'
           packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
 
-      - name: Install NDK 29
+      - name: Install NDK 30
         run: |
           set -euo pipefail
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;29.0.14206865"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;30.0.16248370"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
           python3 - <<'PY'
           from pathlib import Path
           p = Path('V2rayNG/app/build.gradle.kts')
           s = p.read_text()
-          p.write_text(s.replace('android {\n', 'android {\n    ndkVersion = "29.0.14206865"\n', 1))
+          p.write_text(s.replace('android {\n', 'android {\n    ndkVersion = "30.0.16248370"\n', 1))
           PY
 
       - name: Restore libhevtun cache
@@ -124,8 +124,10 @@ jobs:
         id: awg-core-cache
         uses: actions/cache/restore@v6
         with:
-          path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+          path: |
+            V2rayNG/app/libs/libv2ray.aar
+            build/native-tests
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
       - name: Build libv2ray with AmneziaWG v3
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
@@ -142,8 +144,10 @@ jobs:
         if: steps.awg-core-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: V2rayNG/app/libs/libv2ray.aar
-          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/xray-core-amneziawg.patch', 'core/patches/xray-core-amneziawg-recovery.patch', 'core/mobile-recovery/*.go', 'scripts/build-amnezia-libv2ray.sh') }}
+          path: |
+            V2rayNG/app/libs/libv2ray.aar
+            build/native-tests
+          key: awg-libv2ray-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('AndroidLibXrayLite/go.mod', 'AndroidLibXrayLite/go.sum', 'core/patches/*.patch', 'core/mobile-recovery/*.go', 'core/vless-compat/*.go', 'scripts/build-amnezia-libv2ray.sh', 'scripts/verify-vless-compat.py') }}
 
       - name: Prepare hardened APK signing certificate
         env:
@@ -190,6 +194,9 @@ jobs:
           echo "SIGNING_SOURCE=$SIGNING_SOURCE" >> "$GITHUB_ENV"
           echo "Signer source: $SIGNING_SOURCE"
           echo "Signer SHA-256: $CERT_SHA"
+
+      - name: Prepare bundled GeoData
+        run: bash scripts/prepare-geo-assets.sh
 
       - name: Randomize protected string resource identifiers
         run: python3 scripts/obfuscate-string-resources.py V2rayNG/app/src/main
@@ -347,18 +354,18 @@ jobs:
 
           SHA=$(sha256sum "$APK" | awk '{print $1}')
           SIZE=$(stat -c '%s' "$APK")
-          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8-hardened.sha256
+          printf '%s  %s\n' "$SHA" "$(basename "$APK")" > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-armv7-armv8-hardened.sha256
           printf 'commit=%s\napk_sha256=%s\napk_bytes=%s\nsigner_sha256=%s\nsigning_source=%s\n' \
             "$GITHUB_SHA" "$SHA" "$SIZE" "$CERT_SHA" "$SIGNING_SOURCE" \
-            > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-hardened-report.txt
+            > V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-hardened-report.txt
 
       - name: Upload hardened MobileTina APK
         uses: actions/upload-artifact@v7
         with:
-          name: MobileTina-2.2.6-armv7-armv8-webp-final
+          name: MobileTina-2.3.12-armv7-armv8-webp-final
           path: |
             V2rayNG/app/build/outputs/apk/playstore/release/*armv7-armv8*.apk
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-armv7-armv8-hardened.sha256
-            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.2.6-hardened-report.txt
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-armv7-armv8-hardened.sha256
+            V2rayNG/app/build/outputs/apk/playstore/release/MobileTina-2.3.12-hardened-report.txt
           if-no-files-found: error
           retention-days: 90

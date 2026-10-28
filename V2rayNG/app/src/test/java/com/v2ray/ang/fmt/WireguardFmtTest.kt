@@ -149,7 +149,7 @@ class WireguardFmtTest {
 
             [peer]
             PublicKey = BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
-            Endpoint = 50.7.151.67:43293
+            Endpoint = 198.51.100.42:43293
             AllowedIPs = 0.0.0.0/0, ::/0
             PersistentKeepalive = 1500
             ```
@@ -160,10 +160,28 @@ class WireguardFmtTest {
 
         assertTrue(profile.isAmneziaWG)
         assertEquals("10.187.192.50/30", profile.localAddress)
-        assertEquals("50.7.151.67", profile.server)
+        assertEquals("198.51.100.42", profile.server)
         assertEquals("43293", profile.serverPort)
         assertEquals(1500, profile.keepAlive)
         assertEquals("<b 0x0102>", profile.awgI1)
         assertNull(profile.reserved)
+    }
+    @Test
+    fun preservesDnsAndDisabledKeepaliveOnAmneziaRoundTrip() {
+        val config = WireguardFmt.parseWireguardConfFile("""
+            [Interface]
+            PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            Address = 10.0.0.2/32
+            DNS = 1.1.1.1, 1.0.0.1
+            Jc = 4
+            [Peer]
+            PublicKey = BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+            Endpoint = 198.51.100.42:51820
+            PersistentKeepalive = 0
+        """.trimIndent())
+        val restored = WireguardFmt.parseWireguardConfFile(WireguardFmt.toConf(config))
+        assertEquals("1.1.1.1, 1.0.0.1", restored.remoteDNS)
+        assertEquals(0, restored.keepAlive)
+        assertTrue(restored.isAmneziaWG)
     }
 }

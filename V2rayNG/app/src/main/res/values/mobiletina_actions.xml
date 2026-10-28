@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mobiletina_server_actions">عملیات سرور</string>
+    <string name="mobiletina_share_server">اشتراک‌گذاری</string>
+    <string name="mobiletina_server_qr">نمایش بارکد</string>
+    <string name="mobiletina_copy_server">کپی کانفیگ</string>
+    <string name="mobiletina_server_edit">ویرایش</string>
+    <string name="mobiletina_server_delete">حذف</string>
+</resources>

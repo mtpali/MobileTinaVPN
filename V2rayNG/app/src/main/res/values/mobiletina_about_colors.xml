@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mobiletina_about_background">#FFFFFF</color>
+    <color name="mobiletina_about_text">#111315</color>
+    <color name="mobiletina_about_muted">#5F6368</color>
+    <color name="mobiletina_about_card">#FFFFFF</color>
+    <color name="mobiletina_about_stroke">#DADCE0</color>
+    <color name="mobiletina_about_body">#30343B</color>
+</resources>
