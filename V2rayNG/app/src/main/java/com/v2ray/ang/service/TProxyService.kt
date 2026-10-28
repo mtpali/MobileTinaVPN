@@ -35,17 +35,6 @@ class TProxyService(
         @Suppress("FunctionName")
         private external fun TProxyGetStats(): LongArray?
 
-        @JvmStatic
-        @Suppress("FunctionName")
-        private external fun TProxyGetSource(protocol: Int, port: Int): String?
-
-        fun originalSource(protocol: Int, port: Int): Pair<String, Int>? = runCatching {
-            val fields = TProxyGetSource(protocol, port)?.split('\n') ?: return null
-            if (fields.size != 2) return null
-            val sourcePort = fields[1].toIntOrNull()?.takeIf { it in 1..65535 } ?: return null
-            fields[0] to sourcePort
-        }.getOrNull()
-
         init {
             System.loadLibrary("hev-socks5-tunnel")
         }

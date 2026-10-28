@@ -1,6 +1,5 @@
 package com.v2ray.ang.core
 
-import com.v2ray.ang.handler.AppTrafficLogManager
 import android.app.Activity
 import android.app.Service
 import android.content.BroadcastReceiver
@@ -199,12 +198,6 @@ object CoreServiceManager {
             error("Core failed to start")
         }
 
-        if (vpnInterface != null && AppTrafficLogManager.isSupported()) {
-            AppTrafficLogManager.start(service, coreController.startAppTrafficLog(XrayProcessFinder(service, tunnelOnly = true))) {
-                generation == lifecycleGeneration.get() && isRunning()
-            }
-        }
-
         if (browserDialer != null) {
             browserDialer!!.stop()
             browserDialer = null
@@ -240,7 +233,6 @@ object CoreServiceManager {
      */
     fun stopCoreLoop(): Boolean {
         lifecycleGeneration.incrementAndGet()
-        AppTrafficLogManager.stop()
         val completion = CompletableFuture<Unit>()
         nativeCleanup = completion
         connectionTestScope.coroutineContext.cancelChildren()
@@ -383,7 +375,6 @@ object CoreServiceManager {
             connectionTestScope.coroutineContext.cancelChildren()
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core reload start...")
 
-            AppTrafficLogManager.stop()
             coreController.stopLoop()
             launchCore(service, tunFd, isReload = true)
 
@@ -533,14 +524,8 @@ object CoreServiceManager {
      * Process finder implementation for Xray core.
      * Uses ConnectivityManager to find the owning UID of a connection based on network parameters.
      */
-    private class XrayProcessFinder(context: Context, private val tunnelOnly: Boolean = false) : ProcessFinder {
+    private class XrayProcessFinder(context: Context) : ProcessFinder {
         private val cm: ConnectivityManager? = context.getSystemService(ConnectivityManager::class.java)
-        private val ownUid = android.os.Process.myUid()
-        private val vpnAddresses = SettingsManager.getCurrentVpnInterfaceAddressConfig().let {
-            setOf(it.ipv4Client, it.ipv6Client).mapNotNull { ip ->
-                runCatching { java.net.InetAddress.getByName(ip) }.getOrNull()
-            }.toSet()
-        }
 
         override fun findProcessByConnection(network: String, srcIP: String, srcPort: Long, destIP: String, destPort: Long): Long {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return -1L
@@ -551,22 +536,21 @@ object CoreServiceManager {
                 else -> return -1L
             }
 
-            if (!Utils.isPureIpAddress(srcIP) || !Utils.isPureIpAddress(destIP) ||
-                srcPort !in 1L..65535L || destPort !in 1L..65535L) return -1L
+            if (destIP.isBlank() || destPort == 0L) {
+                LogUtil.d(AppConfig.TAG, "ProcessFinder: Find $network connection from $srcIP:$srcPort to :$destPort, (no dest)")
+                return -1L
+            }
+
             return try {
-                var sourceIp = srcIP
-                var sourcePort = srcPort.toInt()
-                if (java.net.InetAddress.getByName(sourceIp).isLoopbackAddress && SettingsManager.isUsingHevTun()) {
-                    val original = com.v2ray.ang.service.TProxyService.originalSource(proto, sourcePort) ?: return -1L
-                    sourceIp = original.first
-                    sourcePort = original.second
-                }
-                // Local proxies/LAN clients must prove an original TUN source before accounting.
-                if (tunnelOnly && java.net.InetAddress.getByName(sourceIp) !in vpnAddresses) return -1L
                 val uid = cm.getConnectionOwnerUid(
-                    proto, InetSocketAddress(sourceIp, sourcePort), InetSocketAddress(destIP, destPort.toInt())
+                    proto,
+                    InetSocketAddress(srcIP, srcPort.toInt()),
+                    InetSocketAddress(destIP, destPort.toInt())
                 ).toLong()
-                if (tunnelOnly && uid == ownUid.toLong()) -1L else uid
+                LogUtil.d(AppConfig.TAG, "ProcessFinder: Find $network connection from $srcIP:$srcPort to $destIP:$destPort, uid=$uid")
+                //LogUtil.d(AppConfig.TAG, "ProcessFinder: Find $network connection from $srcIP:$srcPort to $destIP:$destPort, uid=$uid,${PackageUidResolver.uidToPackageName(uid.toString())}")
+
+                uid
             } catch (_: Exception) {
                 -1L
             }

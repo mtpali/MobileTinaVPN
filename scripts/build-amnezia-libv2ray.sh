@@ -50,10 +50,7 @@ chmod -R u+w "$patched_core" "$wrapper"
 
 patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$core_patch"
 patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$repo_root/core/patches/xray-core-amneziawg-recovery.patch"
-patch --batch --forward --fuzz=0 --silent -p1 -d "$patched_core" < "$repo_root/core/patches/xray-core-app-traffic.patch"
 cp "$repo_root/core/mobile-recovery/libv2ray_recovery.go" "$wrapper/"
-cp "$repo_root"/core/app-traffic/wrapper/*.go "$wrapper/"
-cp "$repo_root"/core/app-traffic/dispatcher/*.go "$patched_core/app/dispatcher/"
 mkdir -p "$patched_core/testing/mobiletina_compat"
 cp "$repo_root"/core/vless-compat/*.go "$patched_core/testing/mobiletina_compat/"
 
@@ -87,7 +84,7 @@ PY
 
 (
     cd "$patched_core"
-    gofmt -w infra/conf/wireguard.go infra/conf/wireguard_amnezia_test.go proxy/wireguard/*.go testing/mobiletina_compat/*.go app/dispatcher/mobile_app_traffic*.go app/dispatcher/default.go
+    gofmt -w infra/conf/wireguard.go infra/conf/wireguard_amnezia_test.go proxy/wireguard/*.go testing/mobiletina_compat/*.go
     GOWORK=off go mod tidy
     # First reproduce the user's failure on the pinned upstream core. A compile
     # failure is not accepted as reproduction; the verifier checks the exact error.
@@ -104,15 +101,12 @@ PY
         | tee "$native_reports/after.jsonl"
     GOWORK=off go test ./infra/conf -run 'TestAmnezia' -count=1
     GOWORK=off go test ./proxy/wireguard ./proxy/masque -count=1
-    GOWORK=off go test -race -json ./app/dispatcher -run '^TestAppTraffic' -count=1 -timeout=90s \
-        | tee "$native_reports/app-traffic.jsonl"
 )
 
 (
     cd "$wrapper"
     GOWORK=off go mod edit "-replace=github.com/xtls/xray-core=$patched_core"
     GOWORK=off go mod tidy
-    gofmt -w libv2ray_app_traffic.go
     GOWORK=off gomobile bind \
         -v \
         -target=android/arm,android/arm64 \
