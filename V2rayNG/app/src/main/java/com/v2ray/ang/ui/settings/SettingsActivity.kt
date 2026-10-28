@@ -1,20 +1,16 @@
 package com.v2ray.ang.ui.settings
 
-import android.content.Intent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +28,6 @@ import com.v2ray.ang.handler.MmkvManager.rememberMmkvBool
 import com.v2ray.ang.handler.MmkvManager.rememberMmkvString
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.ui.base.BaseComponentActivity
-import com.v2ray.ang.ui.traffic.AppTrafficLogActivity
 import com.v2ray.ang.ui.compose.AppTopBar
 import com.v2ray.ang.ui.compose.CollapsiblePreferenceGroupHeader
 import com.v2ray.ang.ui.compose.NavigationBarsSpacer
@@ -50,8 +45,7 @@ class SettingsActivity : BaseComponentActivity() {
     override fun ScreenContent() {
         SettingsScreen(
             viewModel = viewModel,
-            onBackClick = { finish() },
-            onLogClick = { startActivity(Intent(this, AppTrafficLogActivity::class.java)) },
+            onBackClick = { finish() }
         )
     }
 }
@@ -60,8 +54,7 @@ class SettingsActivity : BaseComponentActivity() {
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onBackClick: () -> Unit,
-    onLogClick: () -> Unit,
+    onBackClick: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -584,11 +577,6 @@ fun SettingsScreen(
                     onSelected = { mode = it }
                 )
             }
-
-            OutlinedButton(
-                onClick = onLogClick,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            ) { Text(stringResource(R.string.mobiletina_app_traffic_log)) }
 
             Spacer(modifier = Modifier.height(24.dp))
             NavigationBarsSpacer()

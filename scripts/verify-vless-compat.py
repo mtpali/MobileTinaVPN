@@ -43,7 +43,6 @@ def inputs():
     paths = [*sorted((ROOT / "core/patches").glob("*.patch")),
              *sorted((ROOT / "core/vless-compat").glob("*.go")),
              *sorted((ROOT / "core/mobile-recovery").glob("*.go")),
-             *sorted((ROOT / "core/app-traffic").rglob("*.go")),
              ROOT / "scripts/build-amnezia-libv2ray.sh", Path(__file__).resolve(),
              ROOT / "AndroidLibXrayLite/go.mod", ROOT / "AndroidLibXrayLite/go.sum"]
     return {str(path.relative_to(ROOT)): digest(path) for path in paths}
@@ -51,17 +50,12 @@ def inputs():
 
 def evidence(aar):
     check_baseline()
-    traffic_rows = events(REPORTS / "app-traffic.jsonl")
-    assert not any(r["Action"] in ("fail", "skip") for r in traffic_rows), "VPN app traffic native tests failed or skipped"
-    traffic_tests = sorted(r["Test"] for r in traffic_rows if r["Action"] == "pass" and "Test" in r)
-    assert len(traffic_tests) >= 6, "VPN app traffic native evidence incomplete"
     with zipfile.ZipFile(aar) as archive:
         native = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist() if name.endswith("/libgojni.so")}
     assert {name.split("/")[1] for name in native} == {"arm64-v8a", "armeabi-v7a"}
     return {"aar_sha256": digest(aar), "inputs_sha256": inputs(), "native_libraries_sha256": native,
             "before_sha256": digest(REPORTS / "before.jsonl"), "after_sha256": digest(REPORTS / "after.jsonl"),
-            "passed_tests": passed_tests(), "app_traffic_tests": traffic_tests,
-            "app_traffic_sha256": digest(REPORTS / "app-traffic.jsonl")}
+            "passed_tests": passed_tests()}
 
 
 if __name__ == "__main__":

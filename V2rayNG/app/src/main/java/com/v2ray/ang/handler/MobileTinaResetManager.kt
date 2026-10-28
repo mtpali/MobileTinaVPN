@@ -24,7 +24,6 @@ object MobileTinaResetManager {
                     // Reconcile marker work before taking the storage lock (opposite ordering can deadlock).
                     MobileTinaSubscriptionMarkerManager.clearExpiredState()
                     MmkvManager.clearProfilesAndSubscriptions()
-                    AppTrafficLogManager.clearHistory(app, endSessions = true)
                     true
                 } catch (e: Exception) {
                     com.v2ray.ang.util.LogUtil.e(com.v2ray.ang.AppConfig.TAG, "VPN reset failed", e)

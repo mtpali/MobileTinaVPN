@@ -131,9 +131,6 @@
             android:name=".ui.settings.SettingsActivity"
             android:exported="false" />
         <activity
-            android:name=".ui.traffic.AppTrafficLogActivity"
-            android:exported="false" />
-        <activity
             android:name=".ui.perappproxy.PerAppProxyActivity"
             android:exported="false" />
         <activity

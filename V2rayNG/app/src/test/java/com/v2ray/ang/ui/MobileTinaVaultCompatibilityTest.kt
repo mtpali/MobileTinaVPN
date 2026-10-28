@@ -16,10 +16,10 @@ class MobileTinaVaultCompatibilityTest {
     }
 
     @Test
-    fun `social records reflect the requested Telegram account`() {
+    fun `social records preserve the restored Instagram and remaining Telegram contact`() {
         assertEquals(
-            "4dbba008ef79e95a576d3b606ba0d4106e397d4c208a11a55154f674c29185a9",
-            digest((0..11).map(q::a))
+            "5c03cc24a1aba6bec03d50087195fd7ffeec75de09ae1562a4478979e5ff19a7",
+            digest((0..10).map(q::a))
         )
     }
 

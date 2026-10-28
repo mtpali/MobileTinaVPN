@@ -20,11 +20,13 @@ import com.v2ray.ang.util.Utils
 internal object MobileTinaFirstLaunchDialog {
     private val k = byteArrayOf(110, 95, 55, 100, 50, 99, 57, 49)
     private val expected = byteArrayOf(
-        -116, -48, 121, 39, -14, -18, 114, 10,
-        -111, 52, -52, 103, 107, 61, 122, 57,
-        -85, 105, -116, -122, -1, 126, -69, 69,
-        105, 1, -96, -69, 78, -56, 5, -106
+        106, -43, 22, 116, 120, 123, 43, -115,
+        57, 123, -97, -100, -29, -59, 18, 2,
+        -95, -73, -104, -6, -114, -74, 34, -118,
+        -17, 101, 111, 82, -27, 127, 96, 74
     )
+
+    internal fun noticeLines(): Array<String> = arrayOf(q.a(9), q.a(10)).also(::verify)
 
     fun showOnce(
         activity: AppCompatActivity,
@@ -36,8 +38,7 @@ internal object MobileTinaFirstLaunchDialog {
             return null
         }
 
-        val lines = arrayOf(q.a(9), q.a(10), q.a(11))
-        verify(lines)
+        val lines = noticeLines()
 
         val primary = Color.rgb(193, 53, 132)
         val root = LinearLayout(activity).apply {
@@ -66,10 +67,7 @@ internal object MobileTinaFirstLaunchDialog {
                 text = value
                 isClickable = true
                 isFocusable = true
-                setOnClickListener {
-                    if (index == 2) Utils.openTelegram(activity, q.a(index))
-                    else Utils.openUri(activity, q.a(index))
-                }
+                setOnClickListener { Utils.openUri(activity, q.a(index)) }
                 setTextColor(Color.WHITE)
                 textSize = 15f
                 gravity = Gravity.CENTER
