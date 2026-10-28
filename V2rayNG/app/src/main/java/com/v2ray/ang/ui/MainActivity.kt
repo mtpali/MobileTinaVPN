@@ -55,6 +55,7 @@ import com.v2ray.ang.core.MobileTinaSessionLimiter
 import com.v2ray.ang.databinding.ActivityMainBinding
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.dto.entities.SubscriptionItem
+import com.v2ray.ang.dto.entities.SubscriptionUsageInfo
 import com.v2ray.ang.enums.PermissionType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
@@ -317,6 +318,9 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
         binding.fab.setOnClickListener { handleManualFabAction() }
         binding.tvAutoPing.setOnClickListener { handlePingClick() }
         binding.manualSelectedRow.setOnClickListener { handlePingClick() }
+        binding.manualDock.setOnClickListener {
+            if (currentMode == MODE_MANUAL && mainViewModel.isRunning.value == true) handlePingClick()
+        }
     }
 
     private fun setupViewModel() {
@@ -819,6 +823,8 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             else -> pingLabel(ping)
         }
         binding.manualSelectedRow.visibility = if (profile != null) View.VISIBLE else View.INVISIBLE
+        binding.manualDock.isClickable = running && !smartConnecting
+        binding.manualDock.isFocusable = running && !smartConnecting
 
         val autoArtwork: Int
         val status: String
@@ -902,8 +908,13 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             return
         }
 
-        val total = (item.trafficTotalBytes ?: 0L).coerceAtLeast(0L)
-        val used = ((item.trafficUploadBytes ?: 0L) + (item.trafficDownloadBytes ?: 0L)).coerceAtLeast(0L)
+        val traffic = SubscriptionUsageInfo(
+            upload = item.trafficUploadBytes ?: 0L,
+            download = item.trafficDownloadBytes ?: 0L,
+            total = item.trafficTotalBytes ?: 0L,
+        )
+        val total = traffic.total.coerceAtLeast(0L)
+        val used = traffic.used.coerceAtLeast(0L)
         val expire = (item.commentExpireEpochSeconds ?: item.expireEpochSeconds ?: 0L)
             .coerceAtLeast(0L)
         val hasUsage = item.usageInfo != null || item.trafficUploadBytes != null || item.trafficDownloadBytes != null
@@ -932,7 +943,10 @@ class MainActivity : HelperBaseActivity(), com.google.android.material.navigatio
             binding.tvSubscriptionUsage.visibility = if (hasUsage) View.VISIBLE else View.GONE
         }
 
-        if (expire > 0L) {
+        if (traffic.trafficExhausted) {
+            binding.tvSubscriptionDays.setText(R.string.mobiletina_subscription_traffic_exhausted)
+            binding.tvSubscriptionDays.visibility = View.VISIBLE
+        } else if (expire > 0L) {
             val days = ceil(((expire * 1000L - System.currentTimeMillis()).coerceAtLeast(0L)) / 86_400_000.0).toLong()
             binding.tvSubscriptionDays.text = String.format(java.util.Locale.ROOT, r.a(7), days)
             binding.tvSubscriptionDays.visibility = View.VISIBLE

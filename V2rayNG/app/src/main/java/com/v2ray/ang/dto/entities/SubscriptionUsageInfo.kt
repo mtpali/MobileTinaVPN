@@ -25,4 +25,7 @@ data class SubscriptionUsageInfo(
 ) {
     /** Bytes consumed so far (upload + download). */
     val used: Long get() = upload + download
+
+    /** A missing or unlimited quota must never hide the remaining subscription time. */
+    val trafficExhausted: Boolean get() = total > 0L && used >= total
 }

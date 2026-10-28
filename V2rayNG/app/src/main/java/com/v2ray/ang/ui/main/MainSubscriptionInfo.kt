@@ -46,6 +46,7 @@ internal data class SubscriptionInfoUiModel(
     val totalBytes: Long,
     /** Used share of the quota in 0..1; null when the quota is unlimited. */
     val trafficFraction: Float?,
+    val trafficExhausted: Boolean,
     /** Expiry in epoch milliseconds; null when the subscription never expires. */
     val expireMillis: Long?,
     val expired: Boolean,
@@ -70,6 +71,7 @@ internal fun buildSubscriptionInfoUiModel(
         usedBytes = info.used,
         totalBytes = if (unlimited) 0L else info.total,
         trafficFraction = if (unlimited) null else (info.used.toDouble() / info.total).toFloat().coerceIn(0f, 1f),
+        trafficExhausted = info.trafficExhausted,
         expireMillis = expireMillis,
         expired = expireMillis != null && expireMillis <= nowMillis,
         supportUrl = info.supportUrl,
@@ -154,6 +156,8 @@ internal fun SubscriptionInfoCard(
                             .clearAndSetSemantics {},
                         color = if (model.trafficLow) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        gapSize = 0.dp,
+                        drawStopIndicator = {},
                     )
                 }
             }
@@ -184,12 +188,16 @@ private fun StatsRow(model: SubscriptionInfoUiModel) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        model.expireMillis?.let { expireMillis ->
+        if (model.trafficExhausted || model.expireMillis != null) {
             Spacer(Modifier.size(8.dp))
             Text(
-                text = Utils.formatTimestamp(expireMillis, EXPIRY_DATE_PATTERN),
+                text = if (model.trafficExhausted) {
+                    stringResource(R.string.mobiletina_subscription_traffic_exhausted)
+                } else {
+                    Utils.formatTimestamp(model.expireMillis!!, EXPIRY_DATE_PATTERN)
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color = if (model.expired) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (model.trafficExhausted || model.expired) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
         }
